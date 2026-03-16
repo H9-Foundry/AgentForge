@@ -1,0 +1,39 @@
+{
+  "name": "@agentops/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "agentops": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@agentops/adapters-filesystem": "workspace:*",
+    "@agentops/adapters-git": "workspace:*",
+    "@agentops/adapters-github": "workspace:*",
+    "@agentops/adapters-shell": "workspace:*",
+    "@agentops/agent-code-review": "workspace:*",
+    "@agentops/agent-context-collector": "workspace:*",
+    "@agentops/agent-security-audit": "workspace:*",
+    "@agentops/agent-test-generation": "workspace:*",
+    "@agentops/audit": "workspace:*",
+    "@agentops/context-engine": "workspace:*",
+    "@agentops/policy-engine": "workspace:*",
+    "@agentops/runtime": "workspace:*",
+    "@agentops/schemas": "workspace:*",
+    "@agentops/shared-types": "workspace:*",
+    "commander": "^13.1.0",
+    "js-yaml": "^4.1.0"
+  }
+}

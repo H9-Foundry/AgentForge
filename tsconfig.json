@@ -1,0 +1,22 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/schemas" },
+    { "path": "./packages/shared-types" },
+    { "path": "./packages/sdk" },
+    { "path": "./packages/context-engine" },
+    { "path": "./packages/policy-engine" },
+    { "path": "./packages/audit" },
+    { "path": "./packages/runtime" },
+    { "path": "./packages/registry-client" },
+    { "path": "./packages/cli" },
+    { "path": "./agents/context-collector" },
+    { "path": "./agents/code-review" },
+    { "path": "./agents/security-audit" },
+    { "path": "./agents/test-generation" },
+    { "path": "./adapters/filesystem" },
+    { "path": "./adapters/git" },
+    { "path": "./adapters/shell" },
+    { "path": "./adapters/github" }
+  ]
+}

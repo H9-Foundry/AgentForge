@@ -1,0 +1,72 @@
+name: AgentOps PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      workflow_name:
+        description: AgentOps workflow to run
+        required: false
+        default: pr-review
+      tracker_issue:
+        description: Tracker issue number to update
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  pr-review:
+    runs-on: ubuntu-latest
+    env:
+      AGENTOPS_WORKFLOW_NAME: ${{ github.event.inputs.workflow_name || 'pr-review' }}
+      AGENTOPS_TRACKER_ISSUE: ${{ github.event.inputs.tracker_issue || '1' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Run AgentOps workflow
+        run: pnpm exec tsx --tsconfig tsconfig.base.json packages/cli/src/bin.ts run "$AGENTOPS_WORKFLOW_NAME" --json > agentops-run.json
+
+      - name: Derive artifact paths
+        id: artifact_paths
+        run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentops-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
+
+      - name: Upload AgentOps artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentops-${{ steps.artifact_paths.outputs.run_id }}
+          path: |
+            ${{ steps.artifact_paths.outputs.bundle_path }}
+            ${{ steps.artifact_paths.outputs.markdown_path }}
+            agentops-run.json
+
+      - name: Publish PR and issue updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AGENTOPS_BUNDLE_PATH: ${{ steps.artifact_paths.outputs.bundle_path }}
+          AGENTOPS_REPORT_OUTPUT: agentops-report.md
+        run: node scripts/github/report-agentops-run.mjs

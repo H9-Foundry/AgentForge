@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "todo-audit",
+  "displayName": "TODO Audit",
+  "category": "quality",
+  "runtime": {
+    "minVersion": "0.1.0",
+    "kind": "deterministic"
+  },
+  "permissions": {
+    "model": false,
+    "network": false,
+    "tools": [],
+    "readPaths": ["**/*"],
+    "writePaths": []
+  },
+  "inputs": ["changes"],
+  "outputs": ["findings"],
+  "contextPolicy": {
+    "sections": ["changes"],
+    "minimalContext": true
+  },
+  "trust": {
+    "tier": "community",
+    "source": "local",
+    "reviewed": false
+  }
+}

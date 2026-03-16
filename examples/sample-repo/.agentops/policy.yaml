@@ -1,0 +1,35 @@
+version: 1
+defaults:
+  execution_mode: inspect
+  model_access: false
+  network: deny
+  writes: approval_required
+paths:
+  allowed_read:
+    - "**/*"
+  allowed_write:
+    - ".agentops/runs/**"
+    - "tests/**"
+  blocked:
+    - ".env*"
+    - "**/.env*"
+    - "secrets/**"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/id_rsa*"
+    - "infra/prod/**"
+tools:
+  git.status:
+    effect: allow
+  git.diff-summary:
+    effect: allow
+  filesystem.read-file:
+    effect: allow
+  filesystem.list-files:
+    effect: allow
+  filesystem.write-file:
+    effect: approval_required
+  shell.run-template:
+    effect: deny
+  github.create-check:
+    effect: deny
