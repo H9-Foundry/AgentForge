@@ -13,7 +13,6 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  NPM_CONFIG_PROVENANCE: true
 
 jobs:
   release:
@@ -49,6 +48,16 @@ jobs:
 
       - name: Verify packed public packages
         run: pnpm release:verify
+
+      - name: Configure npm publish mode
+        run: |
+          if [ "${{ github.event.repository.private }}" = "true" ]; then
+            echo "NPM_CONFIG_PROVENANCE=false" >> "$GITHUB_ENV"
+            echo "npm package provenance is disabled for this private repository because npm only accepts provenance from public GitHub repositories." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "NPM_CONFIG_PROVENANCE=true" >> "$GITHUB_ENV"
+            echo "npm package provenance is enabled for this public repository." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Create release PR or publish
         uses: changesets/action@v1.7.0
