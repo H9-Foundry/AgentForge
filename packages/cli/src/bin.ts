@@ -92,8 +92,11 @@ release
   .command("check")
   .description("Run read-only release preflight checks for npm publishing.")
   .option("--json", "Print machine-readable JSON output.")
-  .action((options: { json?: boolean }) => {
-    const result = checkReleaseReadiness();
+  .option("--skip-npm-auth", "Skip npm auth and npm whoami checks for CI-hosted validation.")
+  .action((options: { json?: boolean; skipNpmAuth?: boolean }) => {
+    const result = checkReleaseReadiness(process.cwd(), {
+      skipNpmAuth: options.skipNpmAuth
+    });
     if (options.json) {
       console.log(JSON.stringify(result, null, 2));
     } else {

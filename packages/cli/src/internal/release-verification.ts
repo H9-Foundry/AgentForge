@@ -254,6 +254,29 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
   );
 
   const tarballs: ReleaseVerifyTarball[] = [];
+  const buildPackages = runCommand("pnpm", ["build:packages"], workspaceRoot, env);
+  pushCheck(
+    checks,
+    "build-packages",
+    "build packages for verification",
+    buildPackages.status === 0 ? "pass" : "fail",
+    buildPackages.status === 0
+      ? "Built package distributions before packing tarballs."
+      : `Failed to build packages before verification: ${summarizeCommandOutput(buildPackages)}`
+  );
+
+  if (buildPackages.status !== 0) {
+    return {
+      workspaceRoot,
+      targetScope: TARGET_NPM_SCOPE,
+      tempDir,
+      consumerProjectDir,
+      tarballs,
+      checks,
+      ready: false
+    };
+  }
+
   for (const packageInfo of getPublicPackageDirectories(workspaceRoot)) {
     const packed = packPublicPackage(packageInfo.packageName, packageInfo.packageDir, tarballDir, env, runCommand);
     checks.push(...packed.checks);
@@ -309,7 +332,15 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
         cliGuide.status === 0 ? "Installed CLI rendered release guide successfully." : summarizeCommandOutput(cliGuide)
       );
 
-      const cliCheck = runCommand(cliBinary, ["release", "check", "--json"], workspaceRoot, env);
+      const cliCheck = runCommand(
+        cliBinary,
+        ["release", "check", "--json", "--skip-npm-auth"],
+        workspaceRoot,
+        {
+          ...env,
+          AGENTFORGE_SKIP_NPM_AUTH: "1"
+        }
+      );
       pushCheck(
         checks,
         "cli-release-check",
