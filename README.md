@@ -66,16 +66,16 @@ Package publishing uses GitHub OIDC trusted publishing for `@h9-foundry/agentfor
 
 ## Security And Release Notes
 
-- [SECURITY.md](/Users/ethan/Repo/AgentOps/SECURITY.md)
-- [docs/security-model.md](/Users/ethan/Repo/AgentOps/docs/security-model.md)
-- [docs/release-trust.md](/Users/ethan/Repo/AgentOps/docs/release-trust.md)
-- [docs/github-actions.md](/Users/ethan/Repo/AgentOps/docs/github-actions.md)
+- [SECURITY.md](./SECURITY.md)
+- [docs/security-model.md](./docs/security-model.md)
+- [docs/release-trust.md](./docs/release-trust.md)
+- [docs/github-actions.md](./docs/github-actions.md)
 
 ## Contributor And Extension Guides
 
-- [CONTRIBUTING.md](/Users/ethan/Repo/AgentOps/CONTRIBUTING.md)
-- [docs/runtime-model.md](/Users/ethan/Repo/AgentOps/docs/runtime-model.md)
-- [docs/policy-model.md](/Users/ethan/Repo/AgentOps/docs/policy-model.md)
-- [docs/agent-manifest-guide.md](/Users/ethan/Repo/AgentOps/docs/agent-manifest-guide.md)
-- [docs/plugin-author-guide.md](/Users/ethan/Repo/AgentOps/docs/plugin-author-guide.md)
-- [examples/README.md](/Users/ethan/Repo/AgentOps/examples/README.md)
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [docs/runtime-model.md](./docs/runtime-model.md)
+- [docs/policy-model.md](./docs/policy-model.md)
+- [docs/agent-manifest-guide.md](./docs/agent-manifest-guide.md)
+- [docs/plugin-author-guide.md](./docs/plugin-author-guide.md)
+- [examples/README.md](./examples/README.md)

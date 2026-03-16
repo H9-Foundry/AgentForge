@@ -1,5 +1,18 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.3.2
+
+### Patch Changes
+
+- 1c6c323: Refresh package metadata and documentation for the public open-source release cutover.
+
+## 0.3.1
+
+### Patch Changes
+
+- f53dbd9: Trigger a real GitHub-owned publish to verify npm trusted publishing after the
+  initial bootstrap release.
+
 ## 0.3.0
 
 ### Minor Changes

@@ -2,6 +2,23 @@
   "name": "agentforge",
   "private": true,
   "version": "0.1.0",
+  "description": "AgentForge monorepo for secure-by-default, repo-first software engineering workflows.",
+  "license": "MIT",
+  "author": "H9 Foundry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/H9-Foundry/AgentForge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/H9-Foundry/AgentForge/issues"
+  },
+  "keywords": [
+    "agentforge",
+    "agentic-workflows",
+    "developer-tools",
+    "github-actions",
+    "policy-engine"
+  ],
   "type": "module",
   "packageManager": "pnpm@10.6.1",
   "scripts": {
@@ -23,7 +40,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",
     "eslint": "^9.22.0",
-    "globals": "^16.0.0",
+    "globals": "^17.4.0",
     "tsx": "^4.19.3",
     "turbo": "^2.5.0",
     "typescript": "^5.8.2",

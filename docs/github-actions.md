@@ -9,9 +9,12 @@ AgentForge includes a GitHub Actions wrapper for the starter `pr-review` workflo
   - comments on PRs and the configured tracker issue
 - `.github/workflows/release-provenance.yml`
   - build artifact provenance for the workspace
-  - skips artifact attestation on private repositories unless `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
+  - attests the workspace build artifact by default when the repository is public
+  - falls back to a documented skip path for private repositories unless `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
 - `.github/workflows/release-packages.yml`
   - Changesets version PRs and trusted npm publishing for the curated public subset
+  - enables npm package provenance automatically when the repository is public
+  - falls back to trusted publishing without provenance when the repository is private because npm only accepts provenance from public GitHub repositories
 
 ## What It Does
 - installs dependencies

@@ -1,5 +1,22 @@
 # @h9-foundry/agentforge-sdk
 
+## 0.3.2
+
+### Patch Changes
+
+- 1c6c323: Refresh package metadata and documentation for the public open-source release cutover.
+- Updated dependencies [1c6c323]
+  - @h9-foundry/agentforge-shared-types@0.3.2
+
+## 0.3.1
+
+### Patch Changes
+
+- f53dbd9: Trigger a real GitHub-owned publish to verify npm trusted publishing after the
+  initial bootstrap release.
+- Updated dependencies [f53dbd9]
+  - @h9-foundry/agentforge-shared-types@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes
