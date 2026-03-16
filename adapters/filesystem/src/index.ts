@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { ToolAdapter } from "@h9-foundry/agentforge-sdk";
 
