@@ -45,6 +45,6 @@ jobs:
           path: agentops-build-${{ github.sha }}.tgz
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: agentops-build-${{ github.sha }}.tgz
