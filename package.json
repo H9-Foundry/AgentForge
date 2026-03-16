@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "pack:public": "node scripts/release/pack-public-packages.mjs",
     "release:publish": "changeset publish",
-    "release:version": "changeset version",
+    "release:version": "changeset version && pnpm install --lockfile-only",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.workspace.json --noEmit"
   },
