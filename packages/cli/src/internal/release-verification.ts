@@ -95,7 +95,7 @@ function packPublicPackage(
 ): { tarball?: ReleaseVerifyTarball; checks: ReleaseVerifyEntry[] } {
   const checks: ReleaseVerifyEntry[] = [];
   const execute = runCommand ?? defaultRunCommand;
-  const result = execute("npm", ["pack", "--json", "--pack-destination", tarballDir], packageDir, env);
+  const result = execute("pnpm", ["pack", "--json", "--pack-destination", tarballDir], packageDir, env);
 
   if (result.status !== 0) {
     pushCheck(
@@ -103,33 +103,33 @@ function packPublicPackage(
       `pack-${packageName}`,
       `pack ${packageName}`,
       "fail",
-      `npm pack failed for ${packageName}: ${summarizeCommandOutput(result)}`
+      `pnpm pack failed for ${packageName}: ${summarizeCommandOutput(result)}`
     );
     return { checks };
   }
 
-  let metadata: PackedTarballJson[];
+  let metadata: PackedTarballJson | PackedTarballJson[];
   try {
-    metadata = JSON.parse(result.stdout) as PackedTarballJson[];
+    metadata = JSON.parse(result.stdout) as PackedTarballJson | PackedTarballJson[];
   } catch {
     pushCheck(
       checks,
       `pack-json-${packageName}`,
       `parse pack metadata for ${packageName}`,
       "fail",
-      `npm pack did not return valid JSON for ${packageName}: ${summarizeCommandOutput(result)}`
+      `pnpm pack did not return valid JSON for ${packageName}: ${summarizeCommandOutput(result)}`
     );
     return { checks };
   }
 
-  const packed = metadata[0];
+  const packed = Array.isArray(metadata) ? metadata[0] : metadata;
   if (!packed?.filename || !packed?.name || !packed?.version) {
     pushCheck(
       checks,
       `pack-metadata-${packageName}`,
       `pack metadata for ${packageName}`,
       "fail",
-      `npm pack did not include filename/name/version for ${packageName}.`
+      `pnpm pack did not include filename/name/version for ${packageName}.`
     );
     return { checks };
   }
@@ -152,7 +152,7 @@ function packPublicPackage(
     tarball: {
       packageName,
       version: packed.version,
-      tarballPath: join(tarballDir, packed.filename),
+      tarballPath: packed.filename,
       packageDir
     },
     checks
