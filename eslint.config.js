@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/coverage/**", ".turbo/**", ".build/**", ".agentops/runs/**"]
+    ignores: ["**/dist/**", "**/coverage/**", "**/*.d.ts", ".turbo/**", ".build/**", ".agentops/runs/**"]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

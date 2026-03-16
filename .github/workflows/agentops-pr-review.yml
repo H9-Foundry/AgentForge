@@ -49,7 +49,7 @@ jobs:
         run: pnpm build
 
       - name: Run AgentOps workflow
-        run: node .build/packages/cli/src/bin.js run "$AGENTOPS_WORKFLOW_NAME" --json > agentops-run.json
+        run: pnpm exec tsx --tsconfig tsconfig.base.json packages/cli/src/bin.ts run "$AGENTOPS_WORKFLOW_NAME" --json > agentops-run.json
 
       - name: Derive artifact paths
         id: artifact_paths
