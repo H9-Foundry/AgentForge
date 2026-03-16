@@ -1,4 +1,4 @@
-# @agentops/schemas
+# @h9-foundry/agentforge-schemas
 
 ## 0.2.0
 

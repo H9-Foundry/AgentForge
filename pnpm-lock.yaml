@@ -44,7 +44,7 @@ importers:
 
   adapters/filesystem:
     dependencies:
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       zod:
@@ -53,7 +53,7 @@ importers:
 
   adapters/git:
     dependencies:
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       zod:
@@ -62,7 +62,7 @@ importers:
 
   adapters/github:
     dependencies:
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       zod:
@@ -71,7 +71,7 @@ importers:
 
   adapters/shell:
     dependencies:
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
       zod:
@@ -80,79 +80,79 @@ importers:
 
   agents/code-review:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
 
   agents/context-collector:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
 
   agents/security-audit:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
 
   agents/test-generation:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
 
   packages/audit:
     dependencies:
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
   packages/cli:
     dependencies:
-      '@agentops/audit':
+      '@h9-foundry/agentforge-audit':
         specifier: workspace:*
         version: link:../audit
-      '@agentops/context-engine':
+      '@h9-foundry/agentforge-context-engine':
         specifier: workspace:*
         version: link:../context-engine
-      '@agentops/policy-engine':
+      '@h9-foundry/agentforge-policy-engine':
         specifier: workspace:*
         version: link:../policy-engine
-      '@agentops/runtime':
+      '@h9-foundry/agentforge-runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
       commander:
@@ -167,19 +167,19 @@ importers:
 
   packages/context-engine:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../schemas
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
   packages/policy-engine:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../schemas
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
       js-yaml:
@@ -191,31 +191,31 @@ importers:
 
   packages/registry-client:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
   packages/runtime:
     dependencies:
-      '@agentops/audit':
+      '@h9-foundry/agentforge-audit':
         specifier: workspace:*
         version: link:../audit
-      '@agentops/policy-engine':
+      '@h9-foundry/agentforge-policy-engine':
         specifier: workspace:*
         version: link:../policy-engine
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../schemas
-      '@agentops/sdk':
+      '@h9-foundry/agentforge-sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
 
@@ -230,7 +230,7 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@agentops/shared-types':
+      '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
       zod:
@@ -239,7 +239,7 @@ importers:
 
   packages/shared-types:
     dependencies:
-      '@agentops/schemas':
+      '@h9-foundry/agentforge-schemas':
         specifier: workspace:*
         version: link:../schemas
       zod:

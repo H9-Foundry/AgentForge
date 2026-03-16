@@ -1,5 +1,5 @@
 {
-  "name": "@agentops/policy-engine",
+  "name": "@h9-foundry/agentforge-policy-engine",
   "version": "0.2.0",
   "type": "module",
   "publishConfig": {
@@ -23,8 +23,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/schemas": "workspace:*",
-    "@agentops/shared-types": "workspace:*",
+    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-shared-types": "workspace:*",
     "js-yaml": "^4.1.0",
     "picomatch": "^4.0.2"
   }

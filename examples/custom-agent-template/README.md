@@ -1,12 +1,12 @@
 # Custom Agent Template
 
-This template shows the minimum structure for a local AgentOps agent plugin package.
+This template shows the minimum structure for a local AgentForge agent plugin package.
 
 ## Files
 
 - `agent.manifest.json`: declarative permissions and trust metadata
 - `src/index.ts`: runtime implementation
-- `agentops.plugin-example.yaml`: positive registration example
+- `agentforge.plugin-example.yaml`: positive registration example
 - `policy.plugin-block-example.yaml`: negative policy example that blocks the plugin
 
 ## Positive Example
@@ -26,7 +26,7 @@ providers:
 plugins:
   agents:
     - name: custom-agent-template
-      package: "@agentops/custom-agent-template"
+      package: "@h9-foundry/agentforge-custom-agent-template"
       enabled: true
 ```
 

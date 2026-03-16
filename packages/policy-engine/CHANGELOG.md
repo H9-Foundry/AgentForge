@@ -1,4 +1,4 @@
-# @agentops/policy-engine
+# @h9-foundry/agentforge-policy-engine
 
 ## 0.2.0
 
@@ -9,5 +9,5 @@
 ### Patch Changes
 
 - Updated dependencies [9a94beb]
-  - @agentops/schemas@0.2.0
-  - @agentops/shared-types@0.2.0
+  - @h9-foundry/agentforge-schemas@0.2.0
+  - @h9-foundry/agentforge-shared-types@0.2.0

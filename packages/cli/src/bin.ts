@@ -5,14 +5,14 @@ import { explainLastRun, initProject, runLocalWorkflow, scanProject } from "./in
 
 const program = new Command();
 
-program.name("agentops").description("Secure-by-default workflow runner for engineering agents.").version("0.1.0");
+program.name("agentforge").description("Secure-by-default workflow runner for engineering agents.").version("0.1.0");
 
 program
   .command("init")
   .description("Scaffold .agentops configuration in the current repository.")
   .action(() => {
     const result = initProject();
-    console.log(`Initialized AgentOps in ${result.root}`);
+    console.log(`Initialized AgentForge in ${result.root}`);
     console.log(result.created.length > 0 ? `Created ${result.created.length} file(s).` : "Configuration already present.");
   });
 

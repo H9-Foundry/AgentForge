@@ -4,14 +4,14 @@
   "commit": false,
   "fixed": [
     [
-      "@agentops/cli",
-      "@agentops/schemas",
-      "@agentops/shared-types",
-      "@agentops/sdk",
-      "@agentops/context-engine",
-      "@agentops/policy-engine",
-      "@agentops/runtime",
-      "@agentops/audit"
+      "@h9-foundry/agentforge-cli",
+      "@h9-foundry/agentforge-schemas",
+      "@h9-foundry/agentforge-shared-types",
+      "@h9-foundry/agentforge-sdk",
+      "@h9-foundry/agentforge-context-engine",
+      "@h9-foundry/agentforge-policy-engine",
+      "@h9-foundry/agentforge-runtime",
+      "@h9-foundry/agentforge-audit"
     ]
   ],
   "linked": [],
@@ -19,14 +19,14 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "@agentops/registry-client",
-    "@agentops/agent-code-review",
-    "@agentops/agent-context-collector",
-    "@agentops/agent-security-audit",
-    "@agentops/agent-test-generation",
-    "@agentops/adapters-filesystem",
-    "@agentops/adapters-git",
-    "@agentops/adapters-github",
-    "@agentops/adapters-shell"
+    "@h9-foundry/agentforge-registry-client",
+    "@h9-foundry/agentforge-agent-code-review",
+    "@h9-foundry/agentforge-agent-context-collector",
+    "@h9-foundry/agentforge-agent-security-audit",
+    "@h9-foundry/agentforge-agent-test-generation",
+    "@h9-foundry/agentforge-adapters-filesystem",
+    "@h9-foundry/agentforge-adapters-git",
+    "@h9-foundry/agentforge-adapters-github",
+    "@h9-foundry/agentforge-adapters-shell"
   ]
 }

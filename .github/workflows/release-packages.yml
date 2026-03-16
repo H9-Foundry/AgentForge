@@ -52,7 +52,7 @@ jobs:
         with:
           version: pnpm release:version && pnpm install --lockfile-only
           publish: pnpm release:publish
-          commit: "Version public AgentOps packages"
-          title: "Version public AgentOps packages"
+          commit: "Version public AgentForge packages"
+          title: "Version public AgentForge packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

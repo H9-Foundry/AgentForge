@@ -8,7 +8,7 @@ import type {
   ToolRequest,
   ToolResult,
   WorkflowStateEnvelope
-} from "@agentops/shared-types";
+} from "@h9-foundry/agentforge-shared-types";
 
 export interface AgentExecutionContext {
   readonly state: WorkflowStateEnvelope;

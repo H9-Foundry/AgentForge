@@ -7,7 +7,7 @@ describe("context collector", () => {
     const output = await contextCollectorAgent.execute({
       state: {} as never,
       stateSlice: {
-        repo: { name: "agentops" },
+        repo: { name: "agentforge" },
         changes: { changedFiles: ["src/index.ts"], impactedPaths: ["src"] }
       } as never,
       policy: {} as never,

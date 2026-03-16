@@ -1,5 +1,5 @@
 {
-  "name": "@agentops/agent-context-collector",
+  "name": "@h9-foundry/agentforge-agent-context-collector",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -20,8 +20,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/schemas": "workspace:*",
-    "@agentops/sdk": "workspace:*",
-    "@agentops/shared-types": "workspace:*"
+    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-sdk": "workspace:*",
+    "@h9-foundry/agentforge-shared-types": "workspace:*"
   }
 }

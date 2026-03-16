@@ -1,5 +1,5 @@
 {
-  "name": "@agentops/runtime",
+  "name": "@h9-foundry/agentforge-runtime",
   "version": "0.2.0",
   "type": "module",
   "publishConfig": {
@@ -23,10 +23,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/audit": "workspace:*",
-    "@agentops/policy-engine": "workspace:*",
-    "@agentops/sdk": "workspace:*",
-    "@agentops/schemas": "workspace:*",
-    "@agentops/shared-types": "workspace:*"
+    "@h9-foundry/agentforge-audit": "workspace:*",
+    "@h9-foundry/agentforge-policy-engine": "workspace:*",
+    "@h9-foundry/agentforge-sdk": "workspace:*",
+    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-shared-types": "workspace:*"
   }
 }

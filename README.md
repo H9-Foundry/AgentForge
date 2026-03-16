@@ -1,6 +1,6 @@
-# AgentOps
+# AgentForge
 
-AgentOps is an open-source, secure-by-default, repo-first runtime for software engineering workflows. The initial delivery target is a runnable local PR-review slice that feels more like GitHub Actions for engineering agents than a chat assistant.
+AgentForge is an open-source, secure-by-default, repo-first runtime for software engineering workflows. The initial delivery target is a runnable local PR-review slice that feels more like GitHub Actions for engineering agents than a chat assistant.
 
 ## Phase 1 Scope
 - TypeScript monorepo with explicit package boundaries
@@ -41,14 +41,14 @@ node packages/cli/dist/bin.js explain last-run
 
 Curated public packages:
 
-- `@agentops/cli`
-- `@agentops/schemas`
-- `@agentops/shared-types`
-- `@agentops/sdk`
-- `@agentops/context-engine`
-- `@agentops/policy-engine`
-- `@agentops/runtime`
-- `@agentops/audit`
+- `@h9-foundry/agentforge-cli`
+- `@h9-foundry/agentforge-schemas`
+- `@h9-foundry/agentforge-shared-types`
+- `@h9-foundry/agentforge-sdk`
+- `@h9-foundry/agentforge-context-engine`
+- `@h9-foundry/agentforge-policy-engine`
+- `@h9-foundry/agentforge-runtime`
+- `@h9-foundry/agentforge-audit`
 
 Internal workspace packages remain private until their APIs stabilize.
 

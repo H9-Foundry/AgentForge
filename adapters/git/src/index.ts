@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 
 import { z } from "zod";
 
-import type { ToolAdapter } from "@agentops/sdk";
+import type { ToolAdapter } from "@h9-foundry/agentforge-sdk";
 
 const execFileAsync = promisify(execFile);
 

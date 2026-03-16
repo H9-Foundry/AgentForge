@@ -1,6 +1,6 @@
 # Plugin Author Guide
 
-AgentOps currently supports local/manual agent plugins only. There is no remote registry, install flow, or adapter plugin system in this phase.
+AgentForge currently supports local/manual agent plugins only. There is no remote registry, install flow, or adapter plugin system in this phase.
 
 ## Package Shape
 

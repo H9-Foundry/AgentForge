@@ -3,24 +3,24 @@ import { join } from "node:path";
 
 import yaml from "js-yaml";
 
-import { renderAuditBundleMarkdown } from "@agentops/audit";
-import { createWorkflowState, findWorkspaceRoot } from "@agentops/context-engine";
-import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@agentops/policy-engine";
-import { runWorkflow } from "@agentops/runtime";
-import { agentopsConfigSchema, workflowDefinitionSchema } from "@agentops/schemas";
+import { renderAuditBundleMarkdown } from "@h9-foundry/agentforge-audit";
+import { createWorkflowState, findWorkspaceRoot } from "@h9-foundry/agentforge-context-engine";
+import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@h9-foundry/agentforge-policy-engine";
+import { runWorkflow } from "@h9-foundry/agentforge-runtime";
+import { agentforgeConfigSchema, workflowDefinitionSchema } from "@h9-foundry/agentforge-schemas";
 import type {
-  AgentOpsConfig,
+  AgentForgeConfig,
   AgentPluginRegistration,
   BlockedPlugin,
   WorkflowDefinition
-} from "@agentops/shared-types";
-import type { RuntimeAgent, ToolAdapter } from "@agentops/sdk";
+} from "@h9-foundry/agentforge-shared-types";
+import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
 
 import { createBuiltinAdapters } from "./internal/builtin-adapters.js";
 import { createBuiltinAgentRegistry } from "./internal/builtin-agents.js";
 import { LocalPluginRegistry } from "./internal/local-plugin-registry.js";
 
-const agentopsConfigTemplate = `version: 1
+const agentforgeConfigTemplate = `version: 1
 project:
   name: REPO_NAME
   language: typescript
@@ -137,7 +137,7 @@ function normalizeWorkflow(input: unknown): WorkflowDefinition {
   });
 }
 
-function normalizeAgentOpsConfigInput(value: unknown): unknown {
+function normalizeAgentForgeConfigInput(value: unknown): unknown {
   if (!isRecord(value)) {
     return value;
   }
@@ -206,10 +206,10 @@ export interface LastRunExplanation {
   markdownPath: string;
 }
 
-function loadAgentOpsConfig(root: string): AgentOpsConfig {
+function loadAgentForgeConfig(root: string): AgentForgeConfig {
   const configPath = join(root, ".agentops", "agentops.yaml");
   if (!existsSync(configPath)) {
-    return agentopsConfigSchema.parse({
+    return agentforgeConfigSchema.parse({
       version: 1,
       project: {
         name: root.split("/").at(-1) ?? "repo",
@@ -230,7 +230,7 @@ function loadAgentOpsConfig(root: string): AgentOpsConfig {
   }
 
   const parsed = loadYaml(configPath);
-  return agentopsConfigSchema.parse(normalizeAgentOpsConfigInput(parsed));
+  return agentforgeConfigSchema.parse(normalizeAgentForgeConfigInput(parsed));
 }
 
 function ensureDirectory(pathValue: string): void {
@@ -246,7 +246,7 @@ function ensureInitFiles(root: string): string[] {
   const files = [
     {
       path: join(configDir, "agentops.yaml"),
-      contents: agentopsConfigTemplate.replace("REPO_NAME", root.split("/").at(-1) ?? "repo")
+      contents: agentforgeConfigTemplate.replace("REPO_NAME", root.split("/").at(-1) ?? "repo")
     },
     {
       path: join(configDir, "policy.yaml"),
@@ -289,7 +289,7 @@ function createBlockedPlugin(
   };
 }
 
-async function buildAgentRegistry(root: string, config: AgentOpsConfig, workflowName: string) {
+async function buildAgentRegistry(root: string, config: AgentForgeConfig, workflowName: string) {
   const agents = buildBuiltinAgentRegistry();
   const registryClient = new LocalPluginRegistry(root);
   const policy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
@@ -404,7 +404,7 @@ export function scanProject(cwd = process.cwd()): {
 export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()): Promise<WorkflowRunResult> {
   const root = findWorkspaceRoot(cwd);
   ensureInitFiles(root);
-  const config = loadAgentOpsConfig(root);
+  const config = loadAgentForgeConfig(root);
   const workflow = normalizeWorkflow(loadYaml(join(root, ".agentops", "workflows", `${workflowName}.yaml`)));
   const { agents, blockedPlugins, policy, policyEngine } = await buildAgentRegistry(root, config, workflowName);
   validateWorkflowAgents(workflow, agents, blockedPlugins);
@@ -454,7 +454,7 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
 
 export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
   const root = findWorkspaceRoot(cwd);
-  const config = loadAgentOpsConfig(root);
+  const config = loadAgentForgeConfig(root);
   const runsRoot = join(root, config.runtime.runsPath);
   const entries = existsSync(runsRoot) ? readdirSync(runsRoot).sort() : [];
   const latest = entries.at(-1);
@@ -484,7 +484,7 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
 
 export function getGitHubReportingConfig(cwd = process.cwd()): { trackerIssue?: number } {
   const root = findWorkspaceRoot(cwd);
-  const config = loadAgentOpsConfig(root);
+  const config = loadAgentForgeConfig(root);
   return {
     trackerIssue: config.reporting.github?.trackerIssue
   };

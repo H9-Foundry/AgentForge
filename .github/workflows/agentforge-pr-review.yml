@@ -1,4 +1,4 @@
-name: AgentOps PR Review
+name: AgentForge PR Review
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       workflow_name:
-        description: AgentOps workflow to run
+        description: AgentForge workflow to run
         required: false
         default: pr-review
       tracker_issue:
@@ -26,8 +26,8 @@ jobs:
   pr-review:
     runs-on: ubuntu-latest
     env:
-      AGENTOPS_WORKFLOW_NAME: ${{ github.event.inputs.workflow_name || 'pr-review' }}
-      AGENTOPS_TRACKER_ISSUE: ${{ github.event.inputs.tracker_issue || '1' }}
+      AGENTFORGE_WORKFLOW_NAME: ${{ github.event.inputs.workflow_name || 'pr-review' }}
+      AGENTFORGE_TRACKER_ISSUE: ${{ github.event.inputs.tracker_issue || '1' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v6.0.2
@@ -56,25 +56,25 @@ jobs:
       - name: Smoke test built CLI
         run: node packages/cli/dist/bin.js scan --json > /dev/null
 
-      - name: Run AgentOps workflow
-        run: pnpm exec tsx --tsconfig tsconfig.base.json packages/cli/src/bin.ts run "$AGENTOPS_WORKFLOW_NAME" --json > agentops-run.json
+      - name: Run AgentForge workflow
+        run: pnpm exec tsx --tsconfig tsconfig.base.json packages/cli/src/bin.ts run "$AGENTFORGE_WORKFLOW_NAME" --json > agentforge-run.json
 
       - name: Derive artifact paths
         id: artifact_paths
-        run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentops-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
+        run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentforge-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
 
-      - name: Upload AgentOps artifacts
+      - name: Upload AgentForge artifacts
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: agentops-${{ steps.artifact_paths.outputs.run_id }}
+          name: agentforge-${{ steps.artifact_paths.outputs.run_id }}
           path: |
             ${{ steps.artifact_paths.outputs.bundle_path }}
             ${{ steps.artifact_paths.outputs.markdown_path }}
-            agentops-run.json
+            agentforge-run.json
 
       - name: Publish PR and issue updates
         env:
           GH_TOKEN: ${{ github.token }}
-          AGENTOPS_BUNDLE_PATH: ${{ steps.artifact_paths.outputs.bundle_path }}
-          AGENTOPS_REPORT_OUTPUT: agentops-report.md
-        run: node scripts/github/report-agentops-run.mjs
+          AGENTFORGE_BUNDLE_PATH: ${{ steps.artifact_paths.outputs.bundle_path }}
+          AGENTFORGE_REPORT_OUTPUT: agentforge-report.md
+        run: node scripts/github/report-agentforge-run.mjs

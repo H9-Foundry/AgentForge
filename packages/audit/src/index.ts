@@ -1,4 +1,4 @@
-import type { AuditBundle, AuditEntry, WorkflowStateEnvelope } from "@agentops/shared-types";
+import type { AuditBundle, AuditEntry, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 
 export function createAuditEntry(entry: AuditEntry): AuditEntry {
   return entry;
@@ -41,7 +41,7 @@ export function buildAuditBundle(
 
 export function renderAuditBundleMarkdown(bundle: AuditBundle): string {
   const lines = [
-    `# AgentOps Run ${bundle.runId}`,
+    `# AgentForge Run ${bundle.runId}`,
     "",
     `- Workflow: ${bundle.workflow}`,
     `- Status: ${bundle.status}`,
