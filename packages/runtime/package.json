@@ -1,6 +1,25 @@
 {
-  "name": "@agentops/runtime",
-  "version": "0.1.0",
+  "name": "@h9-foundry/agentforge-runtime",
+  "version": "0.3.2",
+  "description": "Deterministic workflow runtime and tool mediation engine for AgentForge.",
+  "license": "MIT",
+  "author": "H9 Foundry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/H9-Foundry/AgentForge.git",
+    "directory": "packages/runtime"
+  },
+  "homepage": "https://github.com/H9-Foundry/AgentForge/tree/main/packages/runtime#readme",
+  "bugs": {
+    "url": "https://github.com/H9-Foundry/AgentForge/issues"
+  },
+  "keywords": [
+    "agentforge",
+    "runtime",
+    "workflows",
+    "orchestration",
+    "policy"
+  ],
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -13,16 +32,20 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "!dist/**/*.test.*", "!dist/**/*.spec.*"],
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/audit": "workspace:*",
-    "@agentops/policy-engine": "workspace:*",
-    "@agentops/sdk": "workspace:*",
-    "@agentops/schemas": "workspace:*",
-    "@agentops/shared-types": "workspace:*"
+    "@h9-foundry/agentforge-audit": "workspace:*",
+    "@h9-foundry/agentforge-policy-engine": "workspace:*",
+    "@h9-foundry/agentforge-sdk": "workspace:*",
+    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-shared-types": "workspace:*"
   }
 }

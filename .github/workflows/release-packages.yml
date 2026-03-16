@@ -13,7 +13,6 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  NPM_CONFIG_PROVENANCE: true
 
 jobs:
   release:
@@ -47,12 +46,25 @@ jobs:
       - name: Dry run public package archives
         run: pnpm pack:public
 
+      - name: Verify packed public packages
+        run: pnpm release:verify
+
+      - name: Configure npm publish mode
+        run: |
+          if [ "${{ github.event.repository.private }}" = "true" ]; then
+            echo "NPM_CONFIG_PROVENANCE=false" >> "$GITHUB_ENV"
+            echo "npm package provenance is disabled because this repository is private. Make the repository public to re-enable provenance automatically." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "NPM_CONFIG_PROVENANCE=true" >> "$GITHUB_ENV"
+            echo "npm package provenance is enabled for this public repository." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Create release PR or publish
         uses: changesets/action@v1.7.0
         with:
-          version: pnpm release:version && pnpm install --lockfile-only
+          version: pnpm release:version
           publish: pnpm release:publish
-          commit: "Version public AgentOps packages"
-          title: "Version public AgentOps packages"
+          commit: "Version public AgentForge packages"
+          title: "Version public AgentForge packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

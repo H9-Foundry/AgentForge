@@ -1,4 +1,4 @@
-# AgentOps Architecture
+# AgentForge Architecture
 
 Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with the contracts and guardrails made explicit before broad feature expansion.
 
@@ -43,4 +43,4 @@ Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with
 - policy wins over manifests and runtime requests
 - blocked paths and redaction are enforced before artifacts are written
 
-For more detail on execution and policy behavior, see [docs/runtime-model.md](/Users/ethan/Repo/AgentOps/docs/runtime-model.md) and [docs/policy-model.md](/Users/ethan/Repo/AgentOps/docs/policy-model.md).
+For more detail on execution and policy behavior, see [docs/runtime-model.md](./runtime-model.md) and [docs/policy-model.md](./policy-model.md).

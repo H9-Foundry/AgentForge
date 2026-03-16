@@ -1,6 +1,6 @@
-# AgentOps
+# AgentForge
 
-AgentOps is an open-source, secure-by-default, repo-first runtime for software engineering workflows. The initial delivery target is a runnable local PR-review slice that feels more like GitHub Actions for engineering agents than a chat assistant.
+AgentForge is an open-source, secure-by-default, repo-first runtime for software engineering workflows. The initial delivery target is a runnable local PR-review slice that feels more like GitHub Actions for engineering agents than a chat assistant.
 
 ## Phase 1 Scope
 - TypeScript monorepo with explicit package boundaries
@@ -29,41 +29,53 @@ pnpm build
 pnpm build:packages
 ```
 
-Use the packaged CLI for local release-shape checks:
+Use the packaged CLI for local workflow and release-shape checks:
 
 ```bash
 node packages/cli/dist/bin.js init
 node packages/cli/dist/bin.js run pr-review
 node packages/cli/dist/bin.js explain last-run
+node packages/cli/dist/bin.js release guide
+node packages/cli/dist/bin.js release check --json
+node packages/cli/dist/bin.js release verify --json
 ```
 
 ## Release Surface
 
 Curated public packages:
 
-- `@agentops/cli`
-- `@agentops/schemas`
-- `@agentops/shared-types`
-- `@agentops/sdk`
-- `@agentops/context-engine`
-- `@agentops/policy-engine`
-- `@agentops/runtime`
-- `@agentops/audit`
+- `@h9-foundry/agentforge-cli`
+- `@h9-foundry/agentforge-schemas`
+- `@h9-foundry/agentforge-shared-types`
+- `@h9-foundry/agentforge-sdk`
+- `@h9-foundry/agentforge-context-engine`
+- `@h9-foundry/agentforge-policy-engine`
+- `@h9-foundry/agentforge-runtime`
+- `@h9-foundry/agentforge-audit`
 
 Internal workspace packages remain private until their APIs stabilize.
 
+## Release Bootstrap
+
+Package publishing uses GitHub OIDC trusted publishing for `@h9-foundry/agentforge-*`.
+
+- Run `npm login` once on the workstation that Codex uses. The CLI expects machine-level auth in `~/.npmrc`.
+- Use `agentforge release guide` for the external npm bootstrap steps and reference URLs.
+- Use `agentforge release check --json` to validate npm auth, package metadata, release workflow config, Changesets config, and local release-shape checks.
+- Use `agentforge release verify --json` before the first publish to validate packed tarballs from a clean-room consumer install.
+
 ## Security And Release Notes
 
-- [SECURITY.md](/Users/ethan/Repo/AgentOps/SECURITY.md)
-- [docs/security-model.md](/Users/ethan/Repo/AgentOps/docs/security-model.md)
-- [docs/release-trust.md](/Users/ethan/Repo/AgentOps/docs/release-trust.md)
-- [docs/github-actions.md](/Users/ethan/Repo/AgentOps/docs/github-actions.md)
+- [SECURITY.md](./SECURITY.md)
+- [docs/security-model.md](./docs/security-model.md)
+- [docs/release-trust.md](./docs/release-trust.md)
+- [docs/github-actions.md](./docs/github-actions.md)
 
 ## Contributor And Extension Guides
 
-- [CONTRIBUTING.md](/Users/ethan/Repo/AgentOps/CONTRIBUTING.md)
-- [docs/runtime-model.md](/Users/ethan/Repo/AgentOps/docs/runtime-model.md)
-- [docs/policy-model.md](/Users/ethan/Repo/AgentOps/docs/policy-model.md)
-- [docs/agent-manifest-guide.md](/Users/ethan/Repo/AgentOps/docs/agent-manifest-guide.md)
-- [docs/plugin-author-guide.md](/Users/ethan/Repo/AgentOps/docs/plugin-author-guide.md)
-- [examples/README.md](/Users/ethan/Repo/AgentOps/examples/README.md)
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [docs/runtime-model.md](./docs/runtime-model.md)
+- [docs/policy-model.md](./docs/policy-model.md)
+- [docs/agent-manifest-guide.md](./docs/agent-manifest-guide.md)
+- [docs/plugin-author-guide.md](./docs/plugin-author-guide.md)
+- [examples/README.md](./examples/README.md)

@@ -16,8 +16,9 @@ To dry-run the publishable package set:
 
 ```bash
 pnpm pack:public
+pnpm release:verify
 ```
 
-For the GitHub CI wrapper and PR/issue reporting flow, see [docs/github-actions.md](/Users/ethan/Repo/AgentOps/docs/github-actions.md).
-For the Phase 1 security posture and build provenance approach, see [docs/security-model.md](/Users/ethan/Repo/AgentOps/docs/security-model.md) and [docs/release-trust.md](/Users/ethan/Repo/AgentOps/docs/release-trust.md).
-For contributor workflow and extension authoring, start with [CONTRIBUTING.md](/Users/ethan/Repo/AgentOps/CONTRIBUTING.md), [docs/agent-manifest-guide.md](/Users/ethan/Repo/AgentOps/docs/agent-manifest-guide.md), and [docs/plugin-author-guide.md](/Users/ethan/Repo/AgentOps/docs/plugin-author-guide.md).
+For the GitHub CI wrapper and PR/issue reporting flow, see [docs/github-actions.md](./github-actions.md).
+For the Phase 1 security posture and build provenance approach, see [docs/security-model.md](./security-model.md) and [docs/release-trust.md](./release-trust.md).
+For contributor workflow and extension authoring, start with [CONTRIBUTING.md](../CONTRIBUTING.md), [docs/agent-manifest-guide.md](./agent-manifest-guide.md), and [docs/plugin-author-guide.md](./plugin-author-guide.md).

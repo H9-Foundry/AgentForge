@@ -1,18 +1,26 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 
-import { explainLastRun, initProject, runLocalWorkflow, scanProject } from "./index.js";
+import {
+  checkReleaseReadiness,
+  explainLastRun,
+  initProject,
+  renderReleaseGuide,
+  runLocalWorkflow,
+  scanProject,
+  verifyReleaseArtifacts
+} from "./index.js";
 
 const program = new Command();
 
-program.name("agentops").description("Secure-by-default workflow runner for engineering agents.").version("0.1.0");
+program.name("agentforge").description("Secure-by-default workflow runner for engineering agents.").version("0.1.0");
 
 program
   .command("init")
   .description("Scaffold .agentops configuration in the current repository.")
   .action(() => {
     const result = initProject();
-    console.log(`Initialized AgentOps in ${result.root}`);
+    console.log(`Initialized AgentForge in ${result.root}`);
     console.log(result.created.length > 0 ? `Created ${result.created.length} file(s).` : "Configuration already present.");
   });
 
@@ -69,6 +77,62 @@ program
     console.log(`Findings: ${explanation.findings}`);
     console.log(`Blocked actions: ${explanation.blockedActions}`);
     console.log(`Blocked plugins: ${explanation.blockedPlugins}`);
+  });
+
+const release = program.command("release").description("Guide and validate npm release bootstrap for AgentForge.");
+
+release
+  .command("guide")
+  .description("Print the external npm bootstrap steps and reference URLs.")
+  .action(() => {
+    console.log(renderReleaseGuide());
+  });
+
+release
+  .command("check")
+  .description("Run read-only release preflight checks for npm publishing.")
+  .option("--json", "Print machine-readable JSON output.")
+  .option("--skip-npm-auth", "Skip npm auth and npm whoami checks for CI-hosted validation.")
+  .option("--skip-local-commands", "Skip local command replay for CI-hosted validation.")
+  .action((options: { json?: boolean; skipNpmAuth?: boolean; skipLocalCommands?: boolean }) => {
+    const result = checkReleaseReadiness(process.cwd(), {
+      skipNpmAuth: options.skipNpmAuth,
+      skipLocalCommands: options.skipLocalCommands
+    });
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`Target scope: ${result.targetScope}`);
+      console.log(`Ready: ${result.ready ? "yes" : "no"}`);
+      console.log(`npm auth: ${result.npmAuth.present && result.npmAuth.readable ? "configured" : "missing"}`);
+      console.log(`npm user: ${result.npmUser.value ?? "unresolved"}`);
+      for (const check of result.checks) {
+        console.log(`[${check.status}] ${check.label}: ${check.detail}`);
+      }
+    }
+
+    process.exitCode = result.ready ? 0 : 1;
+  });
+
+release
+  .command("verify")
+  .description("Verify packed public packages from a clean-room consumer install.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action((options: { json?: boolean }) => {
+    const result = verifyReleaseArtifacts();
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`Workspace root: ${result.workspaceRoot}`);
+      console.log(`Target scope: ${result.targetScope}`);
+      console.log(`Ready: ${result.ready ? "yes" : "no"}`);
+      console.log(`Temp dir: ${result.tempDir}`);
+      for (const check of result.checks) {
+        console.log(`[${check.status}] ${check.label}: ${check.detail}`);
+      }
+    }
+
+    process.exitCode = result.ready ? 0 : 1;
   });
 
 program.parseAsync(process.argv);

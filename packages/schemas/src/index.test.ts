@@ -59,7 +59,7 @@ describe("schema fixtures", () => {
           markdown: ".agentops/runs/run-1/summary.md"
         },
         provenance: {
-          generatedBy: "agentops-runtime",
+          generatedBy: "agentforge-runtime",
           schemaVersion: "1.0.0",
           executionEnvironment: "local",
           repoRoot: "/repo"

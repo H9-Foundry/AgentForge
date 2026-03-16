@@ -1,4 +1,4 @@
-# Phase 1 AgentOps Foundation
+# Phase 1 AgentForge Foundation
 
 ## Current Repo State
 - Repository started as an empty scaffold with only `README.md` and `.gitignore`.
@@ -43,6 +43,6 @@
 
 ## Definition Of Done
 - The monorepo installs, builds, typechecks, and tests successfully.
-- `agentops init`, `agentops scan`, `agentops run pr-review`, and `agentops explain last-run` work locally.
+- `agentforge init`, `agentforge scan`, `agentforge run pr-review`, and `agentforge explain last-run` work locally.
 - The starter workflow produces human-readable and machine-readable artifacts.
 - Deferred work is limited to GitHub integration, expanded docs/examples, and later hardening tasks.

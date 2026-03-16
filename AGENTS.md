@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Repository Purpose
-- AgentOps is an open-source, secure-by-default, repo-first runtime for software engineering workflows.
+- AgentForge is an open-source, secure-by-default, repo-first runtime for software engineering workflows.
 - The repository is organized as a TypeScript-first monorepo with explicit package boundaries for schemas, runtime, policy, context, audit, adapters, agents, and CLI tooling.
 
 ## Working Rules

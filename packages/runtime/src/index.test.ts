@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { agentOutputSchema } from "@agentops/schemas";
-import type { RuntimeAgent } from "@agentops/sdk";
-import type { WorkflowStateEnvelope } from "@agentops/shared-types";
+import { agentOutputSchema } from "@h9-foundry/agentforge-schemas";
+import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
+import type { WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 
 import { runWorkflow } from "./index.js";
 

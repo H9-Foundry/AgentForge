@@ -2,8 +2,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { basename } from "node:path";
 import { execFileSync } from "node:child_process";
 
-import { workflowStateEnvelopeSchema } from "@agentops/schemas";
-import type { EffectivePolicySnapshot, WorkflowStateEnvelope } from "@agentops/shared-types";
+import { workflowStateEnvelopeSchema } from "@h9-foundry/agentforge-schemas";
+import type { EffectivePolicySnapshot, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 
 export interface CreateWorkflowStateOptions {
   readonly cwd?: string;

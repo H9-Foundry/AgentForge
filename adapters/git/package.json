@@ -1,5 +1,5 @@
 {
-  "name": "@agentops/adapters-git",
+  "name": "@h9-foundry/agentforge-adapters-git",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,13 +11,15 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/sdk": "workspace:*",
+    "@h9-foundry/agentforge-sdk": "workspace:*",
     "zod": "^3.24.2"
   }
 }

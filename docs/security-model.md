@@ -25,7 +25,7 @@
 
 ## Trust Tiers
 
-AgentOps now carries trust metadata for runtime components:
+AgentForge now carries trust metadata for runtime components:
 
 - `core`: first-party components maintained in this repository
 - `verified`: approved external or privileged integrations with explicit review

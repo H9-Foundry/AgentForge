@@ -10,5 +10,5 @@ providers:
 plugins:
   agents:
     - name: custom-agent-template
-      package: "@agentops/custom-agent-template"
+      package: "@h9-foundry/agentforge-custom-agent-template"
       enabled: true

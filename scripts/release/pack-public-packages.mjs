@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -16,14 +17,19 @@ const packageDirs = readdirSync(packagesDir)
     }
   });
 
+const packDir = mkdtempSync(join(tmpdir(), "agentforge-pack-public-"));
+
 for (const packageDir of packageDirs) {
-  const result = spawnSync("npm", ["pack", "--dry-run"], {
+  const result = spawnSync("pnpm", ["pack", "--pack-destination", packDir], {
     cwd: packageDir,
     stdio: "inherit",
     env: process.env
   });
 
   if (result.status !== 0) {
+    rmSync(packDir, { recursive: true, force: true });
     process.exit(result.status ?? 1);
   }
 }
+
+rmSync(packDir, { recursive: true, force: true });

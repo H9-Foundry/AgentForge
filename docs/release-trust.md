@@ -2,18 +2,18 @@
 
 ## Public Package Policy
 
-AgentOps now treats a curated subset of the workspace as publishable:
+AgentForge now treats a curated subset of the workspace as publishable:
 
-- `@agentops/cli`
-- `@agentops/schemas`
-- `@agentops/shared-types`
-- `@agentops/sdk`
-- `@agentops/context-engine`
-- `@agentops/policy-engine`
-- `@agentops/runtime`
-- `@agentops/audit`
+- `@h9-foundry/agentforge-cli`
+- `@h9-foundry/agentforge-schemas`
+- `@h9-foundry/agentforge-shared-types`
+- `@h9-foundry/agentforge-sdk`
+- `@h9-foundry/agentforge-context-engine`
+- `@h9-foundry/agentforge-policy-engine`
+- `@h9-foundry/agentforge-runtime`
+- `@h9-foundry/agentforge-audit`
 
-Everything else stays private for now, including `@agentops/registry-client`, all official agents, and all adapters.
+Everything else stays private for now, including `@h9-foundry/agentforge-registry-client`, all official agents, and all adapters.
 
 ## Versioning
 
@@ -25,6 +25,7 @@ Before opening or merging release work:
 - keep internal-only work out of publishable release notes
 - run `pnpm build:packages`
 - run `pnpm pack:public`
+- run `pnpm release:verify`
 
 ## Trusted Publishing
 
@@ -34,25 +35,47 @@ It is designed to:
 
 - build the workspace and package outputs
 - dry-run the curated public package tarballs
+- verify the curated tarballs from a clean-room consumer install
 - open or update version PRs through Changesets
-- publish with npm trusted publishing and provenance when a release commit lands on `main`
+- publish with npm trusted publishing when a release commit lands on `main`
+
+`.github/workflows/publish-gate.yml` runs the same tarball-based verification on pull requests and manual dispatches so the first publish is blocked until the packed artifacts behave like consumer installs.
 
 This workflow should not fall back to a long-lived npm token. If npm trusted publishing is not configured yet, keep the workflow gated and fix the external setup first.
+
+`release-packages.yml` enables npm package provenance automatically when the repository is public. If the repository is private, it falls back to trusted publishing without npm provenance because npm currently rejects sigstore provenance bundles from private GitHub repositories.
+
+AgentForge does not store npm credentials in repo config. Codex-assisted npm setup depends on machine-level npm auth on the workstation, typically through `npm login` writing `~/.npmrc`.
+
+Use the CLI to separate guidance from verification:
+
+- `agentforge release guide`
+  - prints the external bootstrap sequence for npm org creation, ownership confirmation, trusted publishing setup, and hosted release reruns
+- `agentforge release check`
+  - runs read-only preflight checks for npm auth, current npm username resolution, package metadata, release workflow trusted publishing config, Changesets config, and local release-shape commands
+- `agentforge release check --json`
+  - emits the same result as structured JSON for Codex or CI consumption
+- `agentforge release verify`
+  - packs every public package, installs the tarballs into a clean temp project, verifies installed metadata and entrypoints, imports every public package, and smoke-tests the installed CLI against the workspace
+- `agentforge release verify --json`
+  - emits the clean-room verification result as structured JSON for Codex or CI consumption
 
 ## Build Provenance
 
 `.github/workflows/release-provenance.yml` remains useful even when package publishing is active. It attests the build artifact for the full workspace so reviewers can inspect a reproducible CI build independent of npm publication.
 
-For private repositories, artifact attestation is skipped unless the repository or organization enables it and sets `AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true`.
+When the repository is public, `release-provenance.yml` attests the build artifact by default. If the repository is private, artifact attestation is skipped unless the repository or organization enables it and sets `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true`.
 
 ## Prerequisites
 
 Before relying on the package release workflow, confirm:
 
-- the npm scope `@agentops` is owned by the correct org
+- the npm scope `@h9-foundry` is owned by the correct org
+- the workstation used for Codex/npm admin work has a valid npm login in `~/.npmrc`
 - GitHub Actions trusted publishing is configured for that scope
 - the repository permissions allow `id-token: write`
 - the public package list in `.changeset/config.json` still matches repo intent
+- the publish gate passes locally or in CI before the first bootstrap publish
 
 ## Plugin Trust And Releases
 

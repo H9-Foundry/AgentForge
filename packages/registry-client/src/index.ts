@@ -2,8 +2,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { agentManifestSchema } from "@agentops/schemas";
-import type { RuntimeAgent } from "@agentops/sdk";
+import { agentManifestSchema } from "@h9-foundry/agentforge-schemas";
+import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 
 interface WorkspacePackageRecord {
   readonly name: string;
