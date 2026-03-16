@@ -1,6 +1,25 @@
 {
   "name": "@h9-foundry/agentforge-sdk",
   "version": "0.3.1",
+  "description": "SDK interfaces for AgentForge agents, adapters, providers, and runtime integrations.",
+  "license": "MIT",
+  "author": "H9 Foundry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/H9-Foundry/AgentForge.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/H9-Foundry/AgentForge/tree/main/packages/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/H9-Foundry/AgentForge/issues"
+  },
+  "keywords": [
+    "agentforge",
+    "sdk",
+    "agents",
+    "adapters",
+    "typescript"
+  ],
   "type": "module",
   "publishConfig": {
     "access": "public"

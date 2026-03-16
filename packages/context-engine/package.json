@@ -1,6 +1,25 @@
 {
   "name": "@h9-foundry/agentforge-context-engine",
   "version": "0.3.1",
+  "description": "Repository and execution context collection for AgentForge workflows.",
+  "license": "MIT",
+  "author": "H9 Foundry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/H9-Foundry/AgentForge.git",
+    "directory": "packages/context-engine"
+  },
+  "homepage": "https://github.com/H9-Foundry/AgentForge/tree/main/packages/context-engine#readme",
+  "bugs": {
+    "url": "https://github.com/H9-Foundry/AgentForge/issues"
+  },
+  "keywords": [
+    "agentforge",
+    "context",
+    "git",
+    "repository-analysis",
+    "workflows"
+  ],
   "type": "module",
   "publishConfig": {
     "access": "public"

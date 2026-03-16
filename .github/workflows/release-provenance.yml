@@ -61,5 +61,5 @@ jobs:
       - name: Note skipped provenance attestation
         if: ${{ github.event.repository.private == true && vars.AGENTFORGE_ENABLE_PRIVATE_ATTESTATION != 'true' }}
         run: |
-          echo "GitHub artifact attestation is skipped for this private repository." >> "$GITHUB_STEP_SUMMARY"
-          echo "Set AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true after enabling private attestations for the org to re-enable this step." >> "$GITHUB_STEP_SUMMARY"
+          echo "GitHub artifact attestation is skipped because this repository is private." >> "$GITHUB_STEP_SUMMARY"
+          echo "Make the repository public, or set AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true after enabling private attestations for the org, to re-enable this step." >> "$GITHUB_STEP_SUMMARY"

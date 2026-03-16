@@ -4,7 +4,7 @@ AgentForge currently supports local/manual agent plugins only. There is no remot
 
 ## Package Shape
 
-Start from [examples/custom-agent-template/README.md](/Users/ethan/Repo/AgentOps/examples/custom-agent-template/README.md).
+Start from [examples/custom-agent-template/README.md](../examples/custom-agent-template/README.md).
 
 Your local plugin package should export a `RuntimeAgent` through one of these shapes:
 
