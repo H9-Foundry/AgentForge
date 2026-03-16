@@ -53,7 +53,7 @@ jobs:
         run: |
           if [ "${{ github.event.repository.private }}" = "true" ]; then
             echo "NPM_CONFIG_PROVENANCE=false" >> "$GITHUB_ENV"
-            echo "npm package provenance is disabled for this private repository because npm only accepts provenance from public GitHub repositories." >> "$GITHUB_STEP_SUMMARY"
+            echo "npm package provenance is disabled because this repository is private. Make the repository public to re-enable provenance automatically." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "NPM_CONFIG_PROVENANCE=true" >> "$GITHUB_ENV"
             echo "npm package provenance is enabled for this public repository." >> "$GITHUB_STEP_SUMMARY"
