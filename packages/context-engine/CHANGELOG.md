@@ -1,5 +1,17 @@
 # @h9-foundry/agentforge-context-engine
 
+## 0.3.0
+
+### Minor Changes
+
+- 97f5848: Rename the public package family from `@agentops/*` to `@h9-foundry/agentforge-*`, rename the CLI command to `agentforge`, and update release/reporting workflows to the AgentForge brand while keeping the current GitHub repository slug unchanged.
+
+### Patch Changes
+
+- Updated dependencies [97f5848]
+  - @h9-foundry/agentforge-schemas@0.3.0
+  - @h9-foundry/agentforge-shared-types@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
