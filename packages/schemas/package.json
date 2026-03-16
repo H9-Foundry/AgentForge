@@ -1,6 +1,6 @@
 {
   "name": "@agentops/schemas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -13,7 +13,11 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "!dist/**/*.test.*", "!dist/**/*.spec.*"],
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
