@@ -27,7 +27,7 @@ jobs:
       AGENTOPS_TRACKER_ISSUE: ${{ github.event.inputs.tracker_issue || '1' }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
