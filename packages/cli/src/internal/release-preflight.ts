@@ -181,7 +181,7 @@ export function getReleaseGuide(): ReleaseGuide {
       "Run `npm login` on this workstation so npm auth is available through your user-scoped ~/.npmrc.",
       "Create the npm organization `h9-foundry` and confirm your npm account is an owner before attempting any publish.",
       "Confirm the public package target remains @h9-foundry/agentforge-* and keep GitHub Actions trusted publishing enabled in .github/workflows/release-packages.yml.",
-      "After npm org ownership is confirmed, configure npm trusted publishing for H9-Foundry/AgentOps and rerun the Release Packages workflow on main.",
+      "After npm org ownership is confirmed, configure npm trusted publishing for H9-Foundry/AgentForge and rerun the Release Packages workflow on main.",
       "Use `agentforge release check --json` before and after external npm setup to confirm the repo is ready and to capture remaining blockers."
     ],
     urls: [
@@ -189,7 +189,7 @@ export function getReleaseGuide(): ReleaseGuide {
       "https://www.npmjs.com/org/create",
       "https://www.npmjs.com/settings",
       "https://docs.npmjs.com/trusted-publishers",
-      "https://github.com/H9-Foundry/AgentOps/actions/workflows/release-packages.yml"
+      "https://github.com/H9-Foundry/AgentForge/actions/workflows/release-packages.yml"
     ]
   };
 }
