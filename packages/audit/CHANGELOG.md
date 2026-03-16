@@ -1,5 +1,13 @@
 # @h9-foundry/agentforge-audit
 
+## 0.3.2
+
+### Patch Changes
+
+- 1c6c323: Refresh package metadata and documentation for the public open-source release cutover.
+- Updated dependencies [1c6c323]
+  - @h9-foundry/agentforge-shared-types@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes
