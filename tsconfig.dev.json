@@ -3,23 +3,23 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@agentops/schemas": ["packages/schemas/src/index.ts"],
-      "@agentops/shared-types": ["packages/shared-types/src/index.ts"],
-      "@agentops/sdk": ["packages/sdk/src/index.ts"],
-      "@agentops/context-engine": ["packages/context-engine/src/index.ts"],
-      "@agentops/policy-engine": ["packages/policy-engine/src/index.ts"],
-      "@agentops/audit": ["packages/audit/src/index.ts"],
-      "@agentops/runtime": ["packages/runtime/src/index.ts"],
-      "@agentops/registry-client": ["packages/registry-client/src/index.ts"],
-      "@agentops/cli": ["packages/cli/src/index.ts"],
-      "@agentops/agent-context-collector": ["agents/context-collector/src/index.ts"],
-      "@agentops/agent-code-review": ["agents/code-review/src/index.ts"],
-      "@agentops/agent-security-audit": ["agents/security-audit/src/index.ts"],
-      "@agentops/agent-test-generation": ["agents/test-generation/src/index.ts"],
-      "@agentops/adapters-filesystem": ["adapters/filesystem/src/index.ts"],
-      "@agentops/adapters-git": ["adapters/git/src/index.ts"],
-      "@agentops/adapters-shell": ["adapters/shell/src/index.ts"],
-      "@agentops/adapters-github": ["adapters/github/src/index.ts"]
+      "@h9-foundry/agentforge-schemas": ["packages/schemas/src/index.ts"],
+      "@h9-foundry/agentforge-shared-types": ["packages/shared-types/src/index.ts"],
+      "@h9-foundry/agentforge-sdk": ["packages/sdk/src/index.ts"],
+      "@h9-foundry/agentforge-context-engine": ["packages/context-engine/src/index.ts"],
+      "@h9-foundry/agentforge-policy-engine": ["packages/policy-engine/src/index.ts"],
+      "@h9-foundry/agentforge-audit": ["packages/audit/src/index.ts"],
+      "@h9-foundry/agentforge-runtime": ["packages/runtime/src/index.ts"],
+      "@h9-foundry/agentforge-registry-client": ["packages/registry-client/src/index.ts"],
+      "@h9-foundry/agentforge-cli": ["packages/cli/src/index.ts"],
+      "@h9-foundry/agentforge-agent-context-collector": ["agents/context-collector/src/index.ts"],
+      "@h9-foundry/agentforge-agent-code-review": ["agents/code-review/src/index.ts"],
+      "@h9-foundry/agentforge-agent-security-audit": ["agents/security-audit/src/index.ts"],
+      "@h9-foundry/agentforge-agent-test-generation": ["agents/test-generation/src/index.ts"],
+      "@h9-foundry/agentforge-adapters-filesystem": ["adapters/filesystem/src/index.ts"],
+      "@h9-foundry/agentforge-adapters-git": ["adapters/git/src/index.ts"],
+      "@h9-foundry/agentforge-adapters-shell": ["adapters/shell/src/index.ts"],
+      "@h9-foundry/agentforge-adapters-github": ["adapters/github/src/index.ts"]
     }
   }
 }

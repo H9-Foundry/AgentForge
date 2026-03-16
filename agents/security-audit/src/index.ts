@@ -1,5 +1,5 @@
-import { agentManifestSchema, agentOutputSchema } from "@agentops/schemas";
-import type { RuntimeAgent } from "@agentops/sdk";
+import { agentManifestSchema, agentOutputSchema } from "@h9-foundry/agentforge-schemas";
+import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 
 const highRiskMatchers = [/\.env/i, /^secrets\//i, /^infra\/prod\//i];
 

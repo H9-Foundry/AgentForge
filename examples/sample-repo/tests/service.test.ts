@@ -4,5 +4,5 @@ import assert from "node:assert/strict";
 import { formatGreeting } from "../src/service.js";
 
 test("formats a greeting", () => {
-  assert.equal(formatGreeting("agentops"), "hello, agentops");
+  assert.equal(formatGreeting("agentforge"), "hello, agentforge");
 });

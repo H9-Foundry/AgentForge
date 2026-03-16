@@ -1,4 +1,4 @@
-# @agentops/runtime
+# @h9-foundry/agentforge-runtime
 
 ## 0.2.0
 
@@ -9,8 +9,8 @@
 ### Patch Changes
 
 - Updated dependencies [9a94beb]
-  - @agentops/audit@0.2.0
-  - @agentops/policy-engine@0.2.0
-  - @agentops/schemas@0.2.0
-  - @agentops/sdk@0.2.0
-  - @agentops/shared-types@0.2.0
+  - @h9-foundry/agentforge-audit@0.2.0
+  - @h9-foundry/agentforge-policy-engine@0.2.0
+  - @h9-foundry/agentforge-schemas@0.2.0
+  - @h9-foundry/agentforge-sdk@0.2.0
+  - @h9-foundry/agentforge-shared-types@0.2.0

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Pre-1.0 AgentOps development is supported on the latest default branch and the latest tagged `0.x` release, when tags exist.
+Pre-1.0 AgentForge development is supported on the latest default branch and the latest tagged `0.x` release, when tags exist.
 
 ## Reporting A Vulnerability
 

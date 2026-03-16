@@ -1,4 +1,4 @@
-# AgentOps Architecture
+# AgentForge Architecture
 
 Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with the contracts and guardrails made explicit before broad feature expansion.
 

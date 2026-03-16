@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
-import type { EffectivePolicySnapshot } from "@agentops/shared-types";
+import type { EffectivePolicySnapshot } from "@h9-foundry/agentforge-shared-types";
 
 import { createWorkflowState, detectPackageManager } from "./index.js";
 
@@ -43,7 +43,7 @@ describe("context engine", () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-state-"));
     execFileSync("git", ["init"], { cwd: root });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "AgentOps Test"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
     writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
     writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
     execFileSync("git", ["add", "."], { cwd: root });

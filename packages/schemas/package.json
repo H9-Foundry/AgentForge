@@ -1,5 +1,5 @@
 {
-  "name": "@agentops/schemas",
+  "name": "@h9-foundry/agentforge-schemas",
   "version": "0.2.0",
   "type": "module",
   "publishConfig": {

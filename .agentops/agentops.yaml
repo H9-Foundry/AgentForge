@@ -1,6 +1,6 @@
 version: 1
 project:
-  name: agentops
+  name: agentforge
   language: typescript
 runtime:
   mode: inspect

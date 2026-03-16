@@ -4,14 +4,14 @@ import { isAbsolute, relative, resolve } from "node:path";
 import yaml from "js-yaml";
 import picomatch from "picomatch";
 
-import { policyDocumentSchema } from "@agentops/schemas";
+import { policyDocumentSchema } from "@h9-foundry/agentforge-schemas";
 import type {
   EffectivePolicySnapshot,
   ExecutionEnvironment,
   PolicyDocument,
   TrustMetadata,
   ToolRequest
-} from "@agentops/shared-types";
+} from "@h9-foundry/agentforge-shared-types";
 
 export interface PolicyDecision {
   readonly allowed: boolean;

@@ -33,7 +33,7 @@ export const blockedPluginSchema = z.object({
   trust: trustMetadataSchema.optional()
 });
 
-export const agentopsConfigSchema = z.object({
+export const agentforgeConfigSchema = z.object({
   version: z.number().int().positive(),
   project: z.object({
     name: z.string().min(1),
@@ -356,7 +356,7 @@ export const schemaRegistry = {
   agentOutput: agentOutputSchema,
   agentManifest: agentManifestSchema,
   agentPluginRegistration: agentPluginRegistrationSchema,
-  agentopsConfig: agentopsConfigSchema,
+  agentforgeConfig: agentforgeConfigSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,

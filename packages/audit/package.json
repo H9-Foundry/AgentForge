@@ -1,5 +1,5 @@
 {
-  "name": "@agentops/audit",
+  "name": "@h9-foundry/agentforge-audit",
   "version": "0.2.0",
   "type": "module",
   "publishConfig": {
@@ -23,6 +23,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/shared-types": "workspace:*"
+    "@h9-foundry/agentforge-shared-types": "workspace:*"
   }
 }

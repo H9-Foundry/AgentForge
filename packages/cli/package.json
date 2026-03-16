@@ -1,12 +1,12 @@
 {
-  "name": "@agentops/cli",
+  "name": "@h9-foundry/agentforge-cli",
   "version": "0.2.0",
   "type": "module",
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "agentops": "./dist/bin.js"
+    "agentforge": "./dist/bin.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,13 +26,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/audit": "workspace:*",
-    "@agentops/context-engine": "workspace:*",
-    "@agentops/policy-engine": "workspace:*",
-    "@agentops/runtime": "workspace:*",
-    "@agentops/schemas": "workspace:*",
-    "@agentops/sdk": "workspace:*",
-    "@agentops/shared-types": "workspace:*",
+    "@h9-foundry/agentforge-audit": "workspace:*",
+    "@h9-foundry/agentforge-context-engine": "workspace:*",
+    "@h9-foundry/agentforge-policy-engine": "workspace:*",
+    "@h9-foundry/agentforge-runtime": "workspace:*",
+    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-sdk": "workspace:*",
+    "@h9-foundry/agentforge-shared-types": "workspace:*",
     "commander": "^13.1.0",
     "js-yaml": "^4.1.0",
     "zod": "^3.24.2"

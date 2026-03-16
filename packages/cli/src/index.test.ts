@@ -63,7 +63,7 @@ describe("cli smoke flows", () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-cli-"));
     execFileSync("git", ["init"], { cwd: root });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "AgentOps Test"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
     writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
     writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
     execFileSync("git", ["add", "."], { cwd: root });
@@ -90,7 +90,7 @@ describe("cli smoke flows", () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-cli-plugin-"));
     execFileSync("git", ["init"], { cwd: root });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "AgentOps Test"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
     writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
     writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
     initProject(root);
@@ -149,7 +149,7 @@ describe("cli smoke flows", () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-cli-blocked-plugin-"));
     execFileSync("git", ["init"], { cwd: root });
     execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "AgentOps Test"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
     writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
     writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
     initProject(root);

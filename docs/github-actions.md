@@ -1,22 +1,22 @@
 # GitHub Action Integration
 
-AgentOps includes a GitHub Actions wrapper for the starter `pr-review` workflow.
+AgentForge includes a GitHub Actions wrapper for the starter `pr-review` workflow.
 
 ## Workflows
 
-- `.github/workflows/agentops-pr-review.yml`
+- `.github/workflows/agentforge-pr-review.yml`
   - pull request and manual workflow execution
   - comments on PRs and the configured tracker issue
 - `.github/workflows/release-provenance.yml`
   - build artifact provenance for the workspace
-  - skips artifact attestation on private repositories unless `AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
+  - skips artifact attestation on private repositories unless `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
 - `.github/workflows/release-packages.yml`
   - Changesets version PRs and trusted npm publishing for the curated public subset
 
 ## What It Does
 - installs dependencies
 - builds the workspace and package outputs
-- runs `agentops run pr-review --json`
+- runs `agentforge run pr-review --json`
 - uploads the JSON bundle and markdown summary as workflow artifacts
 - appends the run summary to the GitHub Actions step summary
 - comments on the pull request when triggered by `pull_request`

@@ -4,7 +4,7 @@ import type { infer as Infer } from "zod";
 import {
   agentManifestSchema,
   agentPluginRegistrationSchema,
-  agentopsConfigSchema,
+  agentforgeConfigSchema,
   agentOutputSchema,
   approvalCheckpointSchema,
   auditBundleSchema,
@@ -24,7 +24,7 @@ import {
   toolResultSchema,
   workflowDefinitionSchema,
   workflowStateEnvelopeSchema
-} from "@agentops/schemas";
+} from "@h9-foundry/agentforge-schemas";
 
 export type Finding = Infer<typeof findingSchema>;
 export type BlockedPlugin = Infer<typeof blockedPluginSchema>;
@@ -39,7 +39,7 @@ export type AuditRedaction = Infer<typeof auditRedactionSchema>;
 export type AgentOutput = Infer<typeof agentOutputSchema>;
 export type AgentManifest = Infer<typeof agentManifestSchema>;
 export type AgentPluginRegistration = Infer<typeof agentPluginRegistrationSchema>;
-export type AgentOpsConfig = Infer<typeof agentopsConfigSchema>;
+export type AgentForgeConfig = Infer<typeof agentforgeConfigSchema>;
 export type PolicyDocument = Infer<typeof policyDocumentSchema>;
 export type EffectivePolicySnapshot = Infer<typeof effectivePolicySnapshotSchema>;
 export type WorkflowDefinition = Infer<typeof workflowDefinitionSchema>;

@@ -1,5 +1,5 @@
-import { buildAuditBundle, createAuditEntry } from "@agentops/audit";
-import { agentOutputSchema, toolResultSchema } from "@agentops/schemas";
+import { buildAuditBundle, createAuditEntry } from "@h9-foundry/agentforge-audit";
+import { agentOutputSchema, toolResultSchema } from "@h9-foundry/agentforge-schemas";
 import type {
   AuditComponent,
   AuditBundle,
@@ -8,8 +8,8 @@ import type {
   ToolResult,
   WorkflowDefinition,
   WorkflowStateEnvelope
-} from "@agentops/shared-types";
-import type { ReasoningProvider, RuntimeAgent, ToolAdapter } from "@agentops/sdk";
+} from "@h9-foundry/agentforge-shared-types";
+import type { ReasoningProvider, RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
 
 export interface PolicyEngineLike {
   readonly snapshot: EffectivePolicySnapshot;
@@ -289,7 +289,7 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
     jsonPath: deps.artifactJsonPath,
     markdownPath: deps.artifactMarkdownPath,
     provenance: {
-      generatedBy: "agentops-runtime",
+      generatedBy: "agentforge-runtime",
       schemaVersion: state.version,
       executionEnvironment: state.context.ciExecution ? "ci" : "local",
       repoRoot: state.repo.root

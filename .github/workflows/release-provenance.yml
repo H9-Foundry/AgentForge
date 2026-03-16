@@ -44,22 +44,22 @@ jobs:
         run: node packages/cli/dist/bin.js scan --json > /dev/null
 
       - name: Package build artifact
-        run: tar -czf "agentops-build-${GITHUB_SHA}.tgz" .build packages/*/dist README.md docs SECURITY.md package.json pnpm-lock.yaml
+        run: tar -czf "agentforge-build-${GITHUB_SHA}.tgz" .build packages/*/dist README.md docs SECURITY.md package.json pnpm-lock.yaml
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7.0.0
         with:
-          name: agentops-build-${{ github.sha }}
-          path: agentops-build-${{ github.sha }}.tgz
+          name: agentforge-build-${{ github.sha }}
+          path: agentforge-build-${{ github.sha }}.tgz
 
       - name: Attest build provenance
-        if: ${{ github.event.repository.private == false || vars.AGENTOPS_ENABLE_PRIVATE_ATTESTATION == 'true' }}
+        if: ${{ github.event.repository.private == false || vars.AGENTFORGE_ENABLE_PRIVATE_ATTESTATION == 'true' }}
         uses: actions/attest-build-provenance@v4.1.0
         with:
-          subject-path: agentops-build-${{ github.sha }}.tgz
+          subject-path: agentforge-build-${{ github.sha }}.tgz
 
       - name: Note skipped provenance attestation
-        if: ${{ github.event.repository.private == true && vars.AGENTOPS_ENABLE_PRIVATE_ATTESTATION != 'true' }}
+        if: ${{ github.event.repository.private == true && vars.AGENTFORGE_ENABLE_PRIVATE_ATTESTATION != 'true' }}
         run: |
           echo "GitHub artifact attestation is skipped for this private repository." >> "$GITHUB_STEP_SUMMARY"
-          echo "Set AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true after enabling private attestations for the org to re-enable this step." >> "$GITHUB_STEP_SUMMARY"
+          echo "Set AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true after enabling private attestations for the org to re-enable this step." >> "$GITHUB_STEP_SUMMARY"

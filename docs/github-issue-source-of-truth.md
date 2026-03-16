@@ -1,6 +1,6 @@
 # GitHub Issues As Source Of Truth
 
-The intended operating model for AgentOps is to track active planning and delivery in GitHub issues rather than only in local markdown files.
+The intended operating model for AgentForge is to track active planning and delivery in GitHub issues rather than only in local markdown files.
 
 ## Issue Structure
 - One umbrella issue for the active phase, including scope, milestones, risks, and links to child issues.
