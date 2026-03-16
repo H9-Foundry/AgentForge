@@ -1,5 +1,8 @@
 name: AgentOps PR Review
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -27,26 +30,31 @@ jobs:
       AGENTOPS_TRACKER_ISSUE: ${{ github.event.inputs.tracker_issue || '1' }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v4.4.0
         with:
           version: 10.6.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.3.0
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build workspace
-        run: pnpm build
+      - name: Build sources and packages
+        run: |
+          pnpm build
+          pnpm -r build
+
+      - name: Smoke test built CLI
+        run: node packages/cli/dist/bin.js scan --json > /dev/null
 
       - name: Run AgentOps workflow
         run: pnpm exec tsx --tsconfig tsconfig.base.json packages/cli/src/bin.ts run "$AGENTOPS_WORKFLOW_NAME" --json > agentops-run.json
@@ -56,7 +64,7 @@ jobs:
         run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentops-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
 
       - name: Upload AgentOps artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.0
         with:
           name: agentops-${{ steps.artifact_paths.outputs.run_id }}
           path: |

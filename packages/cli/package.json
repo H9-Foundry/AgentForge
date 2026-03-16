@@ -2,6 +2,9 @@
   "name": "@agentops/cli",
   "version": "0.1.0",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "agentops": "./dist/bin.js"
   },
@@ -13,27 +16,21 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "!dist/**/*.test.*", "!dist/**/*.spec.*"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentops/adapters-filesystem": "workspace:*",
-    "@agentops/adapters-git": "workspace:*",
-    "@agentops/adapters-github": "workspace:*",
-    "@agentops/adapters-shell": "workspace:*",
-    "@agentops/agent-code-review": "workspace:*",
-    "@agentops/agent-context-collector": "workspace:*",
-    "@agentops/agent-security-audit": "workspace:*",
-    "@agentops/agent-test-generation": "workspace:*",
     "@agentops/audit": "workspace:*",
     "@agentops/context-engine": "workspace:*",
     "@agentops/policy-engine": "workspace:*",
     "@agentops/runtime": "workspace:*",
     "@agentops/schemas": "workspace:*",
+    "@agentops/sdk": "workspace:*",
     "@agentops/shared-types": "workspace:*",
     "commander": "^13.1.0",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "zod": "^3.24.2"
   }
 }

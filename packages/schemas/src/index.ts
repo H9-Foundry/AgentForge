@@ -20,6 +20,50 @@ export const trustMetadataSchema = z.object({
   reviewed: z.boolean().default(true)
 });
 
+export const agentPluginRegistrationSchema = z.object({
+  name: z.string().min(1),
+  package: z.string().min(1),
+  enabled: z.boolean().default(true)
+});
+
+export const blockedPluginSchema = z.object({
+  name: z.string().min(1),
+  package: z.string().min(1),
+  reason: z.string().min(1),
+  trust: trustMetadataSchema.optional()
+});
+
+export const agentopsConfigSchema = z.object({
+  version: z.number().int().positive(),
+  project: z.object({
+    name: z.string().min(1),
+    language: z.string().min(1)
+  }),
+  runtime: z.object({
+    mode: executionModeSchema.default("inspect"),
+    runsPath: z.string().min(1).default(".agentops/runs")
+  }),
+  providers: z
+    .object({
+      default: z.string().min(1).default("disabled")
+    })
+    .default({ default: "disabled" }),
+  reporting: z
+    .object({
+      github: z
+        .object({
+          trackerIssue: z.number().int().positive().optional()
+        })
+        .optional()
+    })
+    .default({}),
+  plugins: z
+    .object({
+      agents: z.array(agentPluginRegistrationSchema).default([])
+    })
+    .default({ agents: [] })
+});
+
 export const findingSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -140,12 +184,19 @@ const policyPathsShape = {
   blocked: z.array(z.string()).default([".env*", "secrets/**"])
 } as const;
 
+const policyPluginShape = {
+  allowedTiers: z.array(trustTierSchema).default(["core", "verified"]),
+  allowedSources: z.array(trustSourceSchema).default(["official", "local"]),
+  requireReviewed: z.boolean().default(true)
+} as const;
+
 export const effectivePolicySnapshotSchema = z.object({
   version: z.number().int().positive(),
   environment: z.enum(["local", "ci"]),
   resolvedAt: z.string().datetime(),
   defaults: z.object(policyDefaultsShape),
   paths: z.object(policyPathsShape),
+  plugins: z.object(policyPluginShape),
   tools: z.record(z.string(), toolPolicySchema).default({})
 });
 
@@ -153,6 +204,7 @@ export const policyDocumentSchema = z.object({
   version: z.number().int().positive(),
   defaults: z.object(policyDefaultsShape),
   paths: z.object(policyPathsShape),
+  plugins: z.object(policyPluginShape),
   tools: z.record(z.string(), toolPolicySchema).default({}),
   overlays: z
     .object({
@@ -160,6 +212,7 @@ export const policyDocumentSchema = z.object({
         .object({
           defaults: z.object(policyDefaultsShape).partial().optional(),
           paths: z.object(policyPathsShape).partial().optional(),
+          plugins: z.object(policyPluginShape).partial().optional(),
           tools: z.record(z.string(), toolPolicySchema).optional()
         })
         .optional(),
@@ -167,6 +220,7 @@ export const policyDocumentSchema = z.object({
         .object({
           defaults: z.object(policyDefaultsShape).partial().optional(),
           paths: z.object(policyPathsShape).partial().optional(),
+          plugins: z.object(policyPluginShape).partial().optional(),
           tools: z.record(z.string(), toolPolicySchema).optional()
         })
         .optional()
@@ -241,6 +295,7 @@ export const workflowStateEnvelopeSchema = z.object({
   approvals: z.array(approvalCheckpointSchema).default([]),
   findings: z.array(findingSchema).default([]),
   proposedActions: z.array(proposedActionSchema).default([]),
+  blockedPlugins: z.array(blockedPluginSchema).default([]),
   agentResults: z.record(z.string(), agentOutputSchema).default({}),
   auditTrail: z.array(auditEntrySchema).default([])
 });
@@ -277,6 +332,7 @@ export const auditBundleSchema = z.object({
   entries: z.array(auditEntrySchema).default([]),
   findings: z.array(findingSchema).default([]),
   proposedActions: z.array(proposedActionSchema).default([]),
+  blockedPlugins: z.array(blockedPluginSchema).default([]),
   artifactPaths: z.object({
     json: z.string().min(1),
     markdown: z.string().min(1)
@@ -288,6 +344,7 @@ export const auditBundleSchema = z.object({
 
 export const schemaRegistry = {
   finding: findingSchema,
+  blockedPlugin: blockedPluginSchema,
   proposedAction: proposedActionSchema,
   toolRequest: toolRequestSchema,
   toolResult: toolResultSchema,
@@ -298,6 +355,8 @@ export const schemaRegistry = {
   auditRedaction: auditRedactionSchema,
   agentOutput: agentOutputSchema,
   agentManifest: agentManifestSchema,
+  agentPluginRegistration: agentPluginRegistrationSchema,
+  agentopsConfig: agentopsConfigSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -363,6 +422,11 @@ export const schemaFixtures = {
       allowedRead: ["**/*"],
       allowedWrite: [".agentops/runs/**", "tests/**"],
       blocked: [".env*", "secrets/**"]
+    },
+    plugins: {
+      allowedTiers: ["core", "verified"],
+      allowedSources: ["official", "local"],
+      requireReviewed: true
     },
     tools: {
       "filesystem.read-file": { effect: "allow" },

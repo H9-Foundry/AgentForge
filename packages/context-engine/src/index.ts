@@ -20,7 +20,7 @@ interface GitStatusEntry {
 
 function runGit(cwd: string, args: string[]): string {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8" });
+    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   } catch {
     return "";
   }

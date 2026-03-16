@@ -27,6 +27,14 @@ describe("policy engine", () => {
         "    - '.agentops/runs/**'",
         "  blocked:",
         "    - '.env*'",
+        "plugins:",
+        "  allowed_tiers:",
+        "    - core",
+        "    - verified",
+        "  allowed_sources:",
+        "    - official",
+        "    - local",
+        "  require_reviewed: true",
         "tools:",
         "  filesystem.read-file:",
         "    effect: allow",
@@ -59,6 +67,11 @@ describe("policy engine", () => {
           allowedWrite: [".agentops/runs/**", "tests/**"],
           blocked: [".env*", "secrets/**"]
         },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
         tools: {
           "filesystem.read-file": { effect: "allow" },
           "filesystem.write-file": { effect: "approval_required" }
@@ -88,6 +101,11 @@ describe("policy engine", () => {
           allowedWrite: [".agentops/runs/**", "tests/**"],
           blocked: [".env*", "secrets/**"]
         },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
         tools: {
           "filesystem.read-file": { effect: "allow" }
         }
@@ -97,5 +115,40 @@ describe("policy engine", () => {
 
     expect(engine.canReadPath("../secrets.txt").allowed).toBe(false);
     expect(engine.redactSecrets("token=ghp_1234567890ABCDE password=hunter2 Bearer sk-abcdef123456")).toContain("[REDACTED");
+  });
+
+  it("enforces plugin trust tiers, sources, and review state", () => {
+    const engine = createPolicyEngine(
+      {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "approval_required"
+        },
+        paths: {
+          allowedRead: ["**/*"],
+          allowedWrite: [".agentops/runs/**", "tests/**"],
+          blocked: [".env*", "secrets/**"]
+        },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
+        tools: {
+          "filesystem.read-file": { effect: "allow" }
+        }
+      },
+      "/repo"
+    );
+
+    expect(engine.evaluatePluginTrust("verified-plugin", { tier: "verified", source: "local", reviewed: true }).allowed).toBe(true);
+    expect(engine.evaluatePluginTrust("community-plugin", { tier: "community", source: "local", reviewed: true }).allowed).toBe(false);
+    expect(engine.evaluatePluginTrust("remote-plugin", { tier: "verified", source: "third-party", reviewed: true }).allowed).toBe(false);
+    expect(engine.evaluatePluginTrust("unreviewed-plugin", { tier: "verified", source: "local", reviewed: false }).allowed).toBe(false);
   });
 });

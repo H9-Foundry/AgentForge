@@ -6,12 +6,18 @@
   "packageManager": "pnpm@10.6.1",
   "scripts": {
     "build": "tsc -p tsconfig.workspace.json",
+    "build:packages": "pnpm -r build",
     "clean": "rm -rf node_modules .turbo .build packages/*/dist agents/*/dist adapters/*/dist coverage",
+    "changeset": "changeset",
     "lint": "eslint .",
+    "pack:public": "node scripts/release/pack-public-packages.mjs",
+    "release:publish": "changeset publish",
+    "release:version": "changeset version",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.workspace.json --noEmit"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.6",
     "@eslint/js": "^9.22.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",

@@ -3,13 +3,20 @@
 ```bash
 pnpm install
 pnpm build
-node .build/packages/cli/src/bin.js init
-node .build/packages/cli/src/bin.js scan
-node .build/packages/cli/src/bin.js run pr-review
-node .build/packages/cli/src/bin.js explain last-run
+pnpm build:packages
+node packages/cli/dist/bin.js init
+node packages/cli/dist/bin.js scan
+node packages/cli/dist/bin.js run pr-review
+node packages/cli/dist/bin.js explain last-run
 ```
 
 The starter configuration is written under `.agentops/`. Run artifacts are written under `.agentops/runs/<run-id>/`.
+
+To dry-run the publishable package set:
+
+```bash
+pnpm pack:public
+```
 
 For the GitHub CI wrapper and PR/issue reporting flow, see [docs/github-actions.md](/Users/ethan/Repo/AgentOps/docs/github-actions.md).
 For the Phase 1 security posture and build provenance approach, see [docs/security-model.md](/Users/ethan/Repo/AgentOps/docs/security-model.md) and [docs/release-trust.md](/Users/ethan/Repo/AgentOps/docs/release-trust.md).

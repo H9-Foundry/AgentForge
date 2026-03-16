@@ -3,6 +3,8 @@ import type { infer as Infer } from "zod";
 
 import {
   agentManifestSchema,
+  agentPluginRegistrationSchema,
+  agentopsConfigSchema,
   agentOutputSchema,
   approvalCheckpointSchema,
   auditBundleSchema,
@@ -10,6 +12,7 @@ import {
   auditProvenanceSchema,
   auditRedactionSchema,
   auditEntrySchema,
+  blockedPluginSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
   policyDocumentSchema,
@@ -24,6 +27,7 @@ import {
 } from "@agentops/schemas";
 
 export type Finding = Infer<typeof findingSchema>;
+export type BlockedPlugin = Infer<typeof blockedPluginSchema>;
 export type ProposedAction = Infer<typeof proposedActionSchema>;
 export type ToolRequest = Infer<typeof toolRequestSchema>;
 export type ToolResult = Infer<typeof toolResultSchema>;
@@ -34,6 +38,8 @@ export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
 export type AgentOutput = Infer<typeof agentOutputSchema>;
 export type AgentManifest = Infer<typeof agentManifestSchema>;
+export type AgentPluginRegistration = Infer<typeof agentPluginRegistrationSchema>;
+export type AgentOpsConfig = Infer<typeof agentopsConfigSchema>;
 export type PolicyDocument = Infer<typeof policyDocumentSchema>;
 export type EffectivePolicySnapshot = Infer<typeof effectivePolicySnapshotSchema>;
 export type WorkflowDefinition = Infer<typeof workflowDefinitionSchema>;

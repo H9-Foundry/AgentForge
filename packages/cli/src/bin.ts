@@ -47,6 +47,7 @@ program
     }
     console.log(`Completed run ${result.runId}`);
     console.log(`Artifacts: ${result.outputDir}`);
+    console.log(`Blocked plugins: ${result.blockedPlugins}`);
   });
 
 program
@@ -67,6 +68,7 @@ program
     console.log(`Status: ${explanation.status}`);
     console.log(`Findings: ${explanation.findings}`);
     console.log(`Blocked actions: ${explanation.blockedActions}`);
+    console.log(`Blocked plugins: ${explanation.blockedPlugins}`);
   });
 
 program.parseAsync(process.argv);

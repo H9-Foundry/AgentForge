@@ -1,0 +1,14 @@
+version: 1
+project:
+  name: sample-repo
+  language: typescript
+runtime:
+  mode: inspect
+  runs_path: .agentops/runs
+providers:
+  default: disabled
+plugins:
+  agents:
+    - name: custom-agent-template
+      package: "@agentops/custom-agent-template"
+      enabled: true

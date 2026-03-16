@@ -5,5 +5,15 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
+  "references": [
+    { "path": "../audit" },
+    { "path": "../context-engine" },
+    { "path": "../policy-engine" },
+    { "path": "../runtime" },
+    { "path": "../schemas" },
+    { "path": "../sdk" },
+    { "path": "../shared-types" }
+  ]
 }

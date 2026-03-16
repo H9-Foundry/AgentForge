@@ -26,7 +26,31 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm build:packages
 ```
+
+Use the packaged CLI for local release-shape checks:
+
+```bash
+node packages/cli/dist/bin.js init
+node packages/cli/dist/bin.js run pr-review
+node packages/cli/dist/bin.js explain last-run
+```
+
+## Release Surface
+
+Curated public packages:
+
+- `@agentops/cli`
+- `@agentops/schemas`
+- `@agentops/shared-types`
+- `@agentops/sdk`
+- `@agentops/context-engine`
+- `@agentops/policy-engine`
+- `@agentops/runtime`
+- `@agentops/audit`
+
+Internal workspace packages remain private until their APIs stabilize.
 
 ## Security And Release Notes
 
