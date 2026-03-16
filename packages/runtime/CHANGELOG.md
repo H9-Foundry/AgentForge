@@ -1,5 +1,18 @@
 # @h9-foundry/agentforge-runtime
 
+## 0.3.1
+
+### Patch Changes
+
+- f53dbd9: Trigger a real GitHub-owned publish to verify npm trusted publishing after the
+  initial bootstrap release.
+- Updated dependencies [f53dbd9]
+  - @h9-foundry/agentforge-schemas@0.3.1
+  - @h9-foundry/agentforge-shared-types@0.3.1
+  - @h9-foundry/agentforge-sdk@0.3.1
+  - @h9-foundry/agentforge-policy-engine@0.3.1
+  - @h9-foundry/agentforge-audit@0.3.1
+
 ## 0.3.0
 
 ### Minor Changes
