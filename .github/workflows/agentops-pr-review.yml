@@ -56,7 +56,7 @@ jobs:
         run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentops-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
 
       - name: Upload AgentOps artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: agentops-${{ steps.artifact_paths.outputs.run_id }}
           path: |
