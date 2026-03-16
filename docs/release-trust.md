@@ -37,11 +37,13 @@ It is designed to:
 - dry-run the curated public package tarballs
 - verify the curated tarballs from a clean-room consumer install
 - open or update version PRs through Changesets
-- publish with npm trusted publishing and provenance when a release commit lands on `main`
+- publish with npm trusted publishing when a release commit lands on `main`
 
 `.github/workflows/publish-gate.yml` runs the same tarball-based verification on pull requests and manual dispatches so the first publish is blocked until the packed artifacts behave like consumer installs.
 
 This workflow should not fall back to a long-lived npm token. If npm trusted publishing is not configured yet, keep the workflow gated and fix the external setup first.
+
+For public repositories, `release-packages.yml` also enables npm package provenance automatically. For private repositories, it disables npm provenance automatically while keeping trusted publishing enabled, because npm currently rejects sigstore provenance bundles from private GitHub repositories.
 
 AgentForge does not store npm credentials in repo config. Codex-assisted npm setup depends on machine-level npm auth on the workstation, typically through `npm login` writing `~/.npmrc`.
 

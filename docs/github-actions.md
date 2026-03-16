@@ -12,6 +12,7 @@ AgentForge includes a GitHub Actions wrapper for the starter `pr-review` workflo
   - skips artifact attestation on private repositories unless `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
 - `.github/workflows/release-packages.yml`
   - Changesets version PRs and trusted npm publishing for the curated public subset
+  - disables npm package provenance automatically on private repositories because npm only accepts provenance from public GitHub repositories
 
 ## What It Does
 - installs dependencies
