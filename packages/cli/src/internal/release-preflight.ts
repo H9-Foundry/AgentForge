@@ -75,6 +75,8 @@ interface CommandResult {
 export interface ReleaseCheckOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly runCommand?: (command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv) => CommandResult;
+  readonly skipNpmAuth?: boolean;
+  readonly skipLocalCommands?: boolean;
 }
 
 function defaultRunCommand(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): CommandResult {
@@ -208,6 +210,8 @@ export function checkReleaseReadiness(cwd = process.cwd(), options: ReleaseCheck
   const root = findWorkspaceRoot(cwd);
   const env = { ...process.env, ...options.env };
   const runCommand = options.runCommand ?? defaultRunCommand;
+  const skipNpmAuth = options.skipNpmAuth ?? env.AGENTFORGE_SKIP_NPM_AUTH === "1";
+  const skipLocalCommands = options.skipLocalCommands ?? env.AGENTFORGE_SKIP_LOCAL_COMMANDS === "1";
   const checks: ReleaseCheckEntry[] = [];
 
   const npmrcPath = resolveNpmUserConfigPath(env);
@@ -227,14 +231,22 @@ export function checkReleaseReadiness(cwd = process.cwd(), options: ReleaseCheck
     readable: npmReadable
   };
 
-  if (npmAuth.present && npmAuth.readable) {
+  if (skipNpmAuth) {
+    pushCheck(checks, "npm-auth", "npm auth file", "pass", "Skipped npm auth verification for this environment.");
+  } else if (npmAuth.present && npmAuth.readable) {
     pushCheck(checks, "npm-auth", "npm auth file", "pass", `Found readable npm auth at ${npmAuth.path}.`);
   } else {
     pushCheck(checks, "npm-auth", "npm auth file", "fail", `Expected a readable npm auth file at ${npmAuth.path}. Run npm login first.`);
   }
 
   let npmUser: ReleaseCheckResult["npmUser"];
-  if (npmAuth.present && npmAuth.readable) {
+  if (skipNpmAuth) {
+    npmUser = {
+      resolved: false,
+      error: "Skipped npm username resolution for this environment."
+    };
+    pushCheck(checks, "npm-user", "npm username", "pass", "Skipped npm username resolution for this environment.");
+  } else if (npmAuth.present && npmAuth.readable) {
     const whoami = runCommand("npm", ["whoami"], root, env);
     if (whoami.status === 0) {
       npmUser = {
@@ -303,17 +315,21 @@ export function checkReleaseReadiness(cwd = process.cwd(), options: ReleaseCheck
     { id: "changeset-status", label: "changeset status", args: ["changeset", "status"] }
   ];
 
-  for (const commandCheck of localCommandChecks) {
-    const result = runCommand("pnpm", commandCheck.args, root, env);
-    pushCheck(
-      checks,
-      commandCheck.id,
-      commandCheck.label,
-      result.status === 0 ? "pass" : "fail",
-      result.status === 0
-        ? summarizeCommandOutput(result)
-        : `Command failed: pnpm ${commandCheck.args.join(" ")} | ${summarizeCommandOutput(result)}`
-    );
+  if (skipLocalCommands) {
+    pushCheck(checks, "local-commands", "local release-shape commands", "pass", "Skipped local command checks for this environment.");
+  } else {
+    for (const commandCheck of localCommandChecks) {
+      const result = runCommand("pnpm", commandCheck.args, root, env);
+      pushCheck(
+        checks,
+        commandCheck.id,
+        commandCheck.label,
+        result.status === 0 ? "pass" : "fail",
+        result.status === 0
+          ? summarizeCommandOutput(result)
+          : `Command failed: pnpm ${commandCheck.args.join(" ")} | ${summarizeCommandOutput(result)}`
+      );
+    }
   }
 
   return {

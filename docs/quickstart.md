@@ -16,6 +16,7 @@ To dry-run the publishable package set:
 
 ```bash
 pnpm pack:public
+pnpm release:verify
 ```
 
 For the GitHub CI wrapper and PR/issue reporting flow, see [docs/github-actions.md](/Users/ethan/Repo/AgentOps/docs/github-actions.md).

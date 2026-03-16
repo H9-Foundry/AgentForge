@@ -169,6 +169,36 @@ describe("release preflight", () => {
     expect(result.ready).toBe(false);
   });
 
+  it("can skip npm auth checks for hosted validation environments", () => {
+    const root = createReleaseFixture();
+    const home = mkdtempSync(join(tmpdir(), "agentforge-home-"));
+
+    const result = checkReleaseReadiness(root, {
+      env: { HOME: home },
+      runCommand: createRunner(),
+      skipNpmAuth: true
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.checks.find((check) => check.id === "npm-auth")?.status).toBe("pass");
+    expect(result.checks.find((check) => check.id === "npm-user")?.status).toBe("pass");
+  });
+
+  it("can skip local command checks for hosted validation environments", () => {
+    const root = createReleaseFixture();
+    const home = mkdtempSync(join(tmpdir(), "agentforge-home-"));
+    writeFileSync(join(home, ".npmrc"), "//registry.npmjs.org/:_authToken=fake\n", "utf8");
+
+    const result = checkReleaseReadiness(root, {
+      env: { HOME: home },
+      runCommand: createRunner(),
+      skipLocalCommands: true
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.checks.find((check) => check.id === "local-commands")?.status).toBe("pass");
+  });
+
   it("reports ready when npm auth, package metadata, workflow config, and local checks all pass", () => {
     const root = createReleaseFixture();
     const home = mkdtempSync(join(tmpdir(), "agentforge-home-"));
