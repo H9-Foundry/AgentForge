@@ -1,37 +1,66 @@
-# Plugin Author Starter Guide
+# Plugin Author Guide
 
-Phase 1 does not ship a full plugin installation system yet, but it does define the shape of a basic custom agent and the runtime expectations around safety.
+AgentOps currently supports local/manual agent plugins only. There is no remote registry, install flow, or adapter plugin system in this phase.
 
-## Start With The Template
+## Package Shape
 
-See [examples/custom-agent-template/README.md](/Users/ethan/Repo/AgentOps/examples/custom-agent-template/README.md).
+Start from [examples/custom-agent-template/README.md](/Users/ethan/Repo/AgentOps/examples/custom-agent-template/README.md).
 
-The minimum custom agent package should include:
+Your local plugin package should export a `RuntimeAgent` through one of these shapes:
 
-- `package.json`
-- `agent.manifest.json`
-- `src/index.ts`
+- `default`
+- `agent`
+- a named export whose value is the `RuntimeAgent`
 
-## Authoring Rules
+The exported manifest is validated at load time.
 
-- keep context sections minimal
-- prefer deterministic logic first
-- request tools explicitly instead of reading arbitrary state
-- return structured output only
-- do not assume policy will allow every tool your manifest names
+## Registration
 
-## Trust And Review
+Register the plugin in `.agentops/agentops.yaml`:
 
-Custom agents should declare trust metadata even though Phase 1 does not yet enforce install-time trust policy. That metadata is still recorded in audit output and should be reviewed before promotion into official workflows.
+```yaml
+plugins:
+  agents:
+    - name: local-review
+      package: "@your-scope/local-review"
+      enabled: true
+```
 
-## When To Avoid A Plugin
+The `name` must match the exported `manifest.name`. Registration names that collide with built-in agents are rejected.
 
-Do not add a custom agent if:
+## Trust Enforcement
 
-- the behavior belongs in an existing official agent
-- the need is only a one-off workflow tweak
-- the agent would require unrestricted shell or network access
+Policy now enforces plugin trust metadata before the plugin can run. The relevant controls live in `.agentops/policy.yaml`:
 
-## Next Step
+```yaml
+plugins:
+  allowed_tiers:
+    - core
+    - verified
+  allowed_sources:
+    - official
+    - local
+  require_reviewed: true
+```
 
-Copy the template, rename the package and manifest, then wire the agent into a workflow after adding it to the local registry in the CLI or runtime bootstrap.
+A plugin is blocked when any of these checks fail:
+
+- its `trust.tier` is not allowed
+- its `trust.source` is not allowed
+- `trust.reviewed` is `false` while policy requires review
+
+Blocked plugins are recorded in the audit bundle and markdown summary.
+
+## Operational Constraints
+
+- plugin loading is limited to local workspace packages
+- plugin trust is evaluated before workflow execution
+- blocked plugins are never executed
+- workflows that reference a blocked plugin fail fast with an explicit reason
+
+## What This Phase Does Not Include
+
+- remote plugin discovery
+- package installation
+- signed third-party plugin distribution
+- adapter or provider plugin loading

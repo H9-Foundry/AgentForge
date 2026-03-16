@@ -28,6 +28,7 @@ export function buildAuditBundle(
     entries: state.auditTrail,
     findings: state.findings,
     proposedActions: state.proposedActions,
+    blockedPlugins: state.blockedPlugins,
     artifactPaths: {
       json: options.jsonPath,
       markdown: options.markdownPath
@@ -48,6 +49,7 @@ export function renderAuditBundleMarkdown(bundle: AuditBundle): string {
     `- Finished: ${bundle.finishedAt}`,
     `- Findings: ${bundle.findings.length}`,
     `- Proposed actions: ${bundle.proposedActions.length}`,
+    `- Blocked plugins: ${bundle.blockedPlugins.length}`,
     `- Redaction applied: ${bundle.redaction.applied ? "yes" : "no"}`,
     `- Trusted components recorded: ${bundle.components.length}`,
     ""
@@ -66,6 +68,14 @@ export function renderAuditBundleMarkdown(bundle: AuditBundle): string {
     lines.push("## Blocked Actions", "");
     for (const entry of blockedEntries) {
       lines.push(`- ${entry.nodeName}: ${entry.blockedActions.join(", ")}`);
+    }
+    lines.push("");
+  }
+
+  if (bundle.blockedPlugins.length > 0) {
+    lines.push("## Blocked Plugins", "");
+    for (const blockedPlugin of bundle.blockedPlugins) {
+      lines.push(`- ${blockedPlugin.name} (${blockedPlugin.package}): ${blockedPlugin.reason}`);
     }
     lines.push("");
   }

@@ -200,10 +200,11 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
   const startedAt = new Date().toISOString();
   const state: WorkflowStateEnvelope = {
     ...deps.initialState,
-    findings: [...deps.initialState.findings],
-    proposedActions: [...deps.initialState.proposedActions],
-    agentResults: { ...deps.initialState.agentResults },
-    auditTrail: [...deps.initialState.auditTrail]
+    findings: [...(deps.initialState.findings ?? [])],
+    proposedActions: [...(deps.initialState.proposedActions ?? [])],
+    blockedPlugins: [...(deps.initialState.blockedPlugins ?? [])],
+    agentResults: { ...(deps.initialState.agentResults ?? {}) },
+    auditTrail: [...(deps.initialState.auditTrail ?? [])]
   };
 
   for (const node of deps.workflow.nodes) {

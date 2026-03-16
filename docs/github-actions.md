@@ -2,14 +2,20 @@
 
 AgentOps includes a GitHub Actions wrapper for the starter `pr-review` workflow.
 
-## Workflow
-- File: `.github/workflows/agentops-pr-review.yml`
-- Triggers on pull requests and manual dispatch
-- Uses the existing CLI and run bundle output rather than a separate runtime path
+## Workflows
+
+- `.github/workflows/agentops-pr-review.yml`
+  - pull request and manual workflow execution
+  - comments on PRs and the configured tracker issue
+- `.github/workflows/release-provenance.yml`
+  - build artifact provenance for the workspace
+  - skips artifact attestation on private repositories unless `AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
+- `.github/workflows/release-packages.yml`
+  - Changesets version PRs and trusted npm publishing for the curated public subset
 
 ## What It Does
 - installs dependencies
-- builds the workspace
+- builds the workspace and package outputs
 - runs `agentops run pr-review --json`
 - uploads the JSON bundle and markdown summary as workflow artifacts
 - appends the run summary to the GitHub Actions step summary
@@ -20,8 +26,9 @@ AgentOps includes a GitHub Actions wrapper for the starter `pr-review` workflow.
 - `contents: read`
 - `issues: write`
 - `pull-requests: write`
+- `id-token: write` for release provenance and trusted publishing workflows
 
-The workflow uses the repository `GITHUB_TOKEN`. No separate long-lived token is required for basic Phase 1 reporting.
+The repository workflows are configured for the Node 24 JavaScript action runtime transition. Trusted publishing should continue using GitHub OIDC instead of a long-lived npm token.
 
 ## Tracker Issue
 - The default tracker issue is `#1`

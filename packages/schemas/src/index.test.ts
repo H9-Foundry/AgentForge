@@ -47,11 +47,13 @@ describe("schema fixtures", () => {
           resolvedAt: new Date().toISOString(),
           defaults: schemaFixtures.policyDocument.defaults,
           paths: schemaFixtures.policyDocument.paths,
+          plugins: schemaFixtures.policyDocument.plugins,
           tools: schemaFixtures.policyDocument.tools
         },
         entries: [],
         findings: [],
         proposedActions: [],
+        blockedPlugins: [],
         artifactPaths: {
           json: ".agentops/runs/run-1/bundle.json",
           markdown: ".agentops/runs/run-1/summary.md"

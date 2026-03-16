@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@agentops/cli",
+      "@agentops/schemas",
+      "@agentops/shared-types",
+      "@agentops/sdk",
+      "@agentops/context-engine",
+      "@agentops/policy-engine",
+      "@agentops/runtime",
+      "@agentops/audit"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@agentops/registry-client",
+    "@agentops/agent-code-review",
+    "@agentops/agent-context-collector",
+    "@agentops/agent-security-audit",
+    "@agentops/agent-test-generation",
+    "@agentops/adapters-filesystem",
+    "@agentops/adapters-git",
+    "@agentops/adapters-github",
+    "@agentops/adapters-shell"
+  ]
+}

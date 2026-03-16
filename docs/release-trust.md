@@ -1,35 +1,59 @@
 # Release Trust
 
-## Current Phase 1 Position
+## Public Package Policy
 
-AgentOps is not yet using package publication as the primary release channel. The current safeguard is build provenance for workspace artifacts, combined with repository-level policy and audit data.
+AgentOps now treats a curated subset of the workspace as publishable:
 
-## Build Provenance Workflow
+- `@agentops/cli`
+- `@agentops/schemas`
+- `@agentops/shared-types`
+- `@agentops/sdk`
+- `@agentops/context-engine`
+- `@agentops/policy-engine`
+- `@agentops/runtime`
+- `@agentops/audit`
 
-`.github/workflows/release-provenance.yml`:
+Everything else stays private for now, including `@agentops/registry-client`, all official agents, and all adapters.
 
-- builds the workspace from source
-- creates a versioned build artifact
-- uploads the artifact to GitHub Actions
-- attests build provenance for the generated archive
+## Versioning
 
-This gives reviewers a verifiable record for the generated build artifact without pretending that package publishing is already finalized.
+Changesets is configured in fixed-version mode for the public subset. That keeps the external surface moving together while the runtime contracts are still settling.
+
+Before opening or merging release work:
+
+- add a changeset for public-facing changes
+- keep internal-only work out of publishable release notes
+- run `pnpm build:packages`
+- run `pnpm pack:public`
 
 ## Trusted Publishing
 
-Trusted publishing for npm or other registries is intentionally deferred until:
+`.github/workflows/release-packages.yml` is the package release path.
 
-- package boundaries are stable
-- release packaging is explicitly defined per package
-- registry ownership and scope decisions are finalized
+It is designed to:
 
-That follow-up work should stay tracked in GitHub under Phase 2 or a dedicated release-hardening issue, not hidden in ad hoc release notes.
+- build the workspace and package outputs
+- dry-run the curated public package tarballs
+- open or update version PRs through Changesets
+- publish with npm trusted publishing and provenance when a release commit lands on `main`
 
-## Review Guidance
+This workflow should not fall back to a long-lived npm token. If npm trusted publishing is not configured yet, keep the workflow gated and fix the external setup first.
 
-Before treating a build as releasable, verify:
+## Build Provenance
 
-- GitHub Actions build provenance completed successfully
-- `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build` passed
-- audit bundle metadata shows the expected trust tiers and redaction summary
-- no open high-severity issues remain against the active release candidate
+`.github/workflows/release-provenance.yml` remains useful even when package publishing is active. It attests the build artifact for the full workspace so reviewers can inspect a reproducible CI build independent of npm publication.
+
+For private repositories, artifact attestation is skipped unless the repository or organization enables it and sets `AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true`.
+
+## Prerequisites
+
+Before relying on the package release workflow, confirm:
+
+- the npm scope `@agentops` is owned by the correct org
+- GitHub Actions trusted publishing is configured for that scope
+- the repository permissions allow `id-token: write`
+- the public package list in `.changeset/config.json` still matches repo intent
+
+## Plugin Trust And Releases
+
+Local/manual plugins are not part of the publishable surface yet. They must still declare trust metadata because the CLI and runtime enforce plugin trust policy during startup and record blocked plugins in the audit bundle when policy rejects them.

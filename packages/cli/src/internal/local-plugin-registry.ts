@@ -107,19 +107,11 @@ function pickRuntimeAgent(moduleValue: unknown): RuntimeAgent | undefined {
   return Object.values(moduleValue).find((candidate): candidate is RuntimeAgent => isRuntimeAgent(candidate));
 }
 
-export class RegistryClient {
+export class LocalPluginRegistry {
   constructor(private readonly repoRoot: string) {}
 
-  async listOfficialAgents(): Promise<string[]> {
-    return ["context-collector", "code-review", "security-audit", "test-generation"];
-  }
-
-  listWorkspacePackages(): WorkspacePackageRecord[] {
-    return findWorkspacePackages(this.repoRoot);
-  }
-
   async loadLocalAgentPlugin(packageName: string): Promise<RuntimeAgent> {
-    const workspacePackage = this.listWorkspacePackages().find((candidate) => candidate.name === packageName);
+    const workspacePackage = findWorkspacePackages(this.repoRoot).find((candidate) => candidate.name === packageName);
 
     if (!workspacePackage) {
       throw new Error(`Plugin package is not a local workspace package: ${packageName}`);

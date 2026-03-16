@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { agentOutputSchema } from "@agentops/schemas";
 import type { RuntimeAgent } from "@agentops/sdk";
+import type { WorkflowStateEnvelope } from "@agentops/shared-types";
 
 import { runWorkflow } from "./index.js";
 
-const state = {
+const state: WorkflowStateEnvelope = {
   version: "1.0.0",
   runId: "run-1",
   workflow: "pr-review",
@@ -52,11 +53,17 @@ const state = {
       allowedWrite: [".agentops/runs/**"],
       blocked: [".env*"]
     },
+    plugins: {
+      allowedTiers: ["core", "verified"],
+      allowedSources: ["official", "local"],
+      requireReviewed: true
+    },
     tools: {}
   },
   approvals: [],
   findings: [],
   proposedActions: [],
+  blockedPlugins: [],
   agentResults: {},
   auditTrail: []
 };

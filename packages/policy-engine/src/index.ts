@@ -9,6 +9,7 @@ import type {
   EffectivePolicySnapshot,
   ExecutionEnvironment,
   PolicyDocument,
+  TrustMetadata,
   ToolRequest
 } from "@agentops/shared-types";
 
@@ -61,6 +62,19 @@ function normalizePolicyInput(value: unknown): unknown {
             blocked: (overlayRecord.paths as Record<string, unknown>).blocked
           }
         : undefined,
+      plugins: overlayRecord.plugins
+        ? {
+            allowedTiers:
+              (overlayRecord.plugins as Record<string, unknown>).allowed_tiers ??
+              (overlayRecord.plugins as Record<string, unknown>).allowedTiers,
+            allowedSources:
+              (overlayRecord.plugins as Record<string, unknown>).allowed_sources ??
+              (overlayRecord.plugins as Record<string, unknown>).allowedSources,
+            requireReviewed:
+              (overlayRecord.plugins as Record<string, unknown>).require_reviewed ??
+              (overlayRecord.plugins as Record<string, unknown>).requireReviewed
+          }
+        : undefined,
       tools: overlayRecord.tools
         ? Object.fromEntries(
             Object.entries(overlayRecord.tools as Record<string, unknown>).map(([name, config]) => [
@@ -84,6 +98,13 @@ function normalizePolicyInput(value: unknown): unknown {
       allowedRead: (record.paths as Record<string, unknown>)?.allowed_read ?? (record.paths as Record<string, unknown>)?.allowedRead,
       allowedWrite: (record.paths as Record<string, unknown>)?.allowed_write ?? (record.paths as Record<string, unknown>)?.allowedWrite,
       blocked: (record.paths as Record<string, unknown>)?.blocked
+    },
+    plugins: {
+      allowedTiers: (record.plugins as Record<string, unknown>)?.allowed_tiers ?? (record.plugins as Record<string, unknown>)?.allowedTiers,
+      allowedSources:
+        (record.plugins as Record<string, unknown>)?.allowed_sources ?? (record.plugins as Record<string, unknown>)?.allowedSources,
+      requireReviewed:
+        (record.plugins as Record<string, unknown>)?.require_reviewed ?? (record.plugins as Record<string, unknown>)?.requireReviewed
     },
     tools: record.tools
       ? Object.fromEntries(
@@ -113,6 +134,11 @@ function mergePolicy(base: PolicyDocument, environment: ExecutionEnvironment): E
       allowedRead: overlay?.paths?.allowedRead ?? base.paths.allowedRead,
       allowedWrite: overlay?.paths?.allowedWrite ?? base.paths.allowedWrite,
       blocked: overlay?.paths?.blocked ?? base.paths.blocked
+    },
+    plugins: {
+      allowedTiers: overlay?.plugins?.allowedTiers ?? base.plugins.allowedTiers,
+      allowedSources: overlay?.plugins?.allowedSources ?? base.plugins.allowedSources,
+      requireReviewed: overlay?.plugins?.requireReviewed ?? base.plugins.requireReviewed
     },
     tools: {
       ...base.tools,
@@ -195,6 +221,37 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
     };
   }
 
+  function evaluatePluginTrust(name: string, trust: TrustMetadata): PolicyDecision {
+    if (!policy.plugins.allowedTiers.includes(trust.tier)) {
+      return {
+        allowed: false,
+        effect: "deny",
+        requiresApproval: false,
+        reason: `Plugin trust tier denied for ${name}: ${trust.tier}`
+      };
+    }
+
+    if (!policy.plugins.allowedSources.includes(trust.source)) {
+      return {
+        allowed: false,
+        effect: "deny",
+        requiresApproval: false,
+        reason: `Plugin trust source denied for ${name}: ${trust.source}`
+      };
+    }
+
+    if (policy.plugins.requireReviewed && !trust.reviewed) {
+      return {
+        allowed: false,
+        effect: "deny",
+        requiresApproval: false,
+        reason: `Plugin review required for ${name}`
+      };
+    }
+
+    return { allowed: true, effect: "allow", requiresApproval: false };
+  }
+
   function redactSecrets(value: string): string {
     return value
       .replaceAll(/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
@@ -215,6 +272,7 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
     canWritePath(pathValue: string): PolicyDecision {
       return evaluatePath(pathValue, "write");
     },
+    evaluatePluginTrust,
     evaluateToolRequest,
     filterBlockedPaths(paths: readonly string[]): string[] {
       return paths.filter((pathValue) => evaluatePath(pathValue, "read").allowed);

@@ -5,9 +5,11 @@ import { execFileSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
+import type { EffectivePolicySnapshot } from "@agentops/shared-types";
+
 import { createWorkflowState, detectPackageManager } from "./index.js";
 
-const snapshot = {
+const snapshot: EffectivePolicySnapshot = {
   version: 1,
   environment: "local" as const,
   resolvedAt: new Date().toISOString(),
@@ -21,6 +23,11 @@ const snapshot = {
     allowedRead: ["**/*"],
     allowedWrite: [".agentops/runs/**"],
     blocked: [".env*"]
+  },
+  plugins: {
+    allowedTiers: ["core", "verified"],
+    allowedSources: ["official", "local"],
+    requireReviewed: true
   },
   tools: {}
 };
