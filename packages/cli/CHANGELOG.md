@@ -1,5 +1,19 @@
 # @h9-foundry/agentforge-cli
 
+## 0.3.2
+
+### Patch Changes
+
+- 1c6c323: Refresh package metadata and documentation for the public open-source release cutover.
+- Updated dependencies [1c6c323]
+  - @h9-foundry/agentforge-schemas@0.3.2
+  - @h9-foundry/agentforge-shared-types@0.3.2
+  - @h9-foundry/agentforge-sdk@0.3.2
+  - @h9-foundry/agentforge-context-engine@0.3.2
+  - @h9-foundry/agentforge-policy-engine@0.3.2
+  - @h9-foundry/agentforge-runtime@0.3.2
+  - @h9-foundry/agentforge-audit@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes
