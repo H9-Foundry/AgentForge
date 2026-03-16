@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 
-import { explainLastRun, initProject, runLocalWorkflow, scanProject } from "./index.js";
+import { checkReleaseReadiness, explainLastRun, initProject, renderReleaseGuide, runLocalWorkflow, scanProject } from "./index.js";
 
 const program = new Command();
 
@@ -69,6 +69,36 @@ program
     console.log(`Findings: ${explanation.findings}`);
     console.log(`Blocked actions: ${explanation.blockedActions}`);
     console.log(`Blocked plugins: ${explanation.blockedPlugins}`);
+  });
+
+const release = program.command("release").description("Guide and validate npm release bootstrap for AgentForge.");
+
+release
+  .command("guide")
+  .description("Print the external npm bootstrap steps and reference URLs.")
+  .action(() => {
+    console.log(renderReleaseGuide());
+  });
+
+release
+  .command("check")
+  .description("Run read-only release preflight checks for npm publishing.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action((options: { json?: boolean }) => {
+    const result = checkReleaseReadiness();
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`Target scope: ${result.targetScope}`);
+      console.log(`Ready: ${result.ready ? "yes" : "no"}`);
+      console.log(`npm auth: ${result.npmAuth.present && result.npmAuth.readable ? "configured" : "missing"}`);
+      console.log(`npm user: ${result.npmUser.value ?? "unresolved"}`);
+      for (const check of result.checks) {
+        console.log(`[${check.status}] ${check.label}: ${check.detail}`);
+      }
+    }
+
+    process.exitCode = result.ready ? 0 : 1;
   });
 
 program.parseAsync(process.argv);

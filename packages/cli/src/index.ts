@@ -19,6 +19,14 @@ import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
 import { createBuiltinAdapters } from "./internal/builtin-adapters.js";
 import { createBuiltinAgentRegistry } from "./internal/builtin-agents.js";
 import { LocalPluginRegistry } from "./internal/local-plugin-registry.js";
+export {
+  checkReleaseReadiness,
+  getReleaseGuide,
+  renderReleaseGuide,
+  TARGET_NPM_SCOPE,
+  EXPECTED_PUBLIC_PACKAGES
+} from "./internal/release-preflight.js";
+export type { ReleaseCheckEntry, ReleaseCheckResult, ReleaseGuide } from "./internal/release-preflight.js";
 
 const agentforgeConfigTemplate = `version: 1
 project:

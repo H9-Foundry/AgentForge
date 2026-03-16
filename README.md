@@ -29,12 +29,14 @@ pnpm build
 pnpm build:packages
 ```
 
-Use the packaged CLI for local release-shape checks:
+Use the packaged CLI for local workflow and release-shape checks:
 
 ```bash
 node packages/cli/dist/bin.js init
 node packages/cli/dist/bin.js run pr-review
 node packages/cli/dist/bin.js explain last-run
+node packages/cli/dist/bin.js release guide
+node packages/cli/dist/bin.js release check --json
 ```
 
 ## Release Surface
@@ -51,6 +53,14 @@ Curated public packages:
 - `@h9-foundry/agentforge-audit`
 
 Internal workspace packages remain private until their APIs stabilize.
+
+## Release Bootstrap
+
+Package publishing uses GitHub OIDC trusted publishing for `@h9-foundry/agentforge-*`.
+
+- Run `npm login` once on the workstation that Codex uses. The CLI expects machine-level auth in `~/.npmrc`.
+- Use `agentforge release guide` for the external npm bootstrap steps and reference URLs.
+- Use `agentforge release check --json` to validate npm auth, package metadata, release workflow config, Changesets config, and local release-shape checks.
 
 ## Security And Release Notes
 
