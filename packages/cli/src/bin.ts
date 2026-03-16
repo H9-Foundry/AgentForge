@@ -1,7 +1,15 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 
-import { checkReleaseReadiness, explainLastRun, initProject, renderReleaseGuide, runLocalWorkflow, scanProject } from "./index.js";
+import {
+  checkReleaseReadiness,
+  explainLastRun,
+  initProject,
+  renderReleaseGuide,
+  runLocalWorkflow,
+  scanProject,
+  verifyReleaseArtifacts
+} from "./index.js";
 
 const program = new Command();
 
@@ -84,8 +92,13 @@ release
   .command("check")
   .description("Run read-only release preflight checks for npm publishing.")
   .option("--json", "Print machine-readable JSON output.")
-  .action((options: { json?: boolean }) => {
-    const result = checkReleaseReadiness();
+  .option("--skip-npm-auth", "Skip npm auth and npm whoami checks for CI-hosted validation.")
+  .option("--skip-local-commands", "Skip local command replay for CI-hosted validation.")
+  .action((options: { json?: boolean; skipNpmAuth?: boolean; skipLocalCommands?: boolean }) => {
+    const result = checkReleaseReadiness(process.cwd(), {
+      skipNpmAuth: options.skipNpmAuth,
+      skipLocalCommands: options.skipLocalCommands
+    });
     if (options.json) {
       console.log(JSON.stringify(result, null, 2));
     } else {
@@ -93,6 +106,27 @@ release
       console.log(`Ready: ${result.ready ? "yes" : "no"}`);
       console.log(`npm auth: ${result.npmAuth.present && result.npmAuth.readable ? "configured" : "missing"}`);
       console.log(`npm user: ${result.npmUser.value ?? "unresolved"}`);
+      for (const check of result.checks) {
+        console.log(`[${check.status}] ${check.label}: ${check.detail}`);
+      }
+    }
+
+    process.exitCode = result.ready ? 0 : 1;
+  });
+
+release
+  .command("verify")
+  .description("Verify packed public packages from a clean-room consumer install.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action((options: { json?: boolean }) => {
+    const result = verifyReleaseArtifacts();
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`Workspace root: ${result.workspaceRoot}`);
+      console.log(`Target scope: ${result.targetScope}`);
+      console.log(`Ready: ${result.ready ? "yes" : "no"}`);
+      console.log(`Temp dir: ${result.tempDir}`);
       for (const check of result.checks) {
         console.log(`[${check.status}] ${check.label}: ${check.detail}`);
       }

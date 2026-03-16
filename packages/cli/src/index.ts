@@ -27,6 +27,8 @@ export {
   EXPECTED_PUBLIC_PACKAGES
 } from "./internal/release-preflight.js";
 export type { ReleaseCheckEntry, ReleaseCheckResult, ReleaseGuide } from "./internal/release-preflight.js";
+export { verifyReleaseArtifacts } from "./internal/release-verification.js";
+export type { ReleaseVerifyEntry, ReleaseVerifyResult, ReleaseVerifyTarball } from "./internal/release-verification.js";
 
 const agentforgeConfigTemplate = `version: 1
 project:

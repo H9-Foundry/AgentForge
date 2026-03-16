@@ -25,6 +25,7 @@ Before opening or merging release work:
 - keep internal-only work out of publishable release notes
 - run `pnpm build:packages`
 - run `pnpm pack:public`
+- run `pnpm release:verify`
 
 ## Trusted Publishing
 
@@ -34,10 +35,15 @@ It is designed to:
 
 - build the workspace and package outputs
 - dry-run the curated public package tarballs
+- verify the curated tarballs from a clean-room consumer install
 - open or update version PRs through Changesets
-- publish with npm trusted publishing and provenance when a release commit lands on `main`
+- publish with npm trusted publishing when a release commit lands on `main`
+
+`.github/workflows/publish-gate.yml` runs the same tarball-based verification on pull requests and manual dispatches so the first publish is blocked until the packed artifacts behave like consumer installs.
 
 This workflow should not fall back to a long-lived npm token. If npm trusted publishing is not configured yet, keep the workflow gated and fix the external setup first.
+
+`release-packages.yml` enables npm package provenance automatically when the repository is public. If the repository is private, it falls back to trusted publishing without npm provenance because npm currently rejects sigstore provenance bundles from private GitHub repositories.
 
 AgentForge does not store npm credentials in repo config. Codex-assisted npm setup depends on machine-level npm auth on the workstation, typically through `npm login` writing `~/.npmrc`.
 
@@ -49,12 +55,16 @@ Use the CLI to separate guidance from verification:
   - runs read-only preflight checks for npm auth, current npm username resolution, package metadata, release workflow trusted publishing config, Changesets config, and local release-shape commands
 - `agentforge release check --json`
   - emits the same result as structured JSON for Codex or CI consumption
+- `agentforge release verify`
+  - packs every public package, installs the tarballs into a clean temp project, verifies installed metadata and entrypoints, imports every public package, and smoke-tests the installed CLI against the workspace
+- `agentforge release verify --json`
+  - emits the clean-room verification result as structured JSON for Codex or CI consumption
 
 ## Build Provenance
 
 `.github/workflows/release-provenance.yml` remains useful even when package publishing is active. It attests the build artifact for the full workspace so reviewers can inspect a reproducible CI build independent of npm publication.
 
-For private repositories, artifact attestation is skipped unless the repository or organization enables it and sets `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true`.
+When the repository is public, `release-provenance.yml` attests the build artifact by default. If the repository is private, artifact attestation is skipped unless the repository or organization enables it and sets `AGENTFORGE_ENABLE_PRIVATE_ATTESTATION=true`.
 
 ## Prerequisites
 
@@ -65,6 +75,7 @@ Before relying on the package release workflow, confirm:
 - GitHub Actions trusted publishing is configured for that scope
 - the repository permissions allow `id-token: write`
 - the public package list in `.changeset/config.json` still matches repo intent
+- the publish gate passes locally or in CI before the first bootstrap publish
 
 ## Plugin Trust And Releases
 

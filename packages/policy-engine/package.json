@@ -1,6 +1,25 @@
 {
   "name": "@h9-foundry/agentforge-policy-engine",
-  "version": "0.2.0",
+  "version": "0.3.2",
+  "description": "Policy evaluation, path gating, trust enforcement, and redaction for AgentForge workflows.",
+  "license": "MIT",
+  "author": "H9 Foundry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/H9-Foundry/AgentForge.git",
+    "directory": "packages/policy-engine"
+  },
+  "homepage": "https://github.com/H9-Foundry/AgentForge/tree/main/packages/policy-engine#readme",
+  "bugs": {
+    "url": "https://github.com/H9-Foundry/AgentForge/issues"
+  },
+  "keywords": [
+    "agentforge",
+    "policy",
+    "security",
+    "redaction",
+    "trust"
+  ],
   "type": "module",
   "publishConfig": {
     "access": "public"
