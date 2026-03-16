@@ -9,6 +9,7 @@ AgentOps includes a GitHub Actions wrapper for the starter `pr-review` workflow.
   - comments on PRs and the configured tracker issue
 - `.github/workflows/release-provenance.yml`
   - build artifact provenance for the workspace
+  - skips artifact attestation on private repositories unless `AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true` is set after GitHub attestation support is enabled
 - `.github/workflows/release-packages.yml`
   - Changesets version PRs and trusted npm publishing for the curated public subset
 

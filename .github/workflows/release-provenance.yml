@@ -53,6 +53,13 @@ jobs:
           path: agentops-build-${{ github.sha }}.tgz
 
       - name: Attest build provenance
+        if: ${{ github.event.repository.private == false || vars.AGENTOPS_ENABLE_PRIVATE_ATTESTATION == 'true' }}
         uses: actions/attest-build-provenance@v4.1.0
         with:
           subject-path: agentops-build-${{ github.sha }}.tgz
+
+      - name: Note skipped provenance attestation
+        if: ${{ github.event.repository.private == true && vars.AGENTOPS_ENABLE_PRIVATE_ATTESTATION != 'true' }}
+        run: |
+          echo "GitHub artifact attestation is skipped for this private repository." >> "$GITHUB_STEP_SUMMARY"
+          echo "Set AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true after enabling private attestations for the org to re-enable this step." >> "$GITHUB_STEP_SUMMARY"

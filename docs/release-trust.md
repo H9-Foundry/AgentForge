@@ -43,6 +43,8 @@ This workflow should not fall back to a long-lived npm token. If npm trusted pub
 
 `.github/workflows/release-provenance.yml` remains useful even when package publishing is active. It attests the build artifact for the full workspace so reviewers can inspect a reproducible CI build independent of npm publication.
 
+For private repositories, artifact attestation is skipped unless the repository or organization enables it and sets `AGENTOPS_ENABLE_PRIVATE_ATTESTATION=true`.
+
 ## Prerequisites
 
 Before relying on the package release workflow, confirm:
