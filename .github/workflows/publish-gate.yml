@@ -1,22 +1,19 @@
-name: Release Packages
+name: Publish Gate
 
 on:
   workflow_dispatch:
-  push:
+  pull_request:
     branches:
       - main
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  NPM_CONFIG_PROVENANCE: true
 
 jobs:
-  release:
+  validate-public-packages:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -34,7 +31,6 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -42,20 +38,7 @@ jobs:
       - name: Build sources and packages
         run: |
           pnpm build
-          pnpm -r build
-
-      - name: Dry run public package archives
-        run: pnpm pack:public
+          pnpm build:packages
 
       - name: Verify packed public packages
         run: pnpm release:verify
-
-      - name: Create release PR or publish
-        uses: changesets/action@v1.7.0
-        with:
-          version: pnpm release:version
-          publish: pnpm release:publish
-          commit: "Version public AgentForge packages"
-          title: "Version public AgentForge packages"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

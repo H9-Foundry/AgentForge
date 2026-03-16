@@ -23,6 +23,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@h9-foundry/agentforge-shared-types": "workspace:*"
+    "@h9-foundry/agentforge-shared-types": "0.2.0"
   }
 }

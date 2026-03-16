@@ -6,7 +6,7 @@
 2. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, `pnpm build`, and `pnpm build:packages` before proposing changes.
 3. Keep changes scoped to the package, agent, adapter, or doc surface you are modifying.
 4. Update tests and documentation when behavior or public contracts change.
-5. If you touch public packages or release automation, also run `pnpm pack:public`.
+5. If you touch public packages or release automation, also run `pnpm pack:public` and `pnpm release:verify`.
 
 ## Planning And Tracking
 

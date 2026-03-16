@@ -37,6 +37,7 @@ node packages/cli/dist/bin.js run pr-review
 node packages/cli/dist/bin.js explain last-run
 node packages/cli/dist/bin.js release guide
 node packages/cli/dist/bin.js release check --json
+node packages/cli/dist/bin.js release verify --json
 ```
 
 ## Release Surface
@@ -61,6 +62,7 @@ Package publishing uses GitHub OIDC trusted publishing for `@h9-foundry/agentfor
 - Run `npm login` once on the workstation that Codex uses. The CLI expects machine-level auth in `~/.npmrc`.
 - Use `agentforge release guide` for the external npm bootstrap steps and reference URLs.
 - Use `agentforge release check --json` to validate npm auth, package metadata, release workflow config, Changesets config, and local release-shape checks.
+- Use `agentforge release verify --json` before the first publish to validate packed tarballs from a clean-room consumer install.
 
 ## Security And Release Notes
 

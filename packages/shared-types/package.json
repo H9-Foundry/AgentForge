@@ -23,7 +23,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-schemas": "0.2.0",
     "zod": "^3.24.2"
   }
 }
