@@ -53,10 +53,7 @@ jobs:
 
       - name: Derive artifact paths
         id: artifact_paths
-        run: |
-          echo "bundle_path=$(node -e \"const data=require('./agentops-run.json'); process.stdout.write(data.jsonPath)\")" >> "$GITHUB_OUTPUT"
-          echo "markdown_path=$(node -e \"const data=require('./agentops-run.json'); process.stdout.write(data.markdownPath)\")" >> "$GITHUB_OUTPUT"
-          echo "run_id=$(node -e \"const data=require('./agentops-run.json'); process.stdout.write(data.runId)\")" >> "$GITHUB_OUTPUT"
+        run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentops-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
 
       - name: Upload AgentOps artifacts
         uses: actions/upload-artifact@v4
