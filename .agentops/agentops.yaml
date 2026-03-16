@@ -1,0 +1,12 @@
+version: 1
+project:
+  name: agentops
+  language: typescript
+runtime:
+  mode: inspect
+  runs_path: .agentops/runs
+providers:
+  default: disabled
+reporting:
+  github:
+    tracker_issue: 1

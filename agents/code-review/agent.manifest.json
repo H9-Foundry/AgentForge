@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "code-review",
+  "displayName": "Code Review",
+  "category": "review",
+  "runtime": {
+    "minVersion": "0.1.0",
+    "kind": "reasoning"
+  },
+  "permissions": {
+    "model": true,
+    "network": false,
+    "tools": ["filesystem.read-file"],
+    "readPaths": ["src/**", "packages/**", "agents/**", "adapters/**"],
+    "writePaths": []
+  },
+  "inputs": ["repo", "changes", "agentResults"],
+  "outputs": ["findings", "proposedActions"],
+  "contextPolicy": {
+    "sections": ["repo", "changes", "agentResults"],
+    "minimalContext": true
+  },
+  "trust": {
+    "tier": "core",
+    "source": "official",
+    "reviewed": true
+  }
+}

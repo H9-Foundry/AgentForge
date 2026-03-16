@@ -1,0 +1,50 @@
+name: Release Provenance
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-attest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+      - name: Package build artifact
+        run: tar -czf "agentops-build-${GITHUB_SHA}.tgz" .build README.md docs SECURITY.md package.json pnpm-lock.yaml
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentops-build-${{ github.sha }}
+          path: agentops-build-${{ github.sha }}.tgz
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: agentops-build-${{ github.sha }}.tgz

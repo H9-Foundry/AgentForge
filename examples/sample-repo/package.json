@@ -1,0 +1,8 @@
+{
+  "name": "agentops-sample-repo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

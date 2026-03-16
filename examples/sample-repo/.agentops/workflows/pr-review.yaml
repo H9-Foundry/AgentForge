@@ -1,0 +1,23 @@
+version: 1
+name: pr-review
+trigger: manual
+nodes:
+  - id: context
+    kind: deterministic
+    agent: context-collector
+    outputs_to: agentResults.context
+  - id: security
+    kind: reasoning
+    agent: security-audit
+    outputs_to: agentResults.security
+  - id: review
+    kind: reasoning
+    agent: code-review
+    outputs_to: agentResults.review
+  - id: tests
+    kind: reasoning
+    agent: test-generation
+    outputs_to: agentResults.tests
+  - id: report
+    kind: report
+    outputs_to: reports.final

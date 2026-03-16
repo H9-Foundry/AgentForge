@@ -1,0 +1,224 @@
+import { readFileSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
+
+import yaml from "js-yaml";
+import picomatch from "picomatch";
+
+import { policyDocumentSchema } from "@agentops/schemas";
+import type {
+  EffectivePolicySnapshot,
+  ExecutionEnvironment,
+  PolicyDocument,
+  ToolRequest
+} from "@agentops/shared-types";
+
+export interface PolicyDecision {
+  readonly allowed: boolean;
+  readonly effect: "allow" | "deny" | "approval_required";
+  readonly requiresApproval: boolean;
+  readonly reason?: string;
+}
+
+function normalizeToolConfig(toolConfig: unknown): unknown {
+  if (!toolConfig || typeof toolConfig !== "object") return toolConfig;
+  const record = toolConfig as Record<string, unknown>;
+  return {
+    effect: record.effect,
+    allowedCommands: record.allowed_commands ?? record.allowedCommands,
+    allowedPaths: record.allowed_paths ?? record.allowedPaths,
+    allowedHosts: record.allowed_hosts ?? record.allowedHosts
+  };
+}
+
+function normalizePolicyInput(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const record = value as Record<string, unknown>;
+  const overlays = record.overlays as Record<string, unknown> | undefined;
+  const normalizeOverlay = (overlay: unknown): unknown => {
+    if (!overlay || typeof overlay !== "object") return overlay;
+    const overlayRecord = overlay as Record<string, unknown>;
+    return {
+      defaults: overlayRecord.defaults
+        ? {
+            executionMode:
+              (overlayRecord.defaults as Record<string, unknown>).execution_mode ??
+              (overlayRecord.defaults as Record<string, unknown>).executionMode,
+            modelAccess:
+              (overlayRecord.defaults as Record<string, unknown>).model_access ??
+              (overlayRecord.defaults as Record<string, unknown>).modelAccess,
+            network: (overlayRecord.defaults as Record<string, unknown>).network,
+            writes: (overlayRecord.defaults as Record<string, unknown>).writes
+          }
+        : undefined,
+      paths: overlayRecord.paths
+        ? {
+            allowedRead:
+              (overlayRecord.paths as Record<string, unknown>).allowed_read ??
+              (overlayRecord.paths as Record<string, unknown>).allowedRead,
+            allowedWrite:
+              (overlayRecord.paths as Record<string, unknown>).allowed_write ??
+              (overlayRecord.paths as Record<string, unknown>).allowedWrite,
+            blocked: (overlayRecord.paths as Record<string, unknown>).blocked
+          }
+        : undefined,
+      tools: overlayRecord.tools
+        ? Object.fromEntries(
+            Object.entries(overlayRecord.tools as Record<string, unknown>).map(([name, config]) => [
+              name,
+              normalizeToolConfig(config)
+            ])
+          )
+        : undefined
+    };
+  };
+
+  return {
+    version: record.version,
+    defaults: {
+      executionMode: (record.defaults as Record<string, unknown>)?.execution_mode ?? (record.defaults as Record<string, unknown>)?.executionMode,
+      modelAccess: (record.defaults as Record<string, unknown>)?.model_access ?? (record.defaults as Record<string, unknown>)?.modelAccess,
+      network: (record.defaults as Record<string, unknown>)?.network,
+      writes: (record.defaults as Record<string, unknown>)?.writes
+    },
+    paths: {
+      allowedRead: (record.paths as Record<string, unknown>)?.allowed_read ?? (record.paths as Record<string, unknown>)?.allowedRead,
+      allowedWrite: (record.paths as Record<string, unknown>)?.allowed_write ?? (record.paths as Record<string, unknown>)?.allowedWrite,
+      blocked: (record.paths as Record<string, unknown>)?.blocked
+    },
+    tools: record.tools
+      ? Object.fromEntries(
+          Object.entries(record.tools as Record<string, unknown>).map(([name, config]) => [name, normalizeToolConfig(config)])
+        )
+      : {},
+    overlays: {
+      local: normalizeOverlay(overlays?.local),
+      ci: normalizeOverlay(overlays?.ci)
+    }
+  };
+}
+
+function mergePolicy(base: PolicyDocument, environment: ExecutionEnvironment): EffectivePolicySnapshot {
+  const overlay = base.overlays?.[environment];
+  return {
+    version: base.version,
+    environment,
+    resolvedAt: new Date().toISOString(),
+    defaults: {
+      executionMode: overlay?.defaults?.executionMode ?? base.defaults.executionMode,
+      modelAccess: overlay?.defaults?.modelAccess ?? base.defaults.modelAccess,
+      network: overlay?.defaults?.network ?? base.defaults.network,
+      writes: overlay?.defaults?.writes ?? base.defaults.writes
+    },
+    paths: {
+      allowedRead: overlay?.paths?.allowedRead ?? base.paths.allowedRead,
+      allowedWrite: overlay?.paths?.allowedWrite ?? base.paths.allowedWrite,
+      blocked: overlay?.paths?.blocked ?? base.paths.blocked
+    },
+    tools: {
+      ...base.tools,
+      ...(overlay?.tools ?? {})
+    }
+  };
+}
+
+function normalizePath(inputPath: string): string {
+  return inputPath.replaceAll("\\", "/");
+}
+
+function resolveRepoPath(repoRoot: string, pathValue: string): { relativePath: string; insideRepo: boolean } {
+  const absolutePath = isAbsolute(pathValue) ? resolve(pathValue) : resolve(repoRoot, pathValue);
+  const relativePath = normalizePath(relative(repoRoot, absolutePath));
+  const insideRepo = relativePath === "" || (!relativePath.startsWith("..") && relativePath !== "..");
+  return {
+    relativePath: relativePath || ".",
+    insideRepo
+  };
+}
+
+function matchesAny(pathValue: string, patterns: readonly string[]): boolean {
+  return patterns.some((pattern) => picomatch(pattern)(pathValue));
+}
+
+export function loadPolicyDocument(policyPath: string): PolicyDocument {
+  const fileContents = readFileSync(policyPath, "utf8");
+  const parsed = yaml.load(fileContents);
+  return policyDocumentSchema.parse(normalizePolicyInput(parsed));
+}
+
+export function resolvePolicy(policy: PolicyDocument, environment: ExecutionEnvironment): EffectivePolicySnapshot {
+  return mergePolicy(policy, environment);
+}
+
+export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: string) {
+  function evaluatePath(pathValue: string, effect: "read" | "write"): PolicyDecision {
+    const { relativePath, insideRepo } = resolveRepoPath(repoRoot, pathValue);
+
+    if (!insideRepo) {
+      return { allowed: false, effect: "deny", requiresApproval: false, reason: `Path escapes repository root: ${pathValue}` };
+    }
+
+    const blocked = matchesAny(relativePath, policy.paths.blocked);
+
+    if (blocked) {
+      return { allowed: false, effect: "deny", requiresApproval: false, reason: `Blocked path: ${relativePath}` };
+    }
+
+    const allowedPatterns = effect === "read" ? policy.paths.allowedRead : policy.paths.allowedWrite;
+    const allowed = matchesAny(relativePath, allowedPatterns);
+    if (!allowed) {
+      return { allowed: false, effect: "deny", requiresApproval: false, reason: `Path not allowed: ${relativePath}` };
+    }
+
+    if (effect === "write" && policy.defaults.writes === "approval_required") {
+      return { allowed: true, effect: "approval_required", requiresApproval: true, reason: "Write requires approval." };
+    }
+
+    return { allowed: true, effect: "allow", requiresApproval: false };
+  }
+
+  function evaluateToolRequest(request: ToolRequest): PolicyDecision {
+    const toolPolicy = policy.tools[request.tool];
+
+    if (!toolPolicy) {
+      return { allowed: false, effect: "deny", requiresApproval: false, reason: `Tool not permitted: ${request.tool}` };
+    }
+
+    if (toolPolicy.effect === "deny") {
+      return { allowed: false, effect: "deny", requiresApproval: false, reason: `Tool denied by policy: ${request.tool}` };
+    }
+
+    return {
+      allowed: true,
+      effect: toolPolicy.effect,
+      requiresApproval: toolPolicy.effect === "approval_required",
+      reason: toolPolicy.effect === "approval_required" ? `Tool requires approval: ${request.tool}` : undefined
+    };
+  }
+
+  function redactSecrets(value: string): string {
+    return value
+      .replaceAll(/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
+      .replaceAll(/gh[pousr]_[A-Za-z0-9]{12,}/g, "[REDACTED_GITHUB_TOKEN]")
+      .replaceAll(/sk-[A-Za-z0-9]{12,}/g, "[REDACTED_API_KEY]")
+      .replaceAll(/AKIA[0-9A-Z]{16}/g, "[REDACTED_AWS_KEY]")
+      .replaceAll(/Bearer\s+[A-Za-z0-9._-]{12,}/gi, "Bearer [REDACTED_TOKEN]")
+      .replaceAll(/(?<=password[:=])[^\s&]+/gi, "[REDACTED_PASSWORD]")
+      .replaceAll(/(?<=token[:=])[^\s&]+/gi, "[REDACTED_TOKEN]")
+      .replaceAll(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]");
+  }
+
+  return {
+    snapshot: policy,
+    canReadPath(pathValue: string): PolicyDecision {
+      return evaluatePath(pathValue, "read");
+    },
+    canWritePath(pathValue: string): PolicyDecision {
+      return evaluatePath(pathValue, "write");
+    },
+    evaluateToolRequest,
+    filterBlockedPaths(paths: readonly string[]): string[] {
+      return paths.filter((pathValue) => evaluatePath(pathValue, "read").allowed);
+    },
+    redactSecrets
+  };
+}
