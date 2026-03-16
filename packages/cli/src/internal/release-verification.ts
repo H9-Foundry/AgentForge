@@ -334,11 +334,12 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
 
       const cliCheck = runCommand(
         cliBinary,
-        ["release", "check", "--json", "--skip-npm-auth"],
+        ["release", "check", "--json", "--skip-npm-auth", "--skip-local-commands"],
         workspaceRoot,
         {
           ...env,
-          AGENTFORGE_SKIP_NPM_AUTH: "1"
+          AGENTFORGE_SKIP_NPM_AUTH: "1",
+          AGENTFORGE_SKIP_LOCAL_COMMANDS: "1"
         }
       );
       pushCheck(
