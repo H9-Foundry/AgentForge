@@ -40,10 +40,7 @@ Rules:
 
 Current active lane:
 
-1. [#76](https://github.com/H9-Foundry/AgentForge/issues/76) manifest metadata
-2. [#77](https://github.com/H9-Foundry/AgentForge/issues/77) artifact schemas
-3. child implementation issues under [#50](https://github.com/H9-Foundry/AgentForge/issues/50)
-4. child implementation issues under [#48](https://github.com/H9-Foundry/AgentForge/issues/48) and [#49](https://github.com/H9-Foundry/AgentForge/issues/49)
+1. [#78](https://github.com/H9-Foundry/AgentForge/issues/78) planning/discovery workflow MVP
 
 ### Ready Lane
 
@@ -51,8 +48,7 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-5. [#78](https://github.com/H9-Foundry/AgentForge/issues/78) planning/discovery workflow MVP
-6. [#79](https://github.com/H9-Foundry/AgentForge/issues/79) architecture/design workflow MVP
+2. [#79](https://github.com/H9-Foundry/AgentForge/issues/79) architecture/design workflow MVP
 
 ### Parallel Safe Lane
 
@@ -60,7 +56,7 @@ Work that improves first-time evaluation and contributor usability without reord
 
 Current parallel safe lane:
 
-- [#97](https://github.com/H9-Foundry/AgentForge/issues/97) CLI-first onboarding and newcomer usability
+- [#97](https://github.com/H9-Foundry/AgentForge/issues/97) CLI-first onboarding and newcomer usability (complete and ready to close)
 - [#98](https://github.com/H9-Foundry/AgentForge/issues/98) CLI-first README and quick trial path
 - [#99](https://github.com/H9-Foundry/AgentForge/issues/99) first-run output example and artifact walkthrough
 - [#100](https://github.com/H9-Foundry/AgentForge/issues/100) quickstart and sample repo external-evaluation flow
@@ -72,10 +68,11 @@ Current parallel safe lane:
 
 Rules:
 
-- this lane can run in parallel with the active foundation chain when it does not depend on runtime or policy changes
-- it must not reorder `#90` through `#94`
+- this lane can run in parallel with the active workflow-design chain when it does not depend on runtime or policy changes
+- it must not reorder the core dependency chain for the current active slice
 - it should optimize first for evaluators trying the current wedge and early contributors making small changes
-- `#114` is the current active usability slice, with `#115` ready behind it
+- the first usability lane is materially complete through `#116`, `#114`, and `#115`
+- keep the lane idle until a new bounded newcomer-facing issue is opened
 
 ### Mapped Lane
 
