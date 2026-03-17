@@ -3,7 +3,14 @@ import { join } from "node:path";
 
 import { agentManifestSchema, agentOutputSchema, designArtifactSchema, planningArtifactSchema } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
-import type { DesignRequest, PlanningArtifact, PlanningRequest, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import type {
+  DesignArtifact,
+  DesignRequest,
+  ImplementationRequest,
+  PlanningArtifact,
+  PlanningRequest,
+  WorkflowStateEnvelope
+} from "@h9-foundry/agentforge-shared-types";
 
 const contextCollectorAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
@@ -480,6 +487,72 @@ const designInventoryAgent: RuntimeAgent = {
   }
 };
 
+const implementationIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "implementation-intake",
+    displayName: "Implementation Intake",
+    category: "implementation",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "build",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const implementationRequest = getWorkflowInput<ImplementationRequest>(stateSlice, "implementationRequest");
+    const designRecord = getWorkflowInput<DesignArtifact>(stateSlice, "designRecord");
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!implementationRequest || !designRecord) {
+      throw new Error(
+        "implementation-proposal requires a validated implementation request and design record before runtime execution."
+      );
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded implementation request from ${requestFile ?? ".agentops/requests/implementation.yaml"} with design record ${implementationRequest.designRecordRef}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        requestFile,
+        designRecordRef: implementationRequest.designRecordRef,
+        implementationGoal: implementationRequest.implementationGoal,
+        approvalMode: implementationRequest.approvalMode,
+        targetPaths: implementationRequest.targetPaths,
+        validationCommands: implementationRequest.validationCommands,
+        designDecisionSummary: designRecord.payload.decisionSummary
+      }
+    });
+  }
+};
+
 const designAnalystAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -860,6 +933,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["planning-analyst", planningAnalystAgent],
     ["design-intake", designIntakeAgent],
     ["design-inventory", designInventoryAgent],
+    ["implementation-intake", implementationIntakeAgent],
     ["design-analyst", designAnalystAgent],
     ["code-review", codeReviewAgent],
     ["security-audit", securityAuditAgent],

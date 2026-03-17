@@ -359,4 +359,136 @@ describe("cli smoke flows", () => {
     expect(bundle.workflow).toBe("architecture-design-review");
     expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "design-record")).toBe(true);
   });
+
+  it("fails implementation-proposal before reasoning when the request is missing", async () => {
+    const root = createGitFixture("agentops-cli-implementation-missing-");
+    initProject(root);
+
+    await expect(runLocalWorkflow("implementation-proposal", root)).rejects.toThrow("Missing implementation request");
+  });
+
+  it("requires a valid design bundle reference for implementation-proposal", async () => {
+    const root = createGitFixture("agentops-cli-implementation-invalid-ref-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        "designRecordRef: .agentops/runs/missing/bundle.json",
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only"
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("implementation-proposal", root)).rejects.toThrow("Referenced design bundle not found");
+  });
+
+  it("requires a design-record artifact for implementation-proposal", async () => {
+    const root = createGitFixture("agentops-cli-implementation-invalid-artifact-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "issueRefs:",
+        "  - '#127'",
+        "pathHints:",
+        "  - packages/runtime"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only"
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("implementation-proposal", root)).rejects.toThrow(
+      "Referenced bundle does not contain a design-record artifact"
+    );
+  });
+
+  it("requires approvalMode for implementation-proposal requests", async () => {
+    const root = createGitFixture("agentops-cli-implementation-missing-approval-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        "designRecordRef: .agentops/runs/run-456/bundle.json",
+        "implementationGoal: Prepare the next bounded implementation proposal"
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("implementation-proposal", root)).rejects.toThrow();
+  });
+
+  it("runs implementation-proposal after a valid design-record handoff", async () => {
+    const root = createGitFixture("agentops-cli-implementation-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "issueRefs:",
+        "  - '#127'",
+        "pathHints:",
+        "  - packages/runtime",
+        "  - packages/schemas"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first design workflow implementation shape",
+        "pathHints:",
+        "  - packages/runtime",
+        "  - packages/schemas",
+        "alternatives:",
+        "  - single-workflow-pass"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - packages/cli",
+        "  - packages/runtime",
+        "validationCommands:",
+        "  - pnpm test",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    expect(implementationRun.status).toBe("success");
+    expect(implementationRun.artifactKinds).toEqual([]);
+
+    const bundle = JSON.parse(readFileSync(implementationRun.jsonPath, "utf8")) as {
+      workflow: string;
+      lifecycleArtifacts: { artifactKind: string }[];
+    };
+    expect(bundle.workflow).toBe("implementation-proposal");
+    expect(bundle.lifecycleArtifacts).toEqual([]);
+  });
 });

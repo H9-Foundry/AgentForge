@@ -6,6 +6,7 @@ import {
   designArtifactSchema,
   designRequestSchema,
   getJsonSchemas,
+  implementationRequestSchema,
   lifecycleArtifactEnvelopeSchema,
   maintenanceArtifactSchema,
   policyDocumentSchema,
@@ -24,6 +25,7 @@ describe("schema fixtures", () => {
     expect(() => workflowDefinitionSchema.parse(schemaFixtures.workflowDefinition)).not.toThrow();
     expect(() => planningRequestSchema.parse(schemaFixtures.planningRequest)).not.toThrow();
     expect(() => designRequestSchema.parse(schemaFixtures.designRequest)).not.toThrow();
+    expect(() => implementationRequestSchema.parse(schemaFixtures.implementationRequest)).not.toThrow();
   });
 
   it("rejects invalid manifests", () => {
@@ -42,6 +44,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.workflowDefinition).toBeDefined();
     expect(jsonSchemas.planningRequest).toBeDefined();
     expect(jsonSchemas.designRequest).toBeDefined();
+    expect(jsonSchemas.implementationRequest).toBeDefined();
     expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
     expect(jsonSchemas.planningArtifact).toBeDefined();
     expect(jsonSchemas.designArtifact).toBeDefined();
