@@ -22,6 +22,7 @@ This document explains the gap between the current AgentForge implementation and
 - security posture is strong, but security-specific workflow coverage is still thin
 - internal adapters exist, but they are not yet a documented public integration surface
 - the repo has a credible architecture core, but the platform narrative and backlog are still catching up
+- several Phase 1 contract docs now exist for runtime interactions, context slices, policy overlays, manifest metadata, and lifecycle artifact families, but those contracts are still largely design-first rather than implemented behavior
 
 ## What Is Missing
 
