@@ -16,11 +16,12 @@ export const trustSourceSchema = z.enum(["official", "local", "third-party"]);
 export const lifecycleArtifactKindSchema = z.enum([
   "planning-brief",
   "design-record",
+  "implementation-proposal",
   "review-report",
   "release-report",
   "maintenance-report"
 ]);
-export const lifecycleDomainSchema = z.enum(["plan", "design", "review", "release", "maintain"]);
+export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "review", "release", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 export const catalogDomainSchema = z.enum([
@@ -480,6 +481,17 @@ export const reviewArtifactPayloadSchema = z.object({
   approvalRecommendations: z.array(z.string().min(1)).default([])
 });
 
+export const implementationArtifactPayloadSchema = z.object({
+  designRecordRef: z.string().min(1),
+  implementationGoal: z.string().min(1),
+  affectedPaths: z.array(z.string().min(1)).default([]),
+  proposedChanges: z.array(z.string().min(1)).default([]),
+  validationPlan: z.array(z.string().min(1)).default([]),
+  approvalRequiredSteps: z.array(z.string().min(1)).default([]),
+  risks: z.array(z.string().min(1)).default([]),
+  openQuestions: z.array(z.string().min(1)).default([])
+});
+
 export const releaseVerificationCheckSchema = z.object({
   name: z.string().min(1),
   status: z.enum(["passed", "failed", "skipped"]),
@@ -528,6 +540,12 @@ export const designArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   payload: designArtifactPayloadSchema
 });
 
+export const implementationArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("implementation-proposal"),
+  lifecycleDomain: z.literal("build"),
+  payload: implementationArtifactPayloadSchema
+});
+
 export const reviewArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("review-report"),
   lifecycleDomain: z.literal("review"),
@@ -549,6 +567,7 @@ export const maintenanceArtifactSchema = lifecycleArtifactEnvelopeSchema.extend(
 export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   planningArtifactSchema,
   designArtifactSchema,
+  implementationArtifactSchema,
   reviewArtifactSchema,
   releaseArtifactSchema,
   maintenanceArtifactSchema
@@ -596,6 +615,7 @@ export const schemaRegistry = {
   planningArtifactPayload: planningArtifactPayloadSchema,
   designArtifactOption: designArtifactOptionSchema,
   designArtifactPayload: designArtifactPayloadSchema,
+  implementationArtifactPayload: implementationArtifactPayloadSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
@@ -603,6 +623,7 @@ export const schemaRegistry = {
   maintenanceArtifactPayload: maintenanceArtifactPayloadSchema,
   planningArtifact: planningArtifactSchema,
   designArtifact: designArtifactSchema,
+  implementationArtifact: implementationArtifactSchema,
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
@@ -704,6 +725,29 @@ const designArtifactFixture = {
     tradeOffs: ["More schema surface to maintain"],
     risks: ["Design records could drift from implementation"],
     followUpWork: ["Implement runtime emission later"]
+  }
+} as const;
+
+const implementationArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "implementation-proposal",
+  lifecycleDomain: "build",
+  summary: "Implementation proposal for the next bounded workflow slice.",
+  payload: {
+    designRecordRef: ".agentops/runs/run-456/bundle.json",
+    implementationGoal: "Prepare the next bounded implementation proposal",
+    affectedPaths: ["packages/cli", "packages/runtime"],
+    proposedChanges: [
+      "Add the implementation planner starter agent.",
+      "Emit an implementation-proposal artifact through the runtime."
+    ],
+    validationPlan: ["Review requested validation commands before execution."],
+    approvalRequiredSteps: [
+      "Any future patch application requires explicit approval.",
+      "Any future build or validation execution requires approval after allowlist review."
+    ],
+    risks: ["Affected repository surfaces may widen once deterministic inventory lands."],
+    openQuestions: ["Which validation commands should become allowlisted in the next slice?"]
   }
 } as const;
 
@@ -898,6 +942,7 @@ export const schemaFixtures = {
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,
+  implementationArtifact: implementationArtifactFixture,
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   maintenanceArtifact: maintenanceArtifactFixture,

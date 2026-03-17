@@ -1,11 +1,18 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { agentManifestSchema, agentOutputSchema, designArtifactSchema, planningArtifactSchema } from "@h9-foundry/agentforge-schemas";
+import {
+  agentManifestSchema,
+  agentOutputSchema,
+  designArtifactSchema,
+  implementationArtifactSchema,
+  planningArtifactSchema
+} from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
   DesignArtifact,
   DesignRequest,
+  ImplementationArtifact,
   ImplementationRequest,
   PlanningArtifact,
   PlanningRequest,
@@ -553,6 +560,144 @@ const implementationIntakeAgent: RuntimeAgent = {
   }
 };
 
+const implementationPlannerAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "implementation-planner",
+    displayName: "Implementation Planner",
+    category: "implementation",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "reasoning"
+    },
+    permissions: {
+      model: true,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "changes", "agentResults"],
+    outputs: ["lifecycleArtifacts"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "changes", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "build",
+      supportLevel: "official",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ state, stateSlice }) {
+    const implementationRequest = getWorkflowInput<ImplementationRequest>(stateSlice, "implementationRequest");
+    const designRecord = getWorkflowInput<DesignArtifact>(stateSlice, "designRecord");
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!implementationRequest || !designRecord) {
+      throw new Error("implementation-proposal requires validated implementation inputs before proposal analysis.");
+    }
+
+    const affectedPaths = [
+      ...new Set([
+        ...implementationRequest.targetPaths,
+        ...designRecord.payload.interfacesImpacted,
+        ...designRecord.payload.schemaChangesNeeded,
+        ...designRecord.payload.policyChangesNeeded
+      ])
+    ];
+    const normalizedAffectedPaths =
+      affectedPaths.length > 0 ? affectedPaths : ["Repository paths still need deterministic build-surface confirmation."];
+    const proposedChanges = [
+      `Prepare a bounded implementation plan for ${implementationRequest.implementationGoal}.`,
+      ...normalizedAffectedPaths.slice(0, 5).map((pathValue) => `Plan targeted edits for ${pathValue}.`)
+    ];
+    const validationPlan =
+      implementationRequest.validationCommands.length > 0
+        ? implementationRequest.validationCommands.map(
+            (command) => `Review allowlist suitability for \`${command}\` before any future execution.`
+          )
+        : ["Confirm allowlisted validation commands in the next deterministic implementation slice before execution."];
+    const approvalRequiredSteps =
+      implementationRequest.approvalMode === "apply-capable"
+        ? [
+            "Any future patch application requires explicit approval before execution.",
+            "Any future build or validation execution requires approval after allowlist review."
+          ]
+        : ["The default path remains proposal-only; any patch or build execution requires a separate approved workflow."];
+    const risks = [
+      ...(implementationRequest.targetPaths.length === 0
+        ? ["Target paths were not supplied, so affected surfaces may still broaden after deterministic discovery."]
+        : []),
+      ...(implementationRequest.validationCommands.length === 0
+        ? ["Validation commands are not yet specified and will need deterministic allowlist confirmation later."]
+        : [])
+    ];
+    const openQuestions = [
+      ...(implementationRequest.constraints.length === 0
+        ? ["Which additional implementation constraints should be captured before execution work begins?"]
+        : []),
+      ...(designRecord.payload.policyChangesNeeded.length > 0
+        ? ["Do the policy surfaces identified in the design record require a separate approval review?"]
+        : [])
+    ];
+    const summary = `Implementation proposal prepared for ${implementationRequest.implementationGoal}.`;
+    const implementationProposal = implementationArtifactSchema.parse({
+      ...buildArtifactEnvelopeBase(
+        state,
+        summary,
+        [requestFile ?? ".agentops/requests/implementation.yaml", implementationRequest.designRecordRef],
+        designRecord.source.issueRefs
+      ),
+      artifactKind: "implementation-proposal",
+      lifecycleDomain: "build",
+      workflow: {
+        name: state.workflow,
+        displayName: "Implementation Proposal"
+      },
+      payload: {
+        designRecordRef: implementationRequest.designRecordRef,
+        implementationGoal: implementationRequest.implementationGoal,
+        affectedPaths: normalizedAffectedPaths,
+        proposedChanges,
+        validationPlan,
+        approvalRequiredSteps,
+        risks,
+        openQuestions
+      }
+    });
+
+    return agentOutputSchema.parse({
+      summary,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [implementationProposal satisfies ImplementationArtifact],
+      requestedTools: [],
+      blockedActionFlags: [],
+      confidence: 0.76,
+      metadata: {
+        deterministicInputs: {
+          targetPaths: implementationRequest.targetPaths,
+          validationCommands: implementationRequest.validationCommands,
+          constraints: implementationRequest.constraints,
+          designInterfaces: designRecord.payload.interfacesImpacted
+        },
+        synthesizedProposal: {
+          affectedPaths: normalizedAffectedPaths,
+          approvalRequiredSteps,
+          openQuestions
+        }
+      }
+    });
+  }
+};
+
 const designAnalystAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -934,6 +1079,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["design-intake", designIntakeAgent],
     ["design-inventory", designInventoryAgent],
     ["implementation-intake", implementationIntakeAgent],
+    ["implementation-planner", implementationPlannerAgent],
     ["design-analyst", designAnalystAgent],
     ["code-review", codeReviewAgent],
     ["security-audit", securityAuditAgent],

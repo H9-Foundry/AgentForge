@@ -482,13 +482,16 @@ describe("cli smoke flows", () => {
 
     const implementationRun = await runLocalWorkflow("implementation-proposal", root);
     expect(implementationRun.status).toBe("success");
-    expect(implementationRun.artifactKinds).toEqual([]);
+    expect(implementationRun.artifactKinds).toContain("implementation-proposal");
 
     const bundle = JSON.parse(readFileSync(implementationRun.jsonPath, "utf8")) as {
       workflow: string;
       lifecycleArtifacts: { artifactKind: string }[];
     };
     expect(bundle.workflow).toBe("implementation-proposal");
-    expect(bundle.lifecycleArtifacts).toEqual([]);
+    expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "implementation-proposal")).toBe(true);
+
+    const explanation = explainLastRun(root);
+    expect(explanation.artifactKinds).toContain("implementation-proposal");
   });
 });

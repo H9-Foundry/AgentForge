@@ -6,6 +6,7 @@ import {
   designArtifactSchema,
   designRequestSchema,
   getJsonSchemas,
+  implementationArtifactSchema,
   implementationRequestSchema,
   lifecycleArtifactEnvelopeSchema,
   maintenanceArtifactSchema,
@@ -48,6 +49,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
     expect(jsonSchemas.planningArtifact).toBeDefined();
     expect(jsonSchemas.designArtifact).toBeDefined();
+    expect(jsonSchemas.implementationArtifact).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();
     expect(jsonSchemas.releaseArtifact).toBeDefined();
     expect(jsonSchemas.maintenanceArtifact).toBeDefined();
@@ -133,6 +135,7 @@ describe("schema fixtures", () => {
   it("validates the initial lifecycle artifact family schemas", () => {
     expect(() => planningArtifactSchema.parse(schemaFixtures.planningArtifact)).not.toThrow();
     expect(() => designArtifactSchema.parse(schemaFixtures.designArtifact)).not.toThrow();
+    expect(() => implementationArtifactSchema.parse(schemaFixtures.implementationArtifact)).not.toThrow();
     expect(() => reviewArtifactSchema.parse(schemaFixtures.reviewArtifact)).not.toThrow();
     expect(() => releaseArtifactSchema.parse(schemaFixtures.releaseArtifact)).not.toThrow();
     expect(() => maintenanceArtifactSchema.parse(schemaFixtures.maintenanceArtifact)).not.toThrow();

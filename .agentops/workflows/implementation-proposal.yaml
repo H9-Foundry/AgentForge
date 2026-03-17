@@ -12,6 +12,10 @@ nodes:
     kind: deterministic
     agent: implementation-intake
     outputs_to: agentResults.intake
+  - id: planning
+    kind: reasoning
+    agent: implementation-planner
+    outputs_to: agentResults.planning
   - id: report
     kind: report
     outputs_to: reports.final
