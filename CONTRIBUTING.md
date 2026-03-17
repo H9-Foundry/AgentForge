@@ -4,6 +4,8 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 
 ## Start Here
 
+- if you are new and want to evaluate the current wedge quickly, follow the CLI-first path in [README.md](README.md) and [docs/quickstart.md](docs/quickstart.md) first
+- if you want to improve first-time usability, start with the newcomer-usability track under [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
 - read [README.md](README.md)
 - read [docs/PLATFORM_VISION.md](docs/PLATFORM_VISION.md)
 - read [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -20,6 +22,7 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 - Open an epic when work spans multiple packages, workflows, or phases.
 - Open a feature issue for bounded implementation slices.
 - Record deferred work as follow-up issues instead of hiding it in TODO comments.
+- Treat newcomer usability as a standing quality concern for public docs, CLI ergonomics, and the first-run experience, not as a final polish pass.
 
 ## Development Workflow
 
@@ -67,6 +70,8 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 4. run the required validation commands
 5. dogfood through currently supported AgentForge surfaces when the slice type requires it
 6. merge the slice and update or close the issue
+
+For public or user-visible changes, also record whether the slice improves, preserves, or worsens first-time usability and whether the CLI-first docs/examples need an update.
 
 ## Before Opening A Pull Request
 

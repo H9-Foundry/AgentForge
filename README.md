@@ -179,6 +179,11 @@ Current dogfooding posture:
 - use AgentForge on AgentForge for planning, design, review, QA, and release verification
 - do not treat it as a broad autonomous implementation engine yet
 
+Current onboarding focus:
+
+- keep the current wedge CLI-first and as frictionless as possible for new evaluators
+- improve README, quickstart, examples, and contributor entry points in parallel with the Phase 1 foundation work
+
 See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md), [docs/CONTEXT_SLICE_CONTRACTS.md](docs/CONTEXT_SLICE_CONTRACTS.md), and [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md).
 
 Roadmap docs:
@@ -203,5 +208,6 @@ Roadmap docs:
 - Follow the platform roadmap milestones in the GitHub milestone list.
 - Start with the roadmap docs before proposing broad new workflow claims or integration work.
 - Use the issue templates in `.github/ISSUE_TEMPLATE/` so planning data stays consistent.
+- Follow the newcomer-usability track if you want to improve the first-run CLI and onboarding experience: [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
 
 If you need help or want to contribute, open an issue in this repository with the relevant template and link it to the appropriate roadmap phase or epic.
