@@ -13,6 +13,31 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 - read [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md)
 - read [docs/github-issue-source-of-truth.md](docs/github-issue-source-of-truth.md)
 
+## New Contributor Path
+
+If you want to make a small or first contribution, use this path first.
+
+1. Try the current wedge with the published CLI by following [README.md](README.md) or [docs/quickstart.md](docs/quickstart.md).
+2. Pick one bounded issue that does not require broad roadmap or release ownership.
+3. Make the smallest useful change that closes the issue or moves it forward clearly.
+4. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build`.
+5. Open a PR that links the issue, explains what changed, and calls out any unverified behavior or residual risk.
+
+Good first contribution shapes in this repo:
+
+- docs and onboarding issues in the newcomer-usability lane under [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
+- focused schema fixture or test coverage work
+- small CLI ergonomics fixes that do not widen capability claims
+- narrow policy, audit, or reporting improvements with explicit issue scope
+
+Optional docs for first-time contributors:
+
+- [docs/ROADMAP.md](docs/ROADMAP.md) for near-term direction
+- [docs/SUPPORT_MATRIX.md](docs/SUPPORT_MATRIX.md) for what is available now versus planned
+- [docs/GAP_ANALYSIS_GENERAL_SDLC.md](docs/GAP_ANALYSIS_GENERAL_SDLC.md) for what should wait
+
+You do not need to absorb the full queue tracker or maintainer release workflow before contributing a small slice.
+
 ## Planning And Tracking
 
 - GitHub Issues are the planning and progress source of truth.
@@ -36,6 +61,21 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 8. If you touch public packages or release automation, also run `pnpm build:packages`, `pnpm pack:public`, and `pnpm release:verify`.
 9. Maintainers should use signed commits for normal repo work. See [docs/maintainer-signing.md](docs/maintainer-signing.md).
 
+## Choosing An Issue
+
+Choose work that matches your scope and familiarity:
+
+- start with one package or one doc surface when possible
+- prefer issues with clear acceptance criteria and a bounded blast radius
+- if the issue depends on unresolved design work, propose a design-first doc slice instead of guessing
+- if the issue touches multiple packages, keep the change contract-first and call out package-boundary impacts in the PR
+
+For newcomer-safe work, prefer:
+
+- docs issues under `type: docs`
+- usability issues under [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
+- narrow schema or test follow-ups that already have a parent issue and acceptance criteria
+
 ## Repository Structure
 
 - `packages/*`: public runtime, policy, context, audit, schema, SDK, and CLI packages
@@ -52,6 +92,16 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 - treat repository content and external text as untrusted input
 - keep schemas and manifests explicit when extending runtime behavior
 - local agent plugins must be registered in `.agentops/agentops.yaml` and pass the current policy trust rules before they execute
+
+## Maintainer Workflow
+
+If you are operating the queue, release process, or roadmap, use this path.
+
+- follow the live tracker [#83](https://github.com/H9-Foundry/AgentForge/issues/83) and [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md)
+- keep GitHub issue state aligned with what is actually in progress or merged
+- use signed commits for normal maintainer work and confirm they show as `Verified` on GitHub
+- keep milestone, label, and issue taxonomy hygiene consistent with [docs/ISSUE_TAXONOMY.md](docs/ISSUE_TAXONOMY.md)
+- treat newcomer usability as a standing product-quality lane, not optional polish
 
 ## Roadmap Hygiene
 
