@@ -69,6 +69,11 @@ The current shipped baseline is:
   - approval classes
   - precedence and narrowing semantics
   - policy-to-audit expectations
+- [docs/MANIFEST_METADATA.md](MANIFEST_METADATA.md)
+  - workflow and agent catalog metadata
+  - SDLC domain classification
+  - support level, maturity, and trust-scope semantics
+  - schema and CLI follow-up boundaries
 
 ## Execution Flow
 

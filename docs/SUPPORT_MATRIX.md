@@ -2,6 +2,8 @@
 
 This matrix separates current official support from roadmap intent.
 
+The design target for manifest-level classification is documented in [docs/MANIFEST_METADATA.md](MANIFEST_METADATA.md). Until that schema work lands, this matrix remains the authoritative support classification.
+
 ## Maturity Levels
 
 - **Official**: implemented, documented, and treated as current supported surface
