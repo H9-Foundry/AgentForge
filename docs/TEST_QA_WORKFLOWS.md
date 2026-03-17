@@ -91,6 +91,15 @@ Recommended input model:
 - add `.agentops/requests/qa.yaml`
 - allow references to design records, implementation proposals, or local validation outputs
 
+Recommended first request fields:
+
+- `targetRef` as required reference to a prior artifact bundle or bounded local validation output
+- `evidenceSources` as optional additional local evidence paths
+- `executedChecks` as optional list of already-run validation commands
+- `focusAreas` as optional list of QA emphasis areas
+- `constraints` as optional bounded QA constraints
+- `releaseContext` as optional enum describing whether the request is exploratory, candidate-facing, or blocking
+
 ### Workflow Stages
 
 1. intake normalization
@@ -162,4 +171,3 @@ This epic should be decomposed into at least:
 2. `qa-analyst` starter agent and `qa-report` artifact emission
 3. deterministic test-output normalization and QA evidence ingestion
 4. policy/runtime wiring for QA-specific validation commands and evidence visibility
-

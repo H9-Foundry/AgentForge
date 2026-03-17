@@ -1,0 +1,17 @@
+version: 1
+name: qa-review
+description: Validate a bounded QA request and prepare it for later QA analysis stages.
+trigger: manual
+catalog:
+  domain: test
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: qa-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
