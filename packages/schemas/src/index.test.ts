@@ -4,10 +4,12 @@ import {
   agentManifestSchema,
   auditBundleSchema,
   designArtifactSchema,
+  designRequestSchema,
   getJsonSchemas,
   lifecycleArtifactEnvelopeSchema,
   maintenanceArtifactSchema,
   policyDocumentSchema,
+  planningRequestSchema,
   planningArtifactSchema,
   releaseArtifactSchema,
   reviewArtifactSchema,
@@ -20,6 +22,8 @@ describe("schema fixtures", () => {
     expect(() => agentManifestSchema.parse(schemaFixtures.agentManifest)).not.toThrow();
     expect(() => policyDocumentSchema.parse(schemaFixtures.policyDocument)).not.toThrow();
     expect(() => workflowDefinitionSchema.parse(schemaFixtures.workflowDefinition)).not.toThrow();
+    expect(() => planningRequestSchema.parse(schemaFixtures.planningRequest)).not.toThrow();
+    expect(() => designRequestSchema.parse(schemaFixtures.designRequest)).not.toThrow();
   });
 
   it("rejects invalid manifests", () => {
@@ -36,6 +40,8 @@ describe("schema fixtures", () => {
 
     expect(jsonSchemas.agentManifest).toBeDefined();
     expect(jsonSchemas.workflowDefinition).toBeDefined();
+    expect(jsonSchemas.planningRequest).toBeDefined();
+    expect(jsonSchemas.designRequest).toBeDefined();
     expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
     expect(jsonSchemas.planningArtifact).toBeDefined();
     expect(jsonSchemas.designArtifact).toBeDefined();
@@ -66,6 +72,7 @@ describe("schema fixtures", () => {
         findings: [],
         proposedActions: [],
         blockedPlugins: [],
+        lifecycleArtifacts: [schemaFixtures.planningArtifact],
         artifactPaths: {
           json: ".agentops/runs/run-1/bundle.json",
           markdown: ".agentops/runs/run-1/summary.md"

@@ -1,0 +1,25 @@
+version: 1
+name: architecture-design-review
+description: Turn a validated planning brief into one structured architecture and design record.
+trigger: manual
+catalog:
+  domain: design
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: design-intake
+    outputs_to: agentResults.intake
+  - id: inventory
+    kind: deterministic
+    agent: design-inventory
+    outputs_to: agentResults.inventory
+  - id: design
+    kind: reasoning
+    agent: design-analyst
+    outputs_to: agentResults.design
+  - id: report
+    kind: report
+    outputs_to: reports.final

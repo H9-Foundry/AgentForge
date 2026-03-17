@@ -23,6 +23,12 @@ export const manifest = agentManifestSchema.parse({
     sections: ["changes"],
     minimalContext: true
   },
+  catalog: {
+    domain: "test",
+    supportLevel: "official",
+    maturity: "mvp",
+    trustScope: "official-core-only"
+  },
   trust: {
     tier: "core",
     source: "official",

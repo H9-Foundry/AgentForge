@@ -7,11 +7,21 @@ import { renderAuditBundleMarkdown } from "@h9-foundry/agentforge-audit";
 import { createWorkflowState, findWorkspaceRoot } from "@h9-foundry/agentforge-context-engine";
 import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@h9-foundry/agentforge-policy-engine";
 import { runWorkflow } from "@h9-foundry/agentforge-runtime";
-import { agentforgeConfigSchema, workflowDefinitionSchema } from "@h9-foundry/agentforge-schemas";
+import {
+  agentforgeConfigSchema,
+  auditBundleSchema,
+  designRequestSchema,
+  planningArtifactSchema,
+  planningRequestSchema,
+  workflowDefinitionSchema
+} from "@h9-foundry/agentforge-schemas";
 import type {
   AgentForgeConfig,
   AgentPluginRegistration,
   BlockedPlugin,
+  DesignRequest,
+  PlanningArtifact,
+  PlanningRequest,
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
@@ -55,6 +65,7 @@ defaults:
 paths:
   allowed_read:
     - "**/*"
+    - ".agentops/**"
   allowed_write:
     - ".agentops/runs/**"
     - "tests/**"
@@ -91,9 +102,15 @@ tools:
     effect: deny
 `;
 
-const workflowTemplate = `version: 1
+const prReviewWorkflowTemplate = `version: 1
 name: pr-review
+description: Review local repository changes with the official safe-by-default review wedge.
 trigger: manual
+catalog:
+  domain: review
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
 nodes:
   - id: context
     kind: deterministic
@@ -116,6 +133,60 @@ nodes:
     outputs_to: reports.final
 `;
 
+const planningWorkflowTemplate = `version: 1
+name: planning-discovery
+description: Turn a bounded local planning request into one structured planning brief.
+trigger: manual
+catalog:
+  domain: plan
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: planning-intake
+    outputs_to: agentResults.intake
+  - id: discovery
+    kind: deterministic
+    agent: context-collector
+    outputs_to: agentResults.discovery
+  - id: planning
+    kind: reasoning
+    agent: planning-analyst
+    outputs_to: agentResults.planning
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
+const designWorkflowTemplate = `version: 1
+name: architecture-design-review
+description: Turn a validated planning brief into one structured architecture and design record.
+trigger: manual
+catalog:
+  domain: design
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: design-intake
+    outputs_to: agentResults.intake
+  - id: inventory
+    kind: deterministic
+    agent: design-inventory
+    outputs_to: agentResults.inventory
+  - id: design
+    kind: reasoning
+    agent: design-analyst
+    outputs_to: agentResults.design
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -128,6 +199,116 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function ensureReadablePath(
+  policyEngine: ReturnType<typeof createPolicyEngine>,
+  pathValue: string,
+  purpose: string
+): void {
+  const decision = policyEngine.canReadPath(pathValue);
+  if (!decision.allowed) {
+    throw new Error(decision.reason ?? `Read denied for ${purpose}: ${pathValue}`);
+  }
+}
+
+function readYamlFile<T>(filePath: string, parser: { parse(value: unknown): T }, purpose: string): T {
+  if (!existsSync(filePath)) {
+    throw new Error(`Missing ${purpose}: ${filePath}`);
+  }
+
+  return parser.parse(loadYaml(filePath));
+}
+
+function validatePlanningRequestCompleteness(request: PlanningRequest): PlanningRequest {
+  const supportingSignalCount =
+    request.goals.length +
+    request.constraints.length +
+    request.issueRefs.length +
+    request.pathHints.length +
+    request.assumptions.length;
+
+  if (supportingSignalCount === 0) {
+    throw new Error(
+      "Planning request is underspecified. Add at least one of goals, constraints, issueRefs, pathHints, or assumptions."
+    );
+  }
+
+  return request;
+}
+
+function validateWorkflowLifecyclePosture(
+  workflow: WorkflowDefinition,
+  policyEngine: ReturnType<typeof createPolicyEngine>
+): void {
+  const domain = workflow.catalog?.domain;
+  if (domain !== "plan" && domain !== "design") {
+    return;
+  }
+
+  if (policyEngine.snapshot.defaults.network !== "deny") {
+    throw new Error(`${workflow.name} requires network access to remain denied in the default local posture.`);
+  }
+
+  if (policyEngine.snapshot.defaults.writes === "allow") {
+    throw new Error(`${workflow.name} requires writes to remain approval-gated or denied in the default local posture.`);
+  }
+}
+
+function loadPlanningBundleArtifact(root: string, planningBriefRef: string): PlanningArtifact {
+  const bundlePath = join(root, planningBriefRef);
+  if (!existsSync(bundlePath)) {
+    throw new Error(`Referenced planning bundle not found: ${planningBriefRef}`);
+  }
+
+  const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
+  const planningArtifact = bundle.lifecycleArtifacts.find(
+    (artifact): artifact is PlanningArtifact => artifact.artifactKind === "planning-brief"
+  );
+
+  if (!planningArtifact) {
+    throw new Error(`Referenced bundle does not contain a planning-brief artifact: ${planningBriefRef}`);
+  }
+
+  return planningArtifactSchema.parse(planningArtifact);
+}
+
+function prepareWorkflowInputs(
+  workflow: WorkflowDefinition,
+  root: string,
+  policyEngine: ReturnType<typeof createPolicyEngine>
+): Record<string, unknown> {
+  const requestsDir = join(root, ".agentops", "requests");
+  ensureDirectory(requestsDir);
+
+  if (workflow.name === "planning-discovery") {
+    const requestPath = ".agentops/requests/planning.yaml";
+    ensureReadablePath(policyEngine, requestPath, "planning request");
+    const planningRequest = validatePlanningRequestCompleteness(
+      readYamlFile(join(root, requestPath), planningRequestSchema, "planning request")
+    );
+
+    return {
+      planningRequest,
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "architecture-design-review") {
+    const requestPath = ".agentops/requests/design.yaml";
+    ensureReadablePath(policyEngine, requestPath, "design request");
+    const designRequest = readYamlFile(join(root, requestPath), designRequestSchema, "design request");
+    ensureReadablePath(policyEngine, designRequest.planningBriefRef, "planning brief reference");
+    const planningBrief = loadPlanningBundleArtifact(root, designRequest.planningBriefRef);
+
+    return {
+      designRequest: designRequest satisfies DesignRequest,
+      planningBrief,
+      requestFile: requestPath
+    };
+  }
+
+  return {};
+}
+
 function normalizeWorkflow(input: unknown): WorkflowDefinition {
   const parsed = input as Record<string, unknown>;
   return workflowDefinitionSchema.parse({
@@ -135,6 +316,7 @@ function normalizeWorkflow(input: unknown): WorkflowDefinition {
     name: parsed.name,
     description: parsed.description,
     trigger: parsed.trigger,
+    catalog: parsed.catalog,
     nodes: Array.isArray(parsed.nodes)
       ? parsed.nodes.map((node) => {
           const record = node as Record<string, unknown>;
@@ -208,6 +390,8 @@ export interface WorkflowRunResult {
   findings: number;
   blockedActions: number;
   blockedPlugins: number;
+  artifactCount: number;
+  artifactKinds: string[];
 }
 
 export interface LastRunExplanation {
@@ -218,6 +402,8 @@ export interface LastRunExplanation {
   blockedPlugins: number;
   jsonPath: string;
   markdownPath: string;
+  artifactCount: number;
+  artifactKinds: string[];
 }
 
 function loadAgentForgeConfig(root: string): AgentForgeConfig {
@@ -255,7 +441,9 @@ function ensureInitFiles(root: string): string[] {
   const created: string[] = [];
   const configDir = join(root, ".agentops");
   const workflowsDir = join(configDir, "workflows");
+  const requestsDir = join(configDir, "requests");
   ensureDirectory(workflowsDir);
+  ensureDirectory(requestsDir);
 
   const files = [
     {
@@ -268,7 +456,15 @@ function ensureInitFiles(root: string): string[] {
     },
     {
       path: join(workflowsDir, "pr-review.yaml"),
-      contents: workflowTemplate
+      contents: prReviewWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "planning-discovery.yaml"),
+      contents: planningWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "architecture-design-review.yaml"),
+      contents: designWorkflowTemplate
     }
   ];
 
@@ -421,7 +617,9 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
   const config = loadAgentForgeConfig(root);
   const workflow = normalizeWorkflow(loadYaml(join(root, ".agentops", "workflows", `${workflowName}.yaml`)));
   const { agents, blockedPlugins, policy, policyEngine } = await buildAgentRegistry(root, config, workflowName);
+  validateWorkflowLifecyclePosture(workflow, policyEngine);
   validateWorkflowAgents(workflow, agents, blockedPlugins);
+  const workflowInputs = prepareWorkflowInputs(workflow, root, policyEngine);
 
   const state = createWorkflowState({
     cwd: root,
@@ -431,6 +629,7 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
     trigger: workflow.trigger
   });
   state.blockedPlugins = blockedPlugins;
+  state.workflowInputs = workflowInputs;
 
   const runsRoot = join(root, config.runtime.runsPath);
   const outputDir = join(runsRoot, state.runId);
@@ -462,7 +661,9 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
     status: bundle.status,
     findings: bundle.findings.length,
     blockedActions,
-    blockedPlugins: bundle.blockedPlugins.length
+    blockedPlugins: bundle.blockedPlugins.length,
+    artifactCount: bundle.lifecycleArtifacts.length,
+    artifactKinds: bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind)
   };
 }
 
@@ -480,6 +681,7 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
   const bundle = JSON.parse(readFileSync(join(runsRoot, latest, "bundle.json"), "utf8")) as Record<string, unknown>;
   const findings = asArray(bundle.findings);
   const blockedPlugins = asArray(bundle.blockedPlugins);
+  const lifecycleArtifacts = asArray(bundle.lifecycleArtifacts);
   const runEntries = asArray(bundle.entries);
 
   return {
@@ -495,7 +697,11 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
     }, 0),
     blockedPlugins: blockedPlugins.length,
     jsonPath: join(runsRoot, latest, "bundle.json"),
-    markdownPath: join(runsRoot, latest, "summary.md")
+    markdownPath: join(runsRoot, latest, "summary.md"),
+    artifactCount: lifecycleArtifacts.length,
+    artifactKinds: lifecycleArtifacts
+      .map((artifact) => (isRecord(artifact) && typeof artifact.artifactKind === "string" ? artifact.artifactKind : undefined))
+      .filter((artifactKind): artifactKind is string => Boolean(artifactKind))
   };
 }
 

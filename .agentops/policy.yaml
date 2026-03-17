@@ -7,17 +7,18 @@ defaults:
 paths:
   allowed_read:
     - "**/*"
+    - ".agentops/**"
   allowed_write:
     - ".agentops/runs/**"
     - "tests/**"
-blocked:
-  - ".env*"
-  - "**/.env*"
-  - "secrets/**"
-  - "**/*.pem"
-  - "**/*.key"
-  - "**/id_rsa*"
-  - "infra/prod/**"
+  blocked:
+    - ".env*"
+    - "**/.env*"
+    - "secrets/**"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/id_rsa*"
+    - "infra/prod/**"
 tools:
   git.status:
     effect: allow

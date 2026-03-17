@@ -65,6 +65,7 @@ const state: WorkflowStateEnvelope = {
   proposedActions: [],
   lifecycleArtifacts: [],
   blockedPlugins: [],
+  workflowInputs: {},
   agentResults: {},
   auditTrail: []
 };
@@ -128,6 +129,7 @@ describe("runtime", () => {
     expect(result.bundle.redaction.applied).toBe(true);
     expect(result.bundle.components.some((component) => component.kind === "agent" && component.name === "noop")).toBe(true);
     expect(result.state.lifecycleArtifacts).toHaveLength(0);
+    expect(result.bundle.lifecycleArtifacts).toHaveLength(0);
   });
 
   it("does not execute approval-gated tools", async () => {
@@ -300,6 +302,7 @@ describe("runtime", () => {
     });
 
     expect(result.state.lifecycleArtifacts).toHaveLength(1);
+    expect(result.bundle.lifecycleArtifacts).toHaveLength(1);
     expect(result.state.lifecycleArtifacts[0]?.source.runId).toBe("run-1");
     expect(result.state.lifecycleArtifacts[0]?.auditLink.bundlePath).toBe(".agentops/runs/run-1/bundle.json");
     expect(result.state.lifecycleArtifacts[0]?.auditLink.entryIds).toContain("run-1-plan");

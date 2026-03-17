@@ -7,7 +7,8 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 ## What You Can Do Today
 
 - try the current official workflow wedge with the published CLI, without cloning this monorepo
-- initialize a repository, scan it, run `pr-review`, and inspect the generated audit artifacts
+- initialize a repository, scan it, run `pr-review`, `planning-discovery`, and `architecture-design-review`
+- inspect generated audit bundles plus lifecycle artifacts such as `planning-brief` and `design-record`
 - evaluate the secure-by-default runtime model before broader SDLC workflow support lands
 
 ## Try It In 2 Minutes
@@ -30,7 +31,7 @@ If you want to develop AgentForge itself, use the contributor/source-build path 
 
 ## What Success Looks Like
 
-After a clean `pr-review` run, the CLI returns a compact JSON summary like this:
+After a clean official workflow run, the CLI returns a compact JSON summary like this:
 
 ```json
 {
@@ -39,6 +40,8 @@ After a clean `pr-review` run, the CLI returns a compact JSON summary like this:
   "findings": 0,
   "blockedActions": 0,
   "blockedPlugins": 0,
+  "artifactCount": 1,
+  "artifactKinds": ["planning-brief"],
   "jsonPath": ".agentops/runs/1773758683225-4271ed/bundle.json",
   "markdownPath": ".agentops/runs/1773758683225-4271ed/summary.md"
 }
@@ -55,6 +58,11 @@ For a small clean repository, the markdown summary will usually show:
 - `status: success`
 - zero findings, blocked actions, and blocked plugins
 - an audit trail for `context-collector`, `security-audit`, `code-review`, `test-generation`, and `final-report`
+
+For the new lifecycle wedges, `bundle.json` also persists one structured lifecycle artifact per run:
+
+- `planning-discovery` emits `planning-brief`
+- `architecture-design-review` emits `design-record`
 
 ## Project Definition
 
@@ -86,8 +94,11 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 ### Available Now
 
 - secure-by-default runtime, policy, context, audit, and schema foundation
-- one official local workflow slice: `.agentops/workflows/pr-review.yaml`
-- official starter agents for context collection, security audit, code review, and test generation
+- three official local workflow slices:
+  - `.agentops/workflows/pr-review.yaml`
+  - `.agentops/workflows/planning-discovery.yaml`
+  - `.agentops/workflows/architecture-design-review.yaml`
+- official starter agents for context collection, planning analysis, design analysis, security audit, code review, and test generation
 - internal starter adapters for filesystem, git, shell, and GitHub-aware mediation
 - public npm packages for the runtime core, CLI, contracts, and audit surfaces
 - GitHub Actions release automation, trusted publishing, and package verification tooling
@@ -112,8 +123,8 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 
 | SDLC Domain | Status | Notes |
 | --- | --- | --- |
-| Plan / intake / discovery | Planned | Not implemented yet; currently represented only in roadmap and issue backlog. |
-| Architecture / design | Planned | No official workflow yet. |
+| Plan / intake / discovery | Available now | `planning-discovery` is an official local workflow that emits a `planning-brief` artifact. |
+| Architecture / design | Available now | `architecture-design-review` is an official local workflow that consumes a planning brief and emits a `design-record` artifact. |
 | Build / implementation | Planned | No implementation workflow yet beyond secure runtime scaffolding. |
 | Review / test / QA | Available now | The `pr-review` wedge covers review, security audit, and proposed test-generation outputs. |
 | Security / compliance / DevSecOps | Partial | Policy, trust, redaction, and audit exist; broader security workflows are planned. |
@@ -141,6 +152,8 @@ Current runtime flow:
 4. The runtime executes ordered workflow nodes with minimal context slices.
 5. Adapters are invoked only after policy mediation.
 6. Audit bundles and summaries are written under `.agentops/runs/<run-id>/`.
+
+For the official planning and design wedges, the same run directory now also persists lifecycle artifacts inside `bundle.json`, which makes the planning-to-design handoff inspectable without widening the side-effect posture.
 
 See [docs/architecture.md](docs/architecture.md), [docs/runtime-model.md](docs/runtime-model.md), [docs/policy-model.md](docs/policy-model.md), and [docs/security-model.md](docs/security-model.md).
 
@@ -184,6 +197,51 @@ The last command should point you to:
 
 - `.agentops/runs/<run-id>/bundle.json`
 - `.agentops/runs/<run-id>/summary.md`
+
+### Planning To Design Evaluator Path
+
+Once `.agentops/` exists, you can evaluate the first lifecycle handoff end to end:
+
+```bash
+mkdir -p .agentops/requests
+cat > .agentops/requests/planning.yaml <<'EOF'
+problemStatement: Plan the first workflow wedge
+goals:
+  - Produce a planning brief
+constraints:
+  - Keep the workflow local-first
+issueRefs:
+  - '#127'
+pathHints:
+  - packages/cli
+  - packages/runtime
+EOF
+
+npx @h9-foundry/agentforge-cli run planning-discovery --json
+```
+
+Then point the design workflow at the prior planning bundle:
+
+```bash
+cat > .agentops/requests/design.yaml <<'EOF'
+planningBriefRef: .agentops/runs/<planning-run-id>/bundle.json
+decisionTarget: Choose the first design workflow implementation shape
+pathHints:
+  - packages/runtime
+  - packages/schemas
+alternatives:
+  - single-workflow-pass
+EOF
+
+npx @h9-foundry/agentforge-cli run architecture-design-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
+```
+
+That flow gives you:
+
+- one `planning-brief` artifact in the planning run bundle
+- one `design-record` artifact in the design run bundle
+- a fully local, read-only planning-to-design evaluator path
 
 ### Contributor And Source-Build Path
 

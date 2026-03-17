@@ -55,7 +55,7 @@ Phase 1 manifests record trust metadata:
 
 This metadata is scaffolding for stronger plugin trust enforcement in later phases.
 
-Planned catalog-facing metadata such as SDLC domain, support level, maturity, and trust scope is tracked separately in [docs/MANIFEST_METADATA.md](MANIFEST_METADATA.md). Do not add those fields ad hoc until the shared schema contract lands.
+Catalog-facing metadata such as SDLC domain, support level, maturity, and trust scope is now part of the shared manifest schema. Use the `catalog` block consistently for official assets and keep the values aligned with [docs/SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) and [docs/MANIFEST_METADATA.md](MANIFEST_METADATA.md).
 
 ## Authoring Rule
 

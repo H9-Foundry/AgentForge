@@ -7,6 +7,33 @@ import { describe, expect, it } from "vitest";
 
 import { explainLastRun, initProject, runLocalWorkflow, scanProject } from "./index.js";
 
+function createGitFixture(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  execFileSync("git", ["init"], { cwd: root });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
+  writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+  writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
+  execFileSync("git", ["add", "."], { cwd: root });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
+  writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
+  return root;
+}
+
+let builtCli = false;
+
+function ensureBuiltCli(): void {
+  if (builtCli) {
+    return;
+  }
+
+  execFileSync("pnpm", ["build:packages"], {
+    cwd: process.cwd(),
+    stdio: "ignore"
+  });
+  builtCli = true;
+}
+
 function writeLocalPlugin(root: string, options: { manifestName: string; packageName: string; trust?: Record<string, unknown> }) {
   const pluginRoot = join(root, "agents", options.manifestName);
   mkdirSync(join(pluginRoot, "dist"), { recursive: true });
@@ -60,15 +87,7 @@ function writeLocalPlugin(root: string, options: { manifestName: string; package
 
 describe("cli smoke flows", () => {
   it("initializes, scans, runs, and explains a local workflow", async () => {
-    const root = mkdtempSync(join(tmpdir(), "agentops-cli-"));
-    execFileSync("git", ["init"], { cwd: root });
-    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
-    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
-    writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
-    execFileSync("git", ["add", "."], { cwd: root });
-    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
-    writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
+    const root = createGitFixture("agentops-cli-");
 
     const init = initProject(root);
     expect(init.created.length).toBeGreaterThan(0);
@@ -80,10 +99,12 @@ describe("cli smoke flows", () => {
     expect(run.runId.length).toBeGreaterThan(0);
     expect(run.jsonPath.endsWith("bundle.json")).toBe(true);
     expect(run.markdownPath.endsWith("summary.md")).toBe(true);
+    expect(run.artifactCount).toBe(0);
 
     const explanation = explainLastRun(root);
     expect(explanation.runId).toBe(run.runId);
     expect(explanation.jsonPath).toBe(run.jsonPath);
+    expect(explanation.artifactKinds).toEqual([]);
   });
 
   it("loads an allowed local plugin and executes it through a workflow", async () => {
@@ -222,15 +243,8 @@ describe("cli smoke flows", () => {
   });
 
   it("prints first-run guidance for the current wedge in plain-text mode", () => {
-    const root = mkdtempSync(join(tmpdir(), "agentops-cli-guidance-"));
-    execFileSync("git", ["init"], { cwd: root });
-    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
-    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
-    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
-    writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
-    execFileSync("git", ["add", "."], { cwd: root });
-    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
-    writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
+    const root = createGitFixture("agentops-cli-guidance-");
+    ensureBuiltCli();
 
     const cliEntry = join(process.cwd(), "packages", "cli", "src", "bin.ts");
     const run = spawnSync("pnpm", ["exec", "tsx", cliEntry, "run", "pr-review"], {
@@ -242,5 +256,107 @@ describe("cli smoke flows", () => {
     expect(run.stdout).toContain("Audit bundle:");
     expect(run.stdout).toContain("Summary:");
     expect(run.stdout).toContain("agentforge explain last-run");
+  }, 30_000);
+
+  it("fails planning-discovery before reasoning when the request is missing", async () => {
+    const root = createGitFixture("agentops-cli-planning-missing-");
+    initProject(root);
+
+    await expect(runLocalWorkflow("planning-discovery", root)).rejects.toThrow("Missing planning request");
+  });
+
+  it("runs planning-discovery and emits a planning brief artifact", async () => {
+    const root = createGitFixture("agentops-cli-planning-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "issueRefs:",
+        "  - '#127'",
+        "pathHints:",
+        "  - packages/cli",
+        "  - packages/runtime"
+      ].join("\n")
+    );
+
+    const run = await runLocalWorkflow("planning-discovery", root);
+    expect(run.status).toBe("success");
+    expect(run.artifactKinds).toContain("planning-brief");
+
+    const bundle = JSON.parse(readFileSync(run.jsonPath, "utf8")) as {
+      workflow: string;
+      lifecycleArtifacts: { artifactKind: string }[];
+    };
+    expect(bundle.workflow).toBe("planning-discovery");
+    expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "planning-brief")).toBe(true);
+
+    const explanation = explainLastRun(root);
+    expect(explanation.artifactKinds).toContain("planning-brief");
+  });
+
+  it("requires a valid planning brief reference for architecture-design-review", async () => {
+    const root = createGitFixture("agentops-cli-design-invalid-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        "planningBriefRef: .agentops/runs/missing/bundle.json",
+        "decisionTarget: Choose the first design workflow shape"
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("architecture-design-review", root)).rejects.toThrow("Referenced planning bundle not found");
+  });
+
+  it("runs architecture-design-review and emits a design record artifact", async () => {
+    const root = createGitFixture("agentops-cli-design-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "issueRefs:",
+        "  - '#127'",
+        "pathHints:",
+        "  - packages/runtime",
+        "  - packages/schemas"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first design workflow implementation shape",
+        "pathHints:",
+        "  - packages/runtime",
+        "  - packages/schemas",
+        "alternatives:",
+        "  - single-workflow-pass"
+      ].join("\n")
+    );
+
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    expect(designRun.status).toBe("success");
+    expect(designRun.artifactKinds).toContain("design-record");
+
+    const bundle = JSON.parse(readFileSync(designRun.jsonPath, "utf8")) as {
+      workflow: string;
+      lifecycleArtifacts: { artifactKind: string }[];
+    };
+    expect(bundle.workflow).toBe("architecture-design-review");
+    expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "design-record")).toBe(true);
   });
 });

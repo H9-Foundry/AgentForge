@@ -1,0 +1,25 @@
+version: 1
+name: planning-discovery
+description: Turn a bounded local planning request into one structured planning brief.
+trigger: manual
+catalog:
+  domain: plan
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: planning-intake
+    outputs_to: agentResults.intake
+  - id: discovery
+    kind: deterministic
+    agent: context-collector
+    outputs_to: agentResults.discovery
+  - id: planning
+    kind: reasoning
+    agent: planning-analyst
+    outputs_to: agentResults.planning
+  - id: report
+    kind: report
+    outputs_to: reports.final

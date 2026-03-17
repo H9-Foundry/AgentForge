@@ -47,8 +47,8 @@ program
 
 program
   .command("run")
-  .description("Run the current starter workflow wedge locally in safe mode.")
-  .argument("<workflow>", "Workflow name. Phase 1 currently supports: pr-review")
+  .description("Run an official local workflow wedge in safe mode.")
+  .argument("<workflow>", "Workflow name. Official workflows: pr-review, planning-discovery, architecture-design-review")
   .option("--json", "Print machine-readable JSON output.")
   .action(async (workflow, options: { json?: boolean }) => {
     const result = await runLocalWorkflow(workflow);
@@ -60,13 +60,16 @@ program
     console.log(`Artifacts: ${result.outputDir}`);
     console.log(`Audit bundle: ${result.jsonPath}`);
     console.log(`Summary: ${result.markdownPath}`);
+    if (result.artifactCount > 0) {
+      console.log(`Lifecycle artifacts: ${result.artifactKinds.join(", ")}`);
+    }
     console.log("Next: run `agentforge explain last-run` for a compact summary of this workflow run.");
     console.log(`Blocked plugins: ${result.blockedPlugins}`);
   });
 
 program
   .command("explain")
-  .description("Explain the latest run from the current starter workflow wedge.")
+  .description("Explain the latest run from the current official local workflow wedges.")
   .argument("<target>", "Target to explain. Phase 1 currently supports: last-run")
   .option("--json", "Print machine-readable JSON output.")
   .action((target, options: { json?: boolean }) => {
@@ -83,6 +86,7 @@ program
     console.log(`Findings: ${explanation.findings}`);
     console.log(`Blocked actions: ${explanation.blockedActions}`);
     console.log(`Blocked plugins: ${explanation.blockedPlugins}`);
+    console.log(`Lifecycle artifacts: ${explanation.artifactKinds.join(", ") || "none"}`);
   });
 
 const release = program.command("release").description("Guide and validate npm release bootstrap for AgentForge.");

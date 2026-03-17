@@ -22,11 +22,13 @@ import {
   designArtifactOptionSchema,
   designArtifactPayloadSchema,
   designArtifactSchema,
+  designRequestSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
   policyDocumentSchema,
+  planningRequestSchema,
   planningArtifactPayloadSchema,
   planningArtifactSchema,
   proposedActionSchema,
@@ -63,9 +65,11 @@ export type LifecycleArtifactEnvelope = Infer<typeof lifecycleArtifactEnvelopeSc
 export type LifecycleArtifact = Infer<typeof lifecycleArtifactSchema>;
 export type PlanningArtifactPayload = Infer<typeof planningArtifactPayloadSchema>;
 export type PlanningArtifact = Infer<typeof planningArtifactSchema>;
+export type PlanningRequest = Infer<typeof planningRequestSchema>;
 export type DesignArtifactOption = Infer<typeof designArtifactOptionSchema>;
 export type DesignArtifactPayload = Infer<typeof designArtifactPayloadSchema>;
 export type DesignArtifact = Infer<typeof designArtifactSchema>;
+export type DesignRequest = Infer<typeof designRequestSchema>;
 export type ReviewArtifactPayload = Infer<typeof reviewArtifactPayloadSchema>;
 export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;
 export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSchema>;
