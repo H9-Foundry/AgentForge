@@ -374,6 +374,118 @@ export const lifecycleArtifactEnvelopeSchema = z.object({
   payload: z.record(z.string(), z.unknown())
 });
 
+export const planningArtifactPayloadSchema = z.object({
+  problemStatement: z.string().min(1),
+  objectives: z.array(z.string().min(1)).min(1),
+  constraints: z.array(z.string().min(1)).default([]),
+  assumptions: z.array(z.string().min(1)).default([]),
+  inScope: z.array(z.string().min(1)).default([]),
+  outOfScope: z.array(z.string().min(1)).default([]),
+  recommendedNextSteps: z.array(z.string().min(1)).min(1),
+  stakeholders: z.array(z.string().min(1)).default([]),
+  risks: z.array(z.string().min(1)).default([]),
+  openQuestions: z.array(z.string().min(1)).default([]),
+  candidateWorkstreams: z.array(z.string().min(1)).default([]),
+  linkedIssues: z.array(z.string().min(1)).default([])
+});
+
+export const designArtifactOptionSchema = z.object({
+  option: z.string().min(1),
+  summary: z.string().min(1)
+});
+
+export const designArtifactPayloadSchema = z.object({
+  decisionSummary: z.string().min(1),
+  context: z.string().min(1),
+  optionsConsidered: z.array(designArtifactOptionSchema).min(1),
+  chosenApproach: z.string().min(1),
+  tradeOffs: z.array(z.string().min(1)).default([]),
+  risks: z.array(z.string().min(1)).default([]),
+  followUpWork: z.array(z.string().min(1)).default([]),
+  interfacesImpacted: z.array(z.string().min(1)).default([]),
+  schemaChangesNeeded: z.array(z.string().min(1)).default([]),
+  policyChangesNeeded: z.array(z.string().min(1)).default([]),
+  migrationNotes: z.array(z.string().min(1)).default([]),
+  compatibilityNotes: z.array(z.string().min(1)).default([])
+});
+
+export const reviewArtifactPayloadSchema = z.object({
+  findings: z.array(findingSchema).default([]),
+  recommendations: z.array(z.string().min(1)).default([]),
+  riskLevel: severitySchema,
+  coverageNotes: z.array(z.string().min(1)).default([]),
+  blockedItems: z.array(z.string().min(1)).default([]),
+  testGaps: z.array(z.string().min(1)).default([]),
+  securityConcerns: z.array(z.string().min(1)).default([]),
+  approvalRecommendations: z.array(z.string().min(1)).default([])
+});
+
+export const releaseVerificationCheckSchema = z.object({
+  name: z.string().min(1),
+  status: z.enum(["passed", "failed", "skipped"]),
+  detail: z.string().min(1).optional()
+});
+
+export const releaseVersionTargetSchema = z.object({
+  name: z.string().min(1),
+  version: z.string().min(1)
+});
+
+export const releaseArtifactPayloadSchema = z.object({
+  releaseScope: z.string().min(1),
+  versionTargets: z.array(releaseVersionTargetSchema).min(1),
+  readinessStatus: z.enum(["ready", "blocked", "partial"]),
+  verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
+  publishingPlan: z.array(z.string().min(1)).default([]),
+  trustStatus: z.string().min(1),
+  publishedPackages: z.array(z.string().min(1)).default([]),
+  tagRefs: z.array(z.string().min(1)).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([]),
+  rollbackNotes: z.array(z.string().min(1)).default([]),
+  externalDependencies: z.array(z.string().min(1)).default([])
+});
+
+export const maintenanceArtifactPayloadSchema = z.object({
+  maintenanceScope: z.string().min(1),
+  currentFindings: z.array(z.string().min(1)).default([]),
+  recommendedActions: z.array(z.string().min(1)).default([]),
+  priorityAssessment: z.string().min(1),
+  dependencyUpdates: z.array(z.string().min(1)).default([]),
+  docsUpdates: z.array(z.string().min(1)).default([]),
+  stalenessSignals: z.array(z.string().min(1)).default([]),
+  followUpIssues: z.array(z.string().min(1)).default([])
+});
+
+export const planningArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("planning-brief"),
+  lifecycleDomain: z.literal("plan"),
+  payload: planningArtifactPayloadSchema
+});
+
+export const designArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("design-record"),
+  lifecycleDomain: z.literal("design"),
+  payload: designArtifactPayloadSchema
+});
+
+export const reviewArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("review-report"),
+  lifecycleDomain: z.literal("review"),
+  payload: reviewArtifactPayloadSchema
+});
+
+export const releaseArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("release-report"),
+  lifecycleDomain: z.literal("release"),
+  payload: releaseArtifactPayloadSchema
+});
+
+export const maintenanceArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("maintenance-report"),
+  lifecycleDomain: z.literal("maintain"),
+  payload: maintenanceArtifactPayloadSchema
+});
+
 export const auditBundleSchema = z.object({
   version: z.string().min(1),
   runId: z.string().min(1),
@@ -411,6 +523,19 @@ export const schemaRegistry = {
   lifecycleArtifactRepoReference: lifecycleArtifactRepoReferenceSchema,
   lifecycleArtifactAuditLink: lifecycleArtifactAuditLinkSchema,
   lifecycleArtifactEnvelope: lifecycleArtifactEnvelopeSchema,
+  planningArtifactPayload: planningArtifactPayloadSchema,
+  designArtifactOption: designArtifactOptionSchema,
+  designArtifactPayload: designArtifactPayloadSchema,
+  reviewArtifactPayload: reviewArtifactPayloadSchema,
+  releaseVerificationCheck: releaseVerificationCheckSchema,
+  releaseVersionTarget: releaseVersionTargetSchema,
+  releaseArtifactPayload: releaseArtifactPayloadSchema,
+  maintenanceArtifactPayload: maintenanceArtifactPayloadSchema,
+  planningArtifact: planningArtifactSchema,
+  designArtifact: designArtifactSchema,
+  reviewArtifact: reviewArtifactSchema,
+  releaseArtifact: releaseArtifactSchema,
+  maintenanceArtifact: maintenanceArtifactSchema,
   agentOutput: agentOutputSchema,
   agentManifest: agentManifestSchema,
   agentPluginRegistration: agentPluginRegistrationSchema,
