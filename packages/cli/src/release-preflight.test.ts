@@ -250,7 +250,8 @@ describe("release preflight", () => {
     expect(topLevel.status).toBe(0);
     expect(topLevel.stdout).toContain("repository-aware SDLC workflows");
     expect(runHelp.status).toBe(0);
-    expect(runHelp.stdout).toContain("Phase 1 currently supports: pr-review");
+    expect(runHelp.stdout).toContain("Official workflows: pr-review, planning-discovery");
+    expect(runHelp.stdout).toContain("architecture-design-review");
     expect(explainHelp.status).toBe(0);
     expect(explainHelp.stdout).toContain("Phase 1 currently supports: last-run");
   });

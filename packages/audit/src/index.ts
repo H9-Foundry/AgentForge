@@ -29,6 +29,7 @@ export function buildAuditBundle(
     findings: state.findings,
     proposedActions: state.proposedActions,
     blockedPlugins: state.blockedPlugins,
+    lifecycleArtifacts: state.lifecycleArtifacts,
     artifactPaths: {
       json: options.jsonPath,
       markdown: options.markdownPath
@@ -76,6 +77,14 @@ export function renderAuditBundleMarkdown(bundle: AuditBundle): string {
     lines.push("## Blocked Plugins", "");
     for (const blockedPlugin of bundle.blockedPlugins) {
       lines.push(`- ${blockedPlugin.name} (${blockedPlugin.package}): ${blockedPlugin.reason}`);
+    }
+    lines.push("");
+  }
+
+  if (bundle.lifecycleArtifacts.length > 0) {
+    lines.push("## Lifecycle Artifacts", "");
+    for (const artifact of bundle.lifecycleArtifacts) {
+      lines.push(`- ${artifact.artifactKind}: ${artifact.summary}`);
     }
     lines.push("");
   }

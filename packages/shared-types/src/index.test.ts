@@ -3,8 +3,10 @@ import { describe, expectTypeOf, it } from "vitest";
 import type {
   DesignArtifact,
   DesignArtifactOption,
+  DesignRequest,
   MaintenanceArtifact,
   PlanningArtifact,
+  PlanningRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
   ReleaseVersionTarget,
@@ -29,5 +31,10 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<DesignArtifact["payload"]["optionsConsidered"]>().toEqualTypeOf<DesignArtifactOption[]>();
     expectTypeOf<ReleaseArtifact["payload"]["verificationChecks"]>().toEqualTypeOf<ReleaseVerificationCheck[]>();
     expectTypeOf<ReleaseArtifact["payload"]["versionTargets"]>().toEqualTypeOf<ReleaseVersionTarget[]>();
+  });
+
+  it("exports workflow request helper types", () => {
+    expectTypeOf<PlanningRequest["problemStatement"]>().toEqualTypeOf<string>();
+    expectTypeOf<DesignRequest["planningBriefRef"]>().toEqualTypeOf<string>();
   });
 });

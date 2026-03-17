@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "name": "code-review",
-  "displayName": "Code Review",
-  "category": "review",
+  "name": "planning-analyst",
+  "displayName": "Planning Analyst",
+  "category": "planning",
   "runtime": {
     "minVersion": "0.1.0",
     "kind": "reasoning"
@@ -10,18 +10,18 @@
   "permissions": {
     "model": true,
     "network": false,
-    "tools": ["filesystem.read-file"],
-    "readPaths": ["src/**", "packages/**", "agents/**", "adapters/**"],
+    "tools": [],
+    "readPaths": ["**/*"],
     "writePaths": []
   },
-  "inputs": ["repo", "changes", "agentResults"],
-  "outputs": ["findings", "proposedActions"],
+  "inputs": ["workflowInputs", "repo", "changes", "agentResults"],
+  "outputs": ["lifecycleArtifacts"],
   "contextPolicy": {
-    "sections": ["repo", "changes", "agentResults"],
+    "sections": ["workflowInputs", "repo", "changes", "agentResults"],
     "minimalContext": true
   },
   "catalog": {
-    "domain": "review",
+    "domain": "plan",
     "supportLevel": "official",
     "maturity": "mvp",
     "trustScope": "official-core-only"

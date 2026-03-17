@@ -23,6 +23,34 @@ export const lifecycleArtifactKindSchema = z.enum([
 export const lifecycleDomainSchema = z.enum(["plan", "design", "review", "release", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
+export const catalogDomainSchema = z.enum([
+  "foundation",
+  "plan",
+  "design",
+  "build",
+  "review",
+  "test",
+  "security",
+  "release",
+  "operate",
+  "maintain"
+]);
+export const supportLevelSchema = z.enum(["official", "partial", "planned", "internal"]);
+export const maturitySchema = z.enum(["concept", "prototype", "mvp", "expanding", "stable"]);
+export const trustScopeSchema = z.enum([
+  "core-only",
+  "official-core-only",
+  "official-reviewed-only",
+  "official-and-reviewed-local",
+  "review-required-third-party"
+]);
+
+export const catalogMetadataSchema = z.object({
+  domain: catalogDomainSchema,
+  supportLevel: supportLevelSchema,
+  maturity: maturitySchema,
+  trustScope: trustScopeSchema
+});
 
 export const trustMetadataSchema = z.object({
   tier: trustTierSchema.default("core"),
@@ -168,6 +196,7 @@ export const agentManifestSchema = z.object({
     sections: z.array(z.string()).default([]),
     minimalContext: z.boolean().default(true)
   }),
+  catalog: catalogMetadataSchema.optional(),
   trust: trustMetadataSchema.default({
     tier: "core",
     source: "official",
@@ -253,7 +282,26 @@ export const workflowDefinitionSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   trigger: triggerSchema.default("manual"),
+  catalog: catalogMetadataSchema.optional(),
   nodes: z.array(workflowNodeSchema).min(1)
+});
+
+export const planningRequestSchema = z.object({
+  problemStatement: z.string().min(1),
+  goals: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([]),
+  issueRefs: z.array(z.string().min(1)).default([]),
+  pathHints: z.array(z.string().min(1)).default([]),
+  assumptions: z.array(z.string().min(1)).default([])
+});
+
+export const designRequestSchema = z.object({
+  planningBriefRef: z.string().min(1),
+  decisionTarget: z.string().min(1),
+  constraints: z.array(z.string().min(1)).default([]),
+  pathHints: z.array(z.string().min(1)).default([]),
+  alternatives: z.array(z.string().min(1)).default([]),
+  questions: z.array(z.string().min(1)).default([])
 });
 
 export const repoMetadataSchema = z.object({
@@ -308,6 +356,7 @@ export const workflowStateEnvelopeSchema = z.object({
   proposedActions: z.array(proposedActionSchema).default([]),
   lifecycleArtifacts: z.array(z.lazy(() => lifecycleArtifactSchema)).default([]),
   blockedPlugins: z.array(blockedPluginSchema).default([]),
+  workflowInputs: z.record(z.string(), z.unknown()).default({}),
   agentResults: z.record(z.string(), agentOutputSchema).default({}),
   auditTrail: z.array(auditEntrySchema).default([])
 });
@@ -508,6 +557,7 @@ export const auditBundleSchema = z.object({
   findings: z.array(findingSchema).default([]),
   proposedActions: z.array(proposedActionSchema).default([]),
   blockedPlugins: z.array(blockedPluginSchema).default([]),
+  lifecycleArtifacts: z.array(lifecycleArtifactSchema).default([]),
   artifactPaths: z.object({
     json: z.string().min(1),
     markdown: z.string().min(1)
@@ -533,6 +583,7 @@ export const schemaRegistry = {
   lifecycleArtifactRepoReference: lifecycleArtifactRepoReferenceSchema,
   lifecycleArtifactAuditLink: lifecycleArtifactAuditLinkSchema,
   lifecycleArtifactEnvelope: lifecycleArtifactEnvelopeSchema,
+  catalogMetadata: catalogMetadataSchema,
   planningArtifactPayload: planningArtifactPayloadSchema,
   designArtifactOption: designArtifactOptionSchema,
   designArtifactPayload: designArtifactPayloadSchema,
@@ -551,6 +602,8 @@ export const schemaRegistry = {
   agentManifest: agentManifestSchema,
   agentPluginRegistration: agentPluginRegistrationSchema,
   agentforgeConfig: agentforgeConfigSchema,
+  planningRequest: planningRequestSchema,
+  designRequest: designRequestSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -748,6 +801,12 @@ export const schemaFixtures = {
       sections: ["repo", "changes"],
       minimalContext: true
     },
+    catalog: {
+      domain: "review",
+      supportLevel: "official",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
     trust: {
       tier: "core",
       source: "official",
@@ -787,12 +846,34 @@ export const schemaFixtures = {
   workflowDefinition: {
     version: 1,
     name: "pr-review",
+    catalog: {
+      domain: "review",
+      supportLevel: "official",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
     trigger: "manual",
     nodes: [
       { id: "context", kind: "deterministic", agent: "context-collector", outputsTo: "agentResults.context" },
       { id: "review", kind: "reasoning", agent: "code-review", outputsTo: "agentResults.review" },
       { id: "report", kind: "report", outputsTo: "reports.final" }
     ]
+  },
+  planningRequest: {
+    problemStatement: "Define the first planning-discovery workflow wedge.",
+    goals: ["Produce one planning brief artifact"],
+    constraints: ["Keep the workflow local-first and read-only"],
+    issueRefs: ["#127", "#128"],
+    pathHints: ["packages/cli", "packages/runtime", "docs/PLANNING_DISCOVERY_WORKFLOW.md"],
+    assumptions: ["CLI-first execution remains the evaluator path"]
+  },
+  designRequest: {
+    planningBriefRef: ".agentops/runs/run-123/bundle.json",
+    decisionTarget: "Choose the first planning workflow implementation shape.",
+    constraints: ["Keep deterministic intake validation before reasoning"],
+    pathHints: ["packages/schemas", "packages/runtime", "packages/cli"],
+    alternatives: ["single-agent workflow", "deterministic intake plus reasoning"],
+    questions: ["How should planning artifacts be referenced downstream?"]
   },
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,

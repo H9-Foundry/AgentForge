@@ -10,8 +10,8 @@ This document describes lifecycle coverage across AgentForge using three honest 
 
 | Lifecycle Domain | Status | Current Reality | Next Target |
 | --- | --- | --- | --- |
-| Plan / intake / discovery | Planned | No official workflow yet. | Add discovery/intake workflow definitions, schemas, and deterministic context assembly for planning artifacts. |
-| Architecture / design | Planned | No official workflow yet. | Add architecture review/design workflow slice and supporting manifests. |
+| Plan / intake / discovery | Available now | `planning-discovery` is an official local workflow that validates `.agentops/requests/planning.yaml` and emits a `planning-brief` artifact. | Harden the planning workflow with richer request fixtures, policy overlays, and follow-on implementation workflow handoff. |
+| Architecture / design | Available now | `architecture-design-review` is an official local workflow that validates `.agentops/requests/design.yaml`, requires a `planningBriefRef`, and emits a `design-record` artifact. | Expand deterministic impact inventory and downstream implementation/design review handoff. |
 | Build / implementation | Planned | No official workflow yet. | Add implementation workflow support with explicit safe-side-effect policies. |
 | Review / test / QA | Available now | `pr-review` workflow with context, security audit, code review, and proposed test generation. | Broaden into dedicated review/test/QA workflow variants. |
 | Security / compliance / DevSecOps | In progress | Policy, redaction, trust metadata, release trust, and audit exist. | Add richer security workflow coverage and security-specific adapters/evals. |
@@ -26,15 +26,22 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `pr-review`
   - location: `.agentops/workflows/pr-review.yaml`
   - purpose: demonstrate secure local repository review with audit output
+- `planning-discovery`
+  - location: `.agentops/workflows/planning-discovery.yaml`
+  - purpose: validate a planning request and emit a `planning-brief` lifecycle artifact
+- `architecture-design-review`
+  - location: `.agentops/workflows/architecture-design-review.yaml`
+  - purpose: validate a design request, consume a planning brief, and emit a `design-record` lifecycle artifact
 
 ### In progress
 
-- none shipped yet; roadmap work exists but no official additional workflow assets are committed
+- build / implementation
+- security / DevSecOps
+- release / CI-CD
+- maintenance / dependency / docs hygiene
 
 ### Planned
 
-- planning/discovery
-- architecture/design review
 - build/implementation
 - dedicated test/QA
 - security/DevSecOps
@@ -50,11 +57,11 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `security-audit`
 - `code-review`
 - `test-generation`
+- `planning-analyst`
+- `design-analyst`
 
 ### Planned expansion areas
 
-- planning/discovery
-- architecture/design
 - implementation/build assistance
 - release coordination
 - incident and operational handoff

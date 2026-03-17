@@ -1,10 +1,10 @@
 # Planning And Discovery Workflow MVP
 
-This document defines the design target for issue [#78](https://github.com/H9-Foundry/AgentForge/issues/78).
+This document records the design target from issue [#78](https://github.com/H9-Foundry/AgentForge/issues/78) and the first shipped implementation slices [#127](https://github.com/H9-Foundry/AgentForge/issues/127) through [#130](https://github.com/H9-Foundry/AgentForge/issues/130).
 
-It describes the first planning/discovery workflow wedge AgentForge should add beyond `pr-review`.
+It describes the first planning/discovery workflow wedge AgentForge now ships beyond `pr-review`.
 
-It does **not** claim that this workflow is implemented or officially shipped today.
+The workflow is implemented as an official local wedge, but the broader planning domain remains intentionally narrow.
 
 ## Why This Exists
 
@@ -64,19 +64,18 @@ This MVP should not:
 
 Available now:
 
-- manual workflow trigger
-- `context-collector`
-- report node support
-- lifecycle artifact schemas including `planning-brief`
-- lifecycle artifact sanitization and audit linkage
-- manifest metadata design and lifecycle policy overlay design
+- official workflow asset: `.agentops/workflows/planning-discovery.yaml`
+- schema-validated request input at `.agentops/requests/planning.yaml`
+- `planning-intake`, `context-collector`, and `planning-analyst`
+- lifecycle artifact emission for `planning-brief`
+- audit-bundle persistence and markdown reporting for the planning artifact
+- CLI-first evaluator guidance in the README and quickstart
 
-Not yet available:
+Remaining gaps:
 
-- an official planning workflow asset
-- a starter planning/discovery agent
-- a stable planning request input contract
-- CLI guidance for running a planning/discovery wedge
+- no network-backed intake in the normal path
+- no multi-agent planning orchestration
+- no broader planning workflow family beyond this first bounded wedge
 
 ## Recommended MVP Wedge
 
@@ -90,9 +89,9 @@ Not yet available:
 
 ### Entry Model
 
-The first evaluator path should stay CLI-first without expanding the command surface.
+The evaluator path stays CLI-first without expanding the command surface.
 
-Recommended input model:
+Current input model:
 
 - keep `agentforge run <workflow>` as the invocation shape
 - add a repo-local planning request document under `.agentops/requests/planning.yaml`
@@ -295,9 +294,9 @@ Responsibilities:
 
 ## First Evaluator Path
 
-The MVP should inherit the CLI-first framing established by the newcomer-usability lane.
+The implemented wedge inherits the CLI-first framing established by the newcomer-usability lane.
 
-The first supported evaluator path should be:
+The current supported evaluator path is:
 
 1. `agentforge init`
 2. create `.agentops/requests/planning.yaml`
@@ -305,16 +304,14 @@ The first supported evaluator path should be:
 4. inspect the planning brief artifact and summary
 5. `agentforge explain last-run`
 
-This path should be documented when the workflow is implemented, but not claimed as available before then.
+## Next Hardening Slices
 
-## Follow-On Implementation Slices
+The first implementation wave is now landed. The next hardening work should focus on:
 
-This design should decompose into at least these child issues:
-
-1. add the request schema and official `planning-discovery` workflow asset
-2. implement the `planning-analyst` starter agent and planning brief artifact emission path
-3. wire planning workflow manifests to catalog metadata and `plan` lifecycle-policy expectations
-4. add CLI/docs onboarding for the planning-discovery evaluator path once the workflow exists
+1. richer planning request fixtures and validation coverage
+2. stronger lifecycle-policy overlays for the `plan` domain
+3. cleaner handoff into downstream design and implementation workflows
+4. optional deterministic inventory surfaces beyond the current repository/change context
 
 ## Completion Criteria For This Design Issue
 

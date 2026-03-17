@@ -2,7 +2,7 @@
 
 This matrix separates current official support from roadmap intent.
 
-The design target for manifest-level classification is documented in [docs/MANIFEST_METADATA.md](MANIFEST_METADATA.md). Until that schema work lands, this matrix remains the authoritative support classification.
+Manifest-level catalog metadata now exists for official workflow and agent assets, and this matrix remains the human-readable support summary for the current shipped surface.
 
 ## Maturity Levels
 
@@ -16,8 +16,8 @@ The design target for manifest-level classification is documented in [docs/MANIF
 | Workflow | Maturity | Notes |
 | --- | --- | --- |
 | `pr-review` | Official | The current official workflow wedge. |
-| planning / intake | Planned | Roadmap item only. |
-| architecture / design review | Planned | Roadmap item only. |
+| `planning-discovery` | Official | CLI-first planning and intake workflow that emits a `planning-brief` artifact. |
+| `architecture-design-review` | Official | CLI-first design workflow that consumes a planning brief and emits a `design-record` artifact. |
 | build / implementation | Planned | Roadmap item only. |
 | test / QA | Planned | The current `pr-review` flow touches QA, but there is no dedicated official QA workflow yet. |
 | security / DevSecOps | Planned | Security controls exist, but not a broader official security workflow family. |
@@ -30,11 +30,11 @@ The design target for manifest-level classification is documented in [docs/MANIF
 | Agent | Maturity | Notes |
 | --- | --- | --- |
 | `context-collector` | Official | Current starter agent. |
+| `planning-analyst` | Official | Starter planning agent for `planning-discovery`. |
+| `design-analyst` | Official | Starter design agent for `architecture-design-review`. |
 | `security-audit` | Official | Current starter agent. |
 | `code-review` | Official | Current starter agent. |
 | `test-generation` | Official | Current starter agent. |
-| planning/discovery agents | Planned | Not implemented yet. |
-| architecture/design agents | Planned | Not implemented yet. |
 | build/implementation agents | Planned | Not implemented yet. |
 | release/operations/maintenance agents | Planned | Not implemented yet. |
 
@@ -80,7 +80,7 @@ The design target for manifest-level classification is documented in [docs/MANIF
 
 | Self-hosted use | Maturity | Notes |
 | --- | --- | --- |
-| planning/design on the AgentForge repo | Partial | Supported as a process and docs pattern, not as a dedicated official workflow yet. |
+| planning/design on the AgentForge repo | Official | Covered by `planning-discovery` and `architecture-design-review` with lifecycle artifact output. |
 | PR review and QA on the AgentForge repo | Official | Covered by the current `pr-review` wedge and audit outputs. |
 | release/readiness verification on the AgentForge repo | Official | Covered by `release guide`, `release check`, and `release verify`. |
 | autonomous implementation on the AgentForge repo | Planned | Not an official supported mode yet. |

@@ -1,6 +1,12 @@
 version: 1
 name: pr-review
+description: Review local repository changes with the official safe-by-default review wedge.
 trigger: manual
+catalog:
+  domain: review
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
 nodes:
   - id: context
     kind: deterministic

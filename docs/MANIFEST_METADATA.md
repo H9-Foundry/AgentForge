@@ -1,10 +1,10 @@
 # Manifest Metadata For SDLC Domain, Maturity, Trust Scope, And Support
 
-This document defines the design target for issue [#76](https://github.com/H9-Foundry/AgentForge/issues/76).
+This document defines the metadata model from issue [#76](https://github.com/H9-Foundry/AgentForge/issues/76) and records the first implementation now used by the official workflow and agent assets.
 
 It describes the metadata AgentForge should add to workflow and agent manifests so the platform can grow from a single `pr-review` wedge into a broader SDLC catalog without losing clarity about what is actually supported.
 
-It does **not** claim that the current manifest schemas already implement this model.
+The initial shared schema implementation now exists, but the broader catalog and registry surfaces described here remain future work.
 
 ## Why This Exists
 
@@ -16,7 +16,7 @@ The current manifest surface is enough for the shipped baseline:
 
 That is enough to execute the current wedge, but it is not enough to explain a larger SDLC catalog.
 
-Today, the repo has no manifest-level way to answer questions like:
+Before this metadata landed, the repo had no manifest-level way to answer questions like:
 
 - which lifecycle domain an asset belongs to
 - whether it is part of the official supported surface or still internal

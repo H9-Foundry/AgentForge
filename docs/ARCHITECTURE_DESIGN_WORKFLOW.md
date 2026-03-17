@@ -1,10 +1,10 @@
 # Architecture And Design Workflow MVP
 
-This document defines the design target for issue [#79](https://github.com/H9-Foundry/AgentForge/issues/79).
+This document records the design target from issue [#79](https://github.com/H9-Foundry/AgentForge/issues/79) and the first shipped implementation slices [#132](https://github.com/H9-Foundry/AgentForge/issues/132) through [#136](https://github.com/H9-Foundry/AgentForge/issues/136).
 
-It describes the first architecture/design workflow wedge that should follow the planning/discovery workflow defined in [docs/PLANNING_DISCOVERY_WORKFLOW.md](PLANNING_DISCOVERY_WORKFLOW.md).
+It describes the first architecture/design workflow wedge that now follows the planning/discovery workflow defined in [docs/PLANNING_DISCOVERY_WORKFLOW.md](PLANNING_DISCOVERY_WORKFLOW.md).
 
-It does **not** claim that this workflow is implemented or officially shipped today.
+The workflow is implemented as an official local wedge, but the broader build, QA, security, release, and operations families remain planned.
 
 ## Why This Exists
 
@@ -66,18 +66,18 @@ This MVP should not:
 
 Available now:
 
-- planning/discovery workflow design target in [docs/PLANNING_DISCOVERY_WORKFLOW.md](PLANNING_DISCOVERY_WORKFLOW.md)
-- `design-record` lifecycle artifact schema
-- lifecycle artifact sanitization and audit linkage
-- current context collector and report node model
-- lifecycle policy and manifest metadata design targets
+- official workflow asset: `.agentops/workflows/architecture-design-review.yaml`
+- schema-validated request input at `.agentops/requests/design.yaml`
+- deterministic design intake plus impacted-surface inventory collection
+- `design-analyst` starter agent
+- lifecycle artifact emission for `design-record`
+- audit-bundle persistence and markdown reporting for the design artifact
 
-Not yet available:
+Remaining gaps:
 
-- an official architecture/design workflow asset
-- a starter architecture/design reasoning agent
-- a stable design request input contract
-- deterministic interface-impact collection dedicated to design analysis
+- deterministic inventory is heuristic rather than full static analysis
+- no code-generation or implementation workflow handoff yet
+- no network-backed design intake in the normal path
 
 ## Recommended MVP Wedge
 
@@ -91,9 +91,9 @@ Not yet available:
 
 ### Entry Model
 
-The first evaluator path should stay CLI-first without expanding the command surface.
+The evaluator path stays CLI-first without expanding the command surface.
 
-Recommended input model:
+Current input model:
 
 - keep `agentforge run <workflow>` as the invocation shape
 - add a repo-local design request document under `.agentops/requests/design.yaml`
@@ -302,9 +302,9 @@ Responsibilities:
 
 ## First Evaluator Path
 
-The MVP should inherit the CLI-first framing established earlier in Phase 1.
+The implemented wedge inherits the CLI-first framing established earlier in Phase 1.
 
-The first supported evaluator path should be:
+The current supported evaluator path is:
 
 1. run `planning-discovery` and produce a planning brief
 2. create `.agentops/requests/design.yaml` referencing that planning brief
@@ -312,17 +312,14 @@ The first supported evaluator path should be:
 4. inspect the design record artifact and summary
 5. `agentforge explain last-run`
 
-This path should be documented when the workflow is implemented, but not claimed as available before then.
+## Next Hardening Slices
 
-## Follow-On Implementation Slices
+The first implementation wave is now landed. The next hardening work should focus on:
 
-This design should decompose into at least these child issues:
-
-1. add the design request schema and official `architecture-design-review` workflow asset
-2. implement the `design-analyst` starter agent and design record artifact emission path
-3. add deterministic impacted-interface/schema/policy inventory for design discovery
-4. wire design workflow manifests to catalog metadata and `design` lifecycle-policy expectations
-5. add CLI/docs onboarding for the architecture/design evaluator path once the workflow exists
+1. a richer deterministic impacted-interface/schema/policy inventory
+2. stronger lifecycle-policy overlays for the `design` domain
+3. cleaner implementation and QA handoff from the emitted `design-record`
+4. workflow variants for larger repositories and deeper design reviews
 
 ## Completion Criteria For This Design Issue
 
