@@ -64,6 +64,11 @@ The current shipped baseline is:
   - budget and truncation rules
   - requested versus provided slice reporting
   - context-engine/runtime/policy enforcement points
+- [docs/POLICY_LIFECYCLE_OVERLAYS.md](POLICY_LIFECYCLE_OVERLAYS.md)
+  - lifecycle-domain overlays
+  - approval classes
+  - precedence and narrowing semantics
+  - policy-to-audit expectations
 
 ## Phase 2: General SDLC Expansion
 

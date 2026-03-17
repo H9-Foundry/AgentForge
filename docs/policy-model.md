@@ -50,6 +50,17 @@ Typical CI overlay uses:
 - narrow writes further
 - change reporting behavior without relaxing core protections
 
+## Next Hardening Layer
+
+The current environment-only overlay model is enough for the initial wedge, but broader SDLC workflows need:
+
+- lifecycle-domain overlays
+- explicit approval classes
+- deterministic precedence rules across base, environment, lifecycle, and workflow-specific layers
+- audit visibility into which policy layer produced the effective decision
+
+See [docs/POLICY_LIFECYCLE_OVERLAYS.md](POLICY_LIFECYCLE_OVERLAYS.md) for the Phase 1 design target.
+
 ## Redaction
 
 Policy owns redaction hooks because artifacts and logs should be sanitized consistently regardless of which adapter or agent produced the content.
