@@ -27,6 +27,25 @@ Before opening or merging release work:
 - run `pnpm pack:public`
 - run `pnpm release:verify`
 
+## Solo Maintainer Policy
+
+Until AgentForge has a second active maintainer, `main` should stay protected with required CI checks and enforced admin rules, but not require manual approving reviews. In the current one-maintainer model, CI is the primary merge gate:
+
+- open changes on a branch and merge through a pull request
+- keep `pr-review` and `validate-public-packages` green before merge
+- require a changeset whenever public packages change
+- prefer no-op direct pushes to `main`; use pull requests even for maintainer-owned release work
+- keep `require_code_owner_reviews` disabled until another maintainer or reviewer identity exists
+- keep required signed commits deferred until local signing is stable end to end
+
+Use this lightweight release checklist for solo releases:
+
+- changeset added when public packages changed
+- `pnpm release:verify` passed locally or in CI
+- required PR checks are green
+- no blocking security or Dependabot alerts are open
+- `Release Packages` succeeded on `main`
+
 ## Trusted Publishing
 
 `.github/workflows/release-packages.yml` is the package release path.
