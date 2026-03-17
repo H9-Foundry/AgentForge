@@ -1,5 +1,16 @@
 # @h9-foundry/agentforge-shared-types
 
+## 0.5.0
+
+### Minor Changes
+
+- b8a25bb: Ship official `planning-discovery` and `architecture-design-review` workflow wedges with validated request inputs, lifecycle artifact emission, and CLI-first evaluator docs.
+
+### Patch Changes
+
+- Updated dependencies [b8a25bb]
+  - @h9-foundry/agentforge-schemas@0.5.0
+
 ## 0.4.2
 
 ### Patch Changes
