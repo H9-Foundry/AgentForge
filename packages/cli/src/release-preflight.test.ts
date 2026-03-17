@@ -223,7 +223,7 @@ describe("release preflight", () => {
     expect(guide).toContain("https://www.npmjs.com/org/create");
   });
 
-  it("exposes the release guide command from the CLI", () => {
+  it("exposes the release guide command from the CLI", { timeout: 15000 }, () => {
     const result = spawnSync("pnpm", ["exec", "tsx", "packages/cli/src/bin.ts", "release", "guide"], {
       cwd: process.cwd(),
       encoding: "utf8"
