@@ -1,5 +1,19 @@
 # @h9-foundry/agentforge-cli
 
+## 0.4.2
+
+### Patch Changes
+
+- 509464f: Improve the plain-text `run pr-review` success output with clearer artifact and next-step guidance.
+- 073c07a: Clarify top-level CLI help and the supported Phase 1 wedge values for `run` and `explain`.
+  - @h9-foundry/agentforge-schemas@0.4.2
+  - @h9-foundry/agentforge-shared-types@0.4.2
+  - @h9-foundry/agentforge-sdk@0.4.2
+  - @h9-foundry/agentforge-context-engine@0.4.2
+  - @h9-foundry/agentforge-policy-engine@0.4.2
+  - @h9-foundry/agentforge-runtime@0.4.2
+  - @h9-foundry/agentforge-audit@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes
