@@ -40,7 +40,7 @@ Rules:
 
 Current active lane:
 
-1. [#53](https://github.com/H9-Foundry/AgentForge/issues/53) build and implementation workflow support
+1. [#62](https://github.com/H9-Foundry/AgentForge/issues/62) plugin and registry roadmap
 
 ### Ready Lane
 
@@ -48,14 +48,12 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-2. [#54](https://github.com/H9-Foundry/AgentForge/issues/54) test and QA workflow expansion
-3. [#55](https://github.com/H9-Foundry/AgentForge/issues/55) security and DevSecOps workflow expansion
-4. [#56](https://github.com/H9-Foundry/AgentForge/issues/56) GitHub integration maturity
-5. [#59](https://github.com/H9-Foundry/AgentForge/issues/59) release and CI-CD workflow expansion
-6. [#60](https://github.com/H9-Foundry/AgentForge/issues/60) operations and incident workflow expansion
-7. [#61](https://github.com/H9-Foundry/AgentForge/issues/61) maintenance, dependency, and docs workflow expansion
-8. planning/discovery implementation follow-ons under [#127](https://github.com/H9-Foundry/AgentForge/issues/127), [#128](https://github.com/H9-Foundry/AgentForge/issues/128), [#129](https://github.com/H9-Foundry/AgentForge/issues/129), and [#130](https://github.com/H9-Foundry/AgentForge/issues/130)
-9. architecture/design implementation follow-ons under [#132](https://github.com/H9-Foundry/AgentForge/issues/132), [#133](https://github.com/H9-Foundry/AgentForge/issues/133), [#134](https://github.com/H9-Foundry/AgentForge/issues/134), [#136](https://github.com/H9-Foundry/AgentForge/issues/136), and [#135](https://github.com/H9-Foundry/AgentForge/issues/135)
+2. [#63](https://github.com/H9-Foundry/AgentForge/issues/63) evals and benchmarks framework
+3. [#64](https://github.com/H9-Foundry/AgentForge/issues/64) additional SCM and CI integrations roadmap
+4. [#65](https://github.com/H9-Foundry/AgentForge/issues/65) supply-chain and release trust hardening
+5. planning/discovery implementation follow-ons under [#127](https://github.com/H9-Foundry/AgentForge/issues/127), [#128](https://github.com/H9-Foundry/AgentForge/issues/128), [#129](https://github.com/H9-Foundry/AgentForge/issues/129), and [#130](https://github.com/H9-Foundry/AgentForge/issues/130)
+6. architecture/design implementation follow-ons under [#132](https://github.com/H9-Foundry/AgentForge/issues/132), [#133](https://github.com/H9-Foundry/AgentForge/issues/133), [#134](https://github.com/H9-Foundry/AgentForge/issues/134), [#136](https://github.com/H9-Foundry/AgentForge/issues/136), and [#135](https://github.com/H9-Foundry/AgentForge/issues/135)
+7. Phase 2 workflow implementation follow-ons under [#139](https://github.com/H9-Foundry/AgentForge/issues/139) through [#159](https://github.com/H9-Foundry/AgentForge/issues/159)
 
 ### Parallel Safe Lane
 
@@ -87,10 +85,7 @@ Work that is part of the roadmap and ordered relative to dependencies, but not y
 
 Current mapped lane:
 
-10. [#62](https://github.com/H9-Foundry/AgentForge/issues/62) plugin and registry roadmap
-11. [#63](https://github.com/H9-Foundry/AgentForge/issues/63) evals and benchmarks framework
-12. [#64](https://github.com/H9-Foundry/AgentForge/issues/64) additional SCM and CI integrations roadmap
-13. [#65](https://github.com/H9-Foundry/AgentForge/issues/65) supply-chain and release trust hardening
+- no additional mapped items beyond the current active and ready lanes yet
 
 ### Deferred Lane
 

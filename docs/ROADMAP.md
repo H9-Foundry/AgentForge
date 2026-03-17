@@ -175,6 +175,21 @@ Open a new bounded issue for any future newcomer-facing follow-up rather than re
 - evals and benchmarks
 - compatibility and support matrix expansion
 
+### Current Ecosystem Design Work
+
+- [docs/PLUGIN_REGISTRY_ROADMAP.md](PLUGIN_REGISTRY_ROADMAP.md)
+  - local/manual plugin trust baseline versus broader registry intent
+  - registry metadata, discovery, and verified activation wedges
+  - follow-on slices for metadata, discovery, and activation hardening
+- [docs/EVALS_BENCHMARKS_FRAMEWORK.md](EVALS_BENCHMARKS_FRAMEWORK.md)
+  - deterministic eval specs versus model-dependent eval runs
+  - benchmark-summary direction and regression tracking
+  - follow-on slices for eval specs, runner, and benchmark reporting
+- [docs/SCM_CI_INTEGRATIONS_ROADMAP.md](SCM_CI_INTEGRATIONS_ROADMAP.md)
+  - host-agnostic SCM/CI contracts before new host additions
+  - GitLab as the first additional concrete host pair
+  - follow-on slices for contracts, GitLab wedge, and generic CI evidence
+
 ## Phase 4: Enterprise / Governance / Scale
 
 ### Target Outcomes
@@ -188,6 +203,13 @@ Open a new bounded issue for any future newcomer-facing follow-up rather than re
 - governance and scale controls
 - compatibility commitments
 - observability and operational maturity
+
+### Current Governance / Trust Design Work
+
+- [docs/SUPPLY_CHAIN_RELEASE_TRUST_HARDENING.md](SUPPLY_CHAIN_RELEASE_TRUST_HARDENING.md)
+  - dependency-integrity, attestation-verification, and consumer-trust gaps beyond the current trusted release baseline
+  - explicit downstream relationship to security, release, plugin, and integration work
+  - follow-on slices for dependency integrity, attestation verification, and registry/plugin distribution hardening
 
 ## Major Risks
 
