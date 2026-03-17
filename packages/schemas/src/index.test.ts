@@ -121,121 +121,16 @@ describe("schema fixtures", () => {
   });
 
   it("validates the initial lifecycle artifact family schemas", () => {
-    const baseArtifact = {
-      ...schemaFixtures.lifecycleArtifactEnvelope,
-      source: {
-        ...schemaFixtures.lifecycleArtifactEnvelope.source,
-        issueRefs: ["#90"]
-      }
-    };
-
-    expect(() =>
-      planningArtifactSchema.parse({
-        ...baseArtifact,
-        artifactKind: "planning-brief",
-        lifecycleDomain: "plan",
-        payload: {
-          problemStatement: "Define the next planning workflow slice.",
-          objectives: ["Create a safe planning wedge"],
-          constraints: ["Keep the current wedge honest"],
-          assumptions: ["CLI remains the primary entry point"],
-          inScope: ["Planning artifact design"],
-          outOfScope: ["Runtime implementation"],
-          recommendedNextSteps: ["Draft MVP", "Open follow-up implementation issues"],
-          linkedIssues: ["#78"]
-        }
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      designArtifactSchema.parse({
-        ...baseArtifact,
-        artifactKind: "design-record",
-        lifecycleDomain: "design",
-        payload: {
-          decisionSummary: "Use workflow-scoped design artifacts.",
-          context: "The platform needs structured design outputs.",
-          optionsConsidered: [
-            { option: "artifact-first", summary: "Add explicit design artifacts." },
-            { option: "audit-only", summary: "Reuse only the audit bundle." }
-          ],
-          chosenApproach: "artifact-first",
-          tradeOffs: ["More schema surface to maintain"],
-          risks: ["Design records could drift from implementation"],
-          followUpWork: ["Implement runtime emission later"]
-        }
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      reviewArtifactSchema.parse({
-        ...baseArtifact,
-        artifactKind: "review-report",
-        lifecycleDomain: "review",
-        payload: {
-          findings: [schemaFixtures.finding],
-          recommendations: ["Address the blocked-path concern"],
-          riskLevel: "medium",
-          coverageNotes: ["Static review only"]
-        }
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      releaseArtifactSchema.parse({
-        ...baseArtifact,
-        artifactKind: "release-report",
-        lifecycleDomain: "release",
-        payload: {
-          releaseScope: "Patch release for schema contracts",
-          versionTargets: [{ name: "@h9-foundry/agentforge-schemas", version: "0.4.1" }],
-          readinessStatus: "ready",
-          verificationChecks: [{ name: "release-verify", status: "passed" }],
-          publishingPlan: ["Merge version PR", "Let GitHub Actions publish"],
-          trustStatus: "trusted-publishing-configured"
-        }
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      maintenanceArtifactSchema.parse({
-        ...baseArtifact,
-        artifactKind: "maintenance-report",
-        lifecycleDomain: "maintain",
-        payload: {
-          maintenanceScope: "Docs and dependency hygiene",
-          currentFindings: ["README needs clearer first-run guidance"],
-          recommendedActions: ["Rewrite quickstart", "Refresh sample repo docs"],
-          priorityAssessment: "high"
-        }
-      })
-    ).not.toThrow();
+    expect(() => planningArtifactSchema.parse(schemaFixtures.planningArtifact)).not.toThrow();
+    expect(() => designArtifactSchema.parse(schemaFixtures.designArtifact)).not.toThrow();
+    expect(() => reviewArtifactSchema.parse(schemaFixtures.reviewArtifact)).not.toThrow();
+    expect(() => releaseArtifactSchema.parse(schemaFixtures.releaseArtifact)).not.toThrow();
+    expect(() => maintenanceArtifactSchema.parse(schemaFixtures.maintenanceArtifact)).not.toThrow();
   });
 
   it("rejects mismatched lifecycle artifact family payloads", () => {
-    expect(() =>
-      planningArtifactSchema.parse({
-        ...schemaFixtures.lifecycleArtifactEnvelope,
-        artifactKind: "planning-brief",
-        lifecycleDomain: "plan",
-        payload: {
-          decisionSummary: "This is not a planning payload."
-        }
-      })
-    ).toThrow();
-
-    expect(() =>
-      reviewArtifactSchema.parse({
-        ...schemaFixtures.lifecycleArtifactEnvelope,
-        artifactKind: "review-report",
-        lifecycleDomain: "release",
-        payload: {
-          findings: [],
-          recommendations: [],
-          riskLevel: "low",
-          coverageNotes: []
-        }
-      })
-    ).toThrow();
+    expect(() => lifecycleArtifactEnvelopeSchema.parse(schemaFixtures.invalidLifecycleArtifactEnvelope)).toThrow();
+    expect(() => planningArtifactSchema.parse(schemaFixtures.invalidPlanningArtifact)).toThrow();
+    expect(() => reviewArtifactSchema.parse(schemaFixtures.invalidReviewArtifact)).toThrow();
   });
 });
