@@ -58,6 +58,9 @@ program
     }
     console.log(`Completed run ${result.runId}`);
     console.log(`Artifacts: ${result.outputDir}`);
+    console.log(`Audit bundle: ${result.jsonPath}`);
+    console.log(`Summary: ${result.markdownPath}`);
+    console.log("Next: run `agentforge explain last-run` for a compact summary of this workflow run.");
     console.log(`Blocked plugins: ${result.blockedPlugins}`);
   });
 
