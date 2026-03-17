@@ -314,6 +314,23 @@ export const implementationRequestSchema = z.object({
   approvalMode: z.enum(["proposal-only", "apply-capable"])
 });
 
+export const normalizedValidationCommandSchema = z.object({
+  command: z.string().min(1),
+  source: z.enum(["request", "package-script", "workspace-script"]),
+  classification: z.enum(["allow", "approval_required", "deny"]),
+  reason: z.string().min(1)
+});
+
+export const implementationInventorySchema = z.object({
+  requestedTargetPaths: z.array(z.string().min(1)).default([]),
+  resolvedAffectedPaths: z.array(z.string().min(1)).default([]),
+  affectedPackages: z.array(z.string().min(1)).default([]),
+  entrypoints: z.array(z.string().min(1)).default([]),
+  schemaSurfaces: z.array(z.string().min(1)).default([]),
+  policySurfaces: z.array(z.string().min(1)).default([]),
+  discoveredValidationCommands: z.array(normalizedValidationCommandSchema).default([])
+});
+
 export const repoMetadataSchema = z.object({
   root: z.string().min(1),
   name: z.string().min(1),
@@ -635,6 +652,8 @@ export const schemaRegistry = {
   planningRequest: planningRequestSchema,
   designRequest: designRequestSchema,
   implementationRequest: implementationRequestSchema,
+  normalizedValidationCommand: normalizedValidationCommandSchema,
+  implementationInventory: implementationInventorySchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -834,6 +853,31 @@ const implementationRequestFixture = {
   approvalMode: "proposal-only"
 } as const;
 
+const normalizedValidationCommandFixture = {
+  command: "pnpm test",
+  source: "request",
+  classification: "approval_required",
+  reason: "Requested command matches a discovered allowlisted validation script."
+} as const;
+
+const implementationInventoryFixture = {
+  requestedTargetPaths: ["packages/cli", "packages/runtime"],
+  resolvedAffectedPaths: ["packages/cli/src/index.ts", "packages/runtime/src/index.ts"],
+  affectedPackages: ["packages/cli", "packages/runtime"],
+  entrypoints: ["packages/cli/src/index.ts", "packages/runtime/src/index.ts"],
+  schemaSurfaces: ["packages/schemas/src/index.ts"],
+  policySurfaces: ["packages/policy-engine/src/index.ts"],
+  discoveredValidationCommands: [
+    normalizedValidationCommandFixture,
+    {
+      command: "pnpm release:publish",
+      source: "package-script",
+      classification: "deny",
+      reason: "Command is not in the bounded allowlist for implementation validation."
+    }
+  ]
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -939,6 +983,8 @@ export const schemaFixtures = {
     questions: ["How should planning artifacts be referenced downstream?"]
   },
   implementationRequest: implementationRequestFixture,
+  normalizedValidationCommand: normalizedValidationCommandFixture,
+  implementationInventory: implementationInventoryFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,

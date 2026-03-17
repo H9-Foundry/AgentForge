@@ -107,6 +107,26 @@ describe("implementation planner agent", () => {
             }
           },
           requestFile: ".agentops/requests/implementation.yaml"
+        },
+        agentResults: {
+          inventory: {
+            metadata: {
+              requestedTargetPaths: ["packages/cli", "packages/runtime"],
+              resolvedAffectedPaths: ["packages/runtime/src/index.ts", "packages/schemas/src/index.ts"],
+              affectedPackages: ["packages/runtime", "packages/schemas"],
+              entrypoints: ["packages/runtime/src/index.ts"],
+              schemaSurfaces: ["packages/schemas/src/index.ts"],
+              policySurfaces: [],
+              discoveredValidationCommands: [
+                {
+                  command: "pnpm test",
+                  source: "request",
+                  classification: "approval_required",
+                  reason: "Requested command matches a discovered allowlisted validation script."
+                }
+              ]
+            }
+          }
         }
       } as never,
       policy: {} as never,
@@ -114,6 +134,16 @@ describe("implementation planner agent", () => {
     });
 
     expect(output.lifecycleArtifacts).toHaveLength(1);
-    expect(output.lifecycleArtifacts[0]?.artifactKind).toBe("implementation-proposal");
+    const artifact = output.lifecycleArtifacts[0];
+    expect(artifact?.artifactKind).toBe("implementation-proposal");
+    expect(artifact && artifact.artifactKind === "implementation-proposal").toBe(true);
+    if (!artifact || artifact.artifactKind !== "implementation-proposal") {
+      throw new Error("Expected implementation-proposal artifact.");
+    }
+
+    expect(artifact.payload.affectedPaths).toContain("packages/runtime/src/index.ts");
+    expect(artifact.payload.validationPlan).toContain(
+      "Command `pnpm test` is available but approval-required before execution."
+    );
   });
 });

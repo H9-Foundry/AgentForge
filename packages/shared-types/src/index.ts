@@ -27,9 +27,11 @@ import {
   findingSchema,
   implementationArtifactPayloadSchema,
   implementationArtifactSchema,
+  implementationInventorySchema,
   implementationRequestSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
+  normalizedValidationCommandSchema,
   policyDocumentSchema,
   planningRequestSchema,
   planningArtifactPayloadSchema,
@@ -75,9 +77,11 @@ export type DesignArtifact = Infer<typeof designArtifactSchema>;
 export type DesignRequest = Infer<typeof designRequestSchema>;
 export type ImplementationArtifactPayload = Infer<typeof implementationArtifactPayloadSchema>;
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
+export type ImplementationInventory = Infer<typeof implementationInventorySchema>;
 export type ImplementationRequest = Infer<typeof implementationRequestSchema>;
 export type ReviewArtifactPayload = Infer<typeof reviewArtifactPayloadSchema>;
 export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;
+export type NormalizedValidationCommand = Infer<typeof normalizedValidationCommandSchema>;
 export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSchema>;
 export type ReleaseVersionTarget = Infer<typeof releaseVersionTargetSchema>;
 export type ReleaseArtifactPayload = Infer<typeof releaseArtifactPayloadSchema>;

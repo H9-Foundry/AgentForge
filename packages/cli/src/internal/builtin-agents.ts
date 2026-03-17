@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -6,6 +6,7 @@ import {
   agentOutputSchema,
   designArtifactSchema,
   implementationArtifactSchema,
+  implementationInventorySchema,
   planningArtifactSchema
 } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
@@ -13,7 +14,9 @@ import type {
   DesignArtifact,
   DesignRequest,
   ImplementationArtifact,
+  ImplementationInventory,
   ImplementationRequest,
+  NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
   WorkflowStateEnvelope
@@ -83,6 +86,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function parsePackageScripts(packageJsonPath: string): Record<string, string> {
+  if (!existsSync(packageJsonPath)) {
+    return {};
+  }
+
+  const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+  if (!isRecord(parsed) || !isRecord(parsed.scripts)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(parsed.scripts).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+}
+
+const allowedValidationScriptNames = new Set(["test", "lint", "typecheck", "build", "build:packages", "release:verify"]);
+
+function normalizeRequestedCommand(command: string): string {
+  return command.trim().replace(/\s+/g, " ");
+}
+
+function buildValidationCommand(
+  packageManager: string,
+  scriptName: string,
+  packageName?: string
+): string {
+  if (packageName) {
+    return `${packageManager} --filter ${packageName} ${scriptName}`;
+  }
+
+  return `${packageManager} ${scriptName}`;
+}
+
+function derivePackageScope(pathValue: string): string | undefined {
+  const segments = pathValue.split("/").filter(Boolean);
+  if (segments.length < 2) {
+    return undefined;
+  }
+
+  const [topLevel, scope] = segments;
+  if (topLevel === "packages" || topLevel === "agents" || topLevel === "adapters") {
+    return `${topLevel}/${scope}`;
+  }
+
+  return undefined;
 }
 
 function getWorkflowInput<T>(stateSlice: Partial<WorkflowStateEnvelope>, key: string): T | undefined {
@@ -560,6 +610,158 @@ const implementationIntakeAgent: RuntimeAgent = {
   }
 };
 
+const implementationInventoryAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "implementation-inventory",
+    displayName: "Implementation Inventory",
+    category: "implementation",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "changes"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "changes"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "build",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const implementationRequest = getWorkflowInput<ImplementationRequest>(stateSlice, "implementationRequest");
+    const designRecord = getWorkflowInput<DesignArtifact>(stateSlice, "designRecord");
+    if (!implementationRequest || !designRecord) {
+      throw new Error("implementation-proposal requires deterministic inventory inputs before proposal analysis.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const packageManager = stateSlice.repo?.packageManager || "pnpm";
+    const candidatePaths = [
+      ...new Set([
+        ...implementationRequest.targetPaths,
+        ...designRecord.payload.interfacesImpacted,
+        ...designRecord.payload.schemaChangesNeeded,
+        ...designRecord.payload.policyChangesNeeded
+      ])
+    ];
+    const resolvedAffectedPaths = candidatePaths.filter((pathValue) => {
+      if (!pathValue) {
+        return false;
+      }
+
+      if (!repoRoot) {
+        return true;
+      }
+
+      return existsSync(join(repoRoot, pathValue));
+    });
+    const affectedPackages = [...new Set(resolvedAffectedPaths.map(derivePackageScope).filter((value): value is string => Boolean(value)))];
+    const entrypoints = [
+      ...new Set(
+        resolvedAffectedPaths.filter(
+          (pathValue) =>
+            pathValue.endsWith("src/index.ts") || pathValue.endsWith("package.json") || pathValue.endsWith("agent.manifest.json")
+        )
+      )
+    ];
+    const schemaSurfaces = [...new Set(resolvedAffectedPaths.filter((pathValue) => pathValue.includes("schema")))];
+    const policySurfaces = [
+      ...new Set(
+        resolvedAffectedPaths.filter(
+          (pathValue) => pathValue.includes("policy") || pathValue.includes(".agentops/policy.yaml")
+        )
+      )
+    ];
+    const discoveredValidationCommands: NormalizedValidationCommand[] = [];
+    const registerScripts = (packageJsonPath: string, source: "package-script" | "workspace-script", packageName?: string) => {
+      const scripts = parsePackageScripts(packageJsonPath);
+      for (const scriptName of Object.keys(scripts)) {
+        const command = buildValidationCommand(packageManager, scriptName, packageName);
+        discoveredValidationCommands.push({
+          command,
+          source,
+          classification: allowedValidationScriptNames.has(scriptName) ? "approval_required" : "deny",
+          reason: allowedValidationScriptNames.has(scriptName)
+            ? "Discovered from a bounded repository script; execution would still require approval."
+            : "Command is not in the bounded allowlist for implementation validation."
+        });
+      }
+    };
+
+    if (repoRoot) {
+      registerScripts(join(repoRoot, "package.json"), "package-script");
+      for (const packageScope of affectedPackages) {
+        const packageJsonPath = join(repoRoot, packageScope, "package.json");
+        if (!existsSync(packageJsonPath)) {
+          continue;
+        }
+
+        const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+        const packageName = isRecord(parsed) && typeof parsed.name === "string" ? parsed.name : packageScope;
+        registerScripts(packageJsonPath, "workspace-script", packageName);
+      }
+    }
+
+    const normalizedRequestedCommands = implementationRequest.validationCommands.map(normalizeRequestedCommand);
+    const allowlistedCommands = new Set(
+      discoveredValidationCommands
+        .filter((entry) => entry.classification === "approval_required")
+        .map((entry) => entry.command)
+    );
+    for (const requestedCommand of normalizedRequestedCommands) {
+      if (!allowlistedCommands.has(requestedCommand)) {
+        throw new Error(`Implementation request contains non-allowlisted validation command: ${requestedCommand}`);
+      }
+
+      discoveredValidationCommands.push({
+        command: requestedCommand,
+        source: "request",
+        classification: "approval_required",
+        reason: "Requested command matches a discovered allowlisted validation script."
+      });
+    }
+
+    const inventory = implementationInventorySchema.parse({
+      requestedTargetPaths: implementationRequest.targetPaths,
+      resolvedAffectedPaths,
+      affectedPackages,
+      entrypoints,
+      schemaSurfaces,
+      policySurfaces,
+      discoveredValidationCommands
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Collected deterministic implementation inventory across ${inventory.resolvedAffectedPaths.length} path(s) and ${inventory.discoveredValidationCommands.length} validation command(s).`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: inventory satisfies ImplementationInventory
+    });
+  }
+};
+
 const implementationPlannerAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -604,25 +806,37 @@ const implementationPlannerAgent: RuntimeAgent = {
       throw new Error("implementation-proposal requires validated implementation inputs before proposal analysis.");
     }
 
-    const affectedPaths = [
-      ...new Set([
-        ...implementationRequest.targetPaths,
-        ...designRecord.payload.interfacesImpacted,
-        ...designRecord.payload.schemaChangesNeeded,
-        ...designRecord.payload.policyChangesNeeded
-      ])
-    ];
+    const inventoryMetadata = implementationInventorySchema.safeParse(stateSlice.agentResults?.inventory?.metadata);
+    const inventory = inventoryMetadata.success ? inventoryMetadata.data : undefined;
     const normalizedAffectedPaths =
-      affectedPaths.length > 0 ? affectedPaths : ["Repository paths still need deterministic build-surface confirmation."];
+      inventory && inventory.resolvedAffectedPaths.length > 0
+        ? inventory.resolvedAffectedPaths
+        : [
+            ...new Set([
+              ...implementationRequest.targetPaths,
+              ...designRecord.payload.interfacesImpacted,
+              ...designRecord.payload.schemaChangesNeeded,
+              ...designRecord.payload.policyChangesNeeded
+            ])
+          ];
+    const finalAffectedPaths =
+      normalizedAffectedPaths.length > 0
+        ? normalizedAffectedPaths
+        : ["Repository paths still need deterministic build-surface confirmation."];
     const proposedChanges = [
       `Prepare a bounded implementation plan for ${implementationRequest.implementationGoal}.`,
-      ...normalizedAffectedPaths.slice(0, 5).map((pathValue) => `Plan targeted edits for ${pathValue}.`)
+      ...finalAffectedPaths.slice(0, 5).map((pathValue) => `Plan targeted edits for ${pathValue}.`)
     ];
+    const selectedCommands = inventory
+      ? inventory.discoveredValidationCommands.filter(
+          (entry) =>
+            entry.classification === "approval_required" &&
+            (implementationRequest.validationCommands.length === 0 || entry.source === "request")
+        )
+      : [];
     const validationPlan =
-      implementationRequest.validationCommands.length > 0
-        ? implementationRequest.validationCommands.map(
-            (command) => `Review allowlist suitability for \`${command}\` before any future execution.`
-          )
+      selectedCommands.length > 0
+        ? selectedCommands.map((entry) => `Command \`${entry.command}\` is available but approval-required before execution.`)
         : ["Confirm allowlisted validation commands in the next deterministic implementation slice before execution."];
     const approvalRequiredSteps =
       implementationRequest.approvalMode === "apply-capable"
@@ -664,7 +878,7 @@ const implementationPlannerAgent: RuntimeAgent = {
       payload: {
         designRecordRef: implementationRequest.designRecordRef,
         implementationGoal: implementationRequest.implementationGoal,
-        affectedPaths: normalizedAffectedPaths,
+        affectedPaths: finalAffectedPaths,
         proposedChanges,
         validationPlan,
         approvalRequiredSteps,
@@ -686,10 +900,11 @@ const implementationPlannerAgent: RuntimeAgent = {
           targetPaths: implementationRequest.targetPaths,
           validationCommands: implementationRequest.validationCommands,
           constraints: implementationRequest.constraints,
-          designInterfaces: designRecord.payload.interfacesImpacted
+          designInterfaces: designRecord.payload.interfacesImpacted,
+          inventory: inventory ?? null
         },
         synthesizedProposal: {
-          affectedPaths: normalizedAffectedPaths,
+          affectedPaths: finalAffectedPaths,
           approvalRequiredSteps,
           openQuestions
         }
@@ -1079,6 +1294,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["design-intake", designIntakeAgent],
     ["design-inventory", designInventoryAgent],
     ["implementation-intake", implementationIntakeAgent],
+    ["implementation-inventory", implementationInventoryAgent],
     ["implementation-planner", implementationPlannerAgent],
     ["design-analyst", designAnalystAgent],
     ["code-review", codeReviewAgent],

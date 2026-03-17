@@ -5,8 +5,10 @@ import type {
   DesignArtifactOption,
   DesignRequest,
   ImplementationArtifact,
+  ImplementationInventory,
   ImplementationRequest,
   MaintenanceArtifact,
+  NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
   ReleaseArtifact,
@@ -42,5 +44,9 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<DesignRequest["planningBriefRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
+    expectTypeOf<ImplementationInventory["resolvedAffectedPaths"]>().toEqualTypeOf<string[]>();
+    expectTypeOf<NormalizedValidationCommand["classification"]>().toEqualTypeOf<
+      "allow" | "approval_required" | "deny"
+    >();
   });
 });

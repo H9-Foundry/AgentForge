@@ -12,6 +12,10 @@ nodes:
     kind: deterministic
     agent: implementation-intake
     outputs_to: agentResults.intake
+  - id: inventory
+    kind: deterministic
+    agent: implementation-inventory
+    outputs_to: agentResults.inventory
   - id: planning
     kind: reasoning
     agent: implementation-planner
