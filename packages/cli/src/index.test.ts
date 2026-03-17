@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
@@ -219,5 +219,28 @@ describe("cli smoke flows", () => {
     expect(explanation.findings).toBe(0);
     expect(explanation.blockedActions).toBe(0);
     expect(explanation.blockedPlugins).toBe(0);
+  });
+
+  it("prints first-run guidance for the current wedge in plain-text mode", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentops-cli-guidance-"));
+    execFileSync("git", ["init"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+    writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
+    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
+    writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
+
+    const cliEntry = join(process.cwd(), "packages", "cli", "src", "bin.ts");
+    const run = spawnSync("pnpm", ["exec", "tsx", cliEntry, "run", "pr-review"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("Audit bundle:");
+    expect(run.stdout).toContain("Summary:");
+    expect(run.stdout).toContain("agentforge explain last-run");
   });
 });
