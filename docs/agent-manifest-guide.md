@@ -55,6 +55,8 @@ Phase 1 manifests record trust metadata:
 
 This metadata is scaffolding for stronger plugin trust enforcement in later phases.
 
+Planned catalog-facing metadata such as SDLC domain, support level, maturity, and trust scope is tracked separately in [docs/MANIFEST_METADATA.md](MANIFEST_METADATA.md). Do not add those fields ad hoc until the shared schema contract lands.
+
 ## Authoring Rule
 
 If your agent output or manifest shape changes, update the shared schemas and tests in the same change.
