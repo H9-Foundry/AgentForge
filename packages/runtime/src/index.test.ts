@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { agentOutputSchema } from "@h9-foundry/agentforge-schemas";
+import { agentOutputSchema, lifecycleArtifactSchema, schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
-import type { WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import type { Finding, LifecycleArtifact, ProposedAction, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 
 import { runWorkflow } from "./index.js";
 
@@ -63,6 +63,7 @@ const state: WorkflowStateEnvelope = {
   approvals: [],
   findings: [],
   proposedActions: [],
+  lifecycleArtifacts: [],
   blockedPlugins: [],
   agentResults: {},
   auditTrail: []
@@ -87,6 +88,7 @@ const noopAgent: RuntimeAgent = {
       summary: "Completed",
       findings: [],
       proposedActions: [],
+      lifecycleArtifacts: [],
       requestedTools: [],
       blockedActionFlags: [],
       metadata: {}
@@ -124,6 +126,7 @@ describe("runtime", () => {
     expect(result.state.auditTrail).toHaveLength(2);
     expect(result.bundle.redaction.applied).toBe(true);
     expect(result.bundle.components.some((component) => component.kind === "agent" && component.name === "noop")).toBe(true);
+    expect(result.state.lifecycleArtifacts).toHaveLength(0);
   });
 
   it("does not execute approval-gated tools", async () => {
@@ -146,6 +149,7 @@ describe("runtime", () => {
           summary: "Completed",
           findings: [],
           proposedActions: [],
+          lifecycleArtifacts: [],
           requestedTools: [],
           blockedActionFlags: [],
           metadata: {}
@@ -201,5 +205,74 @@ describe("runtime", () => {
 
     expect(executed).toBe(false);
     expect(result.bundle.entries[0]?.blockedActions[0]).toContain("approval");
+  });
+
+  it("records emitted lifecycle artifacts with audit linkage", async () => {
+    const artifactAgent: RuntimeAgent = {
+      ...noopAgent,
+      manifest: {
+        ...noopAgent.manifest,
+        name: "artifact-agent"
+      },
+      async execute() {
+        const finding: Finding = {
+          ...schemaFixtures.finding,
+          tags: [...schemaFixtures.finding.tags]
+        };
+        const proposedAction: ProposedAction = {
+          id: "action-1",
+          title: "Open follow-up issue",
+          summary: "Track the next implementation slice.",
+          sideEffectClass: "suggest",
+          targetPaths: [],
+          approvalRequired: true
+        };
+        const lifecycleArtifact: LifecycleArtifact = lifecycleArtifactSchema.parse(
+          JSON.parse(JSON.stringify(schemaFixtures.planningArtifact))
+        );
+
+        return {
+          summary: "Produced a planning artifact",
+          findings: [finding],
+          proposedActions: [proposedAction],
+          lifecycleArtifacts: [lifecycleArtifact],
+          requestedTools: [],
+          blockedActionFlags: [],
+          metadata: {}
+        };
+      }
+    };
+
+    const result = await runWorkflow({
+      workflow: {
+        version: 1,
+        name: "planning-discovery",
+        trigger: "manual",
+        nodes: [{ id: "plan", kind: "deterministic", agent: "artifact-agent", outputsTo: "agentResults.plan", contextSections: [], tools: [] }]
+      },
+      initialState: {
+        ...state,
+        workflow: "planning-discovery"
+      },
+      agents: new Map([["artifact-agent", artifactAgent]]),
+      adapters: new Map(),
+      policyEngine: {
+        snapshot: state.policy,
+        canReadPath: () => ({ allowed: true, effect: "allow", requiresApproval: false }),
+        canWritePath: () => ({ allowed: false, effect: "approval_required", requiresApproval: true, reason: "Write requires approval." }),
+        evaluateToolRequest: () => ({ allowed: false, effect: "deny", requiresApproval: false }),
+        redactSecrets: (value) => value
+      },
+      artifactJsonPath: ".agentops/runs/run-1/bundle.json",
+      artifactMarkdownPath: ".agentops/runs/run-1/summary.md"
+    });
+
+    expect(result.state.lifecycleArtifacts).toHaveLength(1);
+    expect(result.state.lifecycleArtifacts[0]?.source.runId).toBe("run-1");
+    expect(result.state.lifecycleArtifacts[0]?.auditLink.bundlePath).toBe(".agentops/runs/run-1/bundle.json");
+    expect(result.state.lifecycleArtifacts[0]?.auditLink.entryIds).toContain("run-1-plan");
+    expect(result.state.lifecycleArtifacts[0]?.auditLink.findingIds).toContain("finding-1");
+    expect(result.state.lifecycleArtifacts[0]?.auditLink.proposedActionIds).toContain("action-1");
+    expect(result.bundle.entries[0]?.summary).toBe("Produced a planning artifact");
   });
 });

@@ -10,6 +10,7 @@ import {
   auditBundleSchema,
   auditComponentSchema,
   lifecycleArtifactAuditLinkSchema,
+  lifecycleArtifactSchema,
   lifecycleArtifactEnvelopeSchema,
   lifecycleArtifactRepoReferenceSchema,
   lifecycleArtifactSourceReferenceSchema,
@@ -59,6 +60,7 @@ export type LifecycleArtifactSourceReference = Infer<typeof lifecycleArtifactSou
 export type LifecycleArtifactRepoReference = Infer<typeof lifecycleArtifactRepoReferenceSchema>;
 export type LifecycleArtifactAuditLink = Infer<typeof lifecycleArtifactAuditLinkSchema>;
 export type LifecycleArtifactEnvelope = Infer<typeof lifecycleArtifactEnvelopeSchema>;
+export type LifecycleArtifact = Infer<typeof lifecycleArtifactSchema>;
 export type PlanningArtifactPayload = Infer<typeof planningArtifactPayloadSchema>;
 export type PlanningArtifact = Infer<typeof planningArtifactSchema>;
 export type DesignArtifactOption = Infer<typeof designArtifactOptionSchema>;

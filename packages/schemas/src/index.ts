@@ -139,6 +139,7 @@ export const agentOutputSchema = z.object({
   summary: z.string().min(1),
   findings: z.array(findingSchema).default([]),
   proposedActions: z.array(proposedActionSchema).default([]),
+  lifecycleArtifacts: z.array(z.lazy(() => lifecycleArtifactSchema)).default([]),
   requestedTools: z.array(toolRequestSchema).default([]),
   blockedActionFlags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).optional(),
@@ -305,6 +306,7 @@ export const workflowStateEnvelopeSchema = z.object({
   approvals: z.array(approvalCheckpointSchema).default([]),
   findings: z.array(findingSchema).default([]),
   proposedActions: z.array(proposedActionSchema).default([]),
+  lifecycleArtifacts: z.array(z.lazy(() => lifecycleArtifactSchema)).default([]),
   blockedPlugins: z.array(blockedPluginSchema).default([]),
   agentResults: z.record(z.string(), agentOutputSchema).default({}),
   auditTrail: z.array(auditEntrySchema).default([])
@@ -486,6 +488,14 @@ export const maintenanceArtifactSchema = lifecycleArtifactEnvelopeSchema.extend(
   payload: maintenanceArtifactPayloadSchema
 });
 
+export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
+  planningArtifactSchema,
+  designArtifactSchema,
+  reviewArtifactSchema,
+  releaseArtifactSchema,
+  maintenanceArtifactSchema
+]);
+
 export const auditBundleSchema = z.object({
   version: z.string().min(1),
   runId: z.string().min(1),
@@ -536,6 +546,7 @@ export const schemaRegistry = {
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
+  lifecycleArtifact: lifecycleArtifactSchema,
   agentOutput: agentOutputSchema,
   agentManifest: agentManifestSchema,
   agentPluginRegistration: agentPluginRegistrationSchema,
