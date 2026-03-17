@@ -6,6 +6,8 @@ This example is a minimal standalone repository shape for trying the Phase 1 loc
 
 Copy this directory outside the AgentForge monorepo, initialize it as its own git repository, and then run the published CLI against it.
 
+This sample already includes `.agentops`, so you do not need to run `agentforge init` unless you want to regenerate the starter config yourself.
+
 Example:
 
 ```bash
@@ -14,7 +16,6 @@ cd /tmp/agentforge-sample
 git init
 git add .
 git commit -m "initial sample"
-npx @h9-foundry/agentforge-cli init
 npx @h9-foundry/agentforge-cli scan --json
 npx @h9-foundry/agentforge-cli run pr-review --json
 npx @h9-foundry/agentforge-cli explain last-run --json
