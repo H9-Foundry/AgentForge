@@ -193,4 +193,31 @@ describe("cli smoke flows", () => {
     };
     expect(bundle.blockedPlugins[0]?.reason).toContain("Plugin review required");
   });
+
+  it("explains historical bundles with missing optional arrays", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentops-cli-explain-"));
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+    initProject(root);
+
+    const runRoot = join(root, ".agentops", "runs", "2026-03-17-example");
+    mkdirSync(runRoot, { recursive: true });
+    writeFileSync(
+      join(runRoot, "bundle.json"),
+      JSON.stringify(
+        {
+          runId: "2026-03-17-example",
+          status: "completed"
+        },
+        null,
+        2
+      )
+    );
+
+    const explanation = explainLastRun(root);
+    expect(explanation.runId).toBe("2026-03-17-example");
+    expect(explanation.status).toBe("completed");
+    expect(explanation.findings).toBe(0);
+    expect(explanation.blockedActions).toBe(0);
+    expect(explanation.blockedPlugins).toBe(0);
+  });
 });
