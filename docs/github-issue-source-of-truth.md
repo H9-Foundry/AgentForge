@@ -1,31 +1,61 @@
 # GitHub Issues As Source Of Truth
 
-The intended operating model for AgentForge is to track active planning and delivery in GitHub issues rather than only in local markdown files.
+AgentForge uses GitHub Issues as the primary planning and delivery source of truth.
 
-## Issue Structure
-- One umbrella issue for the active phase, including scope, milestones, risks, and links to child issues.
-- One issue per milestone or reviewable implementation slice.
-- Follow-up issues for deferred work discovered during implementation.
+## Operating Model
 
-## Minimum Update Rules
-- Update the umbrella issue when scope, assumptions, or milestone order changes.
-- Update the active implementation issue when code lands or behavior changes.
-- Record tests run, passes, failures, risks, and deferred work in the issue update, not only in local notes.
-- Open a follow-up issue instead of burying deferred work in a code comment or commit message.
+- roadmap intent is documented in `docs/`
+- active execution state lives in GitHub Issues and milestones
+- epics track multi-slice work
+- feature, docs, bug, and tech-debt issues track implementation slices
 
-## Initial Issue Set For Phase 1
-- Phase 1 foundation umbrella
-- Monorepo bootstrap and tooling
-- Shared schemas and typed contracts
-- Context engine v1
-- Policy engine v1
-- Runtime kernel and audit bundle
-- Safe adapters
-- Starter agents and `pr-review` workflow
-- CLI commands and local artifact UX
-- Deferred: GitHub Action integration and PR reporting
+## Required Behaviors
 
-## Current Implementation
-- Phase 1 issue structure is now seeded in GitHub.
-- The repository includes a GitHub Actions workflow that can comment on pull requests and update the tracker issue from the latest run bundle.
-- The default tracker issue is `#1`, and the local `.agentops/agentops.yaml` template carries that value for future automation.
+- open or reference an issue before broad work starts
+- keep milestone, status, and dependency information current
+- update the relevant epic or tracker when scope, order, or risk changes
+- open follow-up issues for deferred work instead of burying it in code comments
+
+## Milestone Model
+
+New SDLC-platform work should use:
+
+- `Platform Phase 1: Platform Foundation`
+- `Platform Phase 2: General SDLC Expansion`
+- `Platform Phase 3: Ecosystem and Plugins`
+- `Platform Phase 4: Enterprise / Governance / Scale`
+
+Historical milestones from the original foundation work should remain as completed record, not as the active planning model.
+
+## Issue Taxonomy
+
+Use the label taxonomy defined in [docs/ISSUE_TAXONOMY.md](docs/ISSUE_TAXONOMY.md).
+
+At minimum, each issue should capture:
+
+- problem / motivation
+- desired outcome
+- proposed scope
+- non-goals
+- acceptance criteria
+- dependencies
+- labels
+- milestone
+
+## Tracker Shape
+
+The expected structure for major platform work is:
+
+- one umbrella tracker for the active repositioning or phase
+- one epic per major workstream
+- child implementation issues for the first reviewable slices
+
+## Current Direction
+
+The repository has moved beyond the original Phase 1 foundation work. The active platform direction is the broader SDLC workflow/runtime roadmap described in:
+
+- [docs/PLATFORM_VISION.md](PLATFORM_VISION.md)
+- [docs/ROADMAP.md](ROADMAP.md)
+- [docs/SDLC_COVERAGE.md](SDLC_COVERAGE.md)
+- [docs/SUPPORT_MATRIX.md](SUPPORT_MATRIX.md)
+- [docs/GAP_ANALYSIS_GENERAL_SDLC.md](GAP_ANALYSIS_GENERAL_SDLC.md)

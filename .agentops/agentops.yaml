@@ -9,4 +9,4 @@ providers:
   default: disabled
 reporting:
   github:
-    tracker_issue: 1
+    tracker_issue: 45

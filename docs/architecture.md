@@ -1,6 +1,6 @@
 # AgentForge Architecture
 
-Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with the contracts and guardrails made explicit before broad feature expansion.
+AgentForge is currently an early SDLC platform core with one official workflow wedge: secure local repository review. The architecture is intentionally broader than that single workflow so the platform can expand across more lifecycle domains without abandoning deterministic control.
 
 ## Package Map
 
@@ -11,7 +11,7 @@ Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with
 - `packages/context-engine`
   - repository metadata, git status, diff stats, and workflow state creation
 - `packages/policy-engine`
-  - policy loading, overlay resolution, path gating, tool gating, and redaction
+  - policy loading, overlay resolution, path gating, tool gating, trust evaluation, and redaction
 - `packages/runtime`
   - deterministic workflow orchestration, tool mediation, and audit capture
 - `packages/audit`
@@ -19,22 +19,31 @@ Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with
 - `packages/sdk`
   - runtime interfaces for agents, adapters, and providers
 - `packages/cli`
-  - `init`, `scan`, `run`, and `explain last-run`
+  - current CLI commands for config scaffolding, scanning, workflow execution, explanation, and release verification
+- `packages/registry-client`
+  - future-facing registry surface, not a production registry feature today
 
 ## Runtime Flow
 
 1. The CLI loads `.agentops` config, policy, and workflow definition.
 2. The context engine creates a normalized workflow state envelope from repository and git metadata.
 3. The policy engine resolves the effective local or CI policy.
-4. The runtime executes workflow nodes in order, passing each agent only the context sections it requested.
+4. The runtime executes workflow nodes in order, passing each node only the context sections it requested.
 5. Tool requests are mediated through policy before adapter execution.
 6. Audit data is persisted as JSON and markdown under `.agentops/runs/<run-id>/`.
 
+## Current Official Workflow Surface
+
+- `.agentops/workflows/pr-review.yaml`
+
+That is the only official workflow asset today. Broader workflow coverage belongs to the roadmap, not to the current implementation claim.
+
 ## Extension Surfaces
 
-- `agents/*` are the reasoning or deterministic workflow nodes.
-- `adapters/*` are explicit tool wrappers with schemas, side-effect classes, permissions, and trust metadata.
-- `providers` remain optional in Phase 1 and are disabled by default in the starter flow.
+- `agents/*` are the reasoning or deterministic workflow nodes
+- `adapters/*` are explicit tool wrappers with schemas, side-effect classes, permissions, and trust metadata
+- plugin registration exists locally through `.agentops/agentops.yaml`
+- provider integration remains optional and disabled by default in the starter flow
 
 ## Design Constraints
 
@@ -42,5 +51,10 @@ Phase 1 is deliberately narrow: one secure-by-default local workflow slice, with
 - structured outputs for all agent behavior
 - policy wins over manifests and runtime requests
 - blocked paths and redaction are enforced before artifacts are written
+- approval-gated tools are blocked before execution
 
-For more detail on execution and policy behavior, see [docs/runtime-model.md](./runtime-model.md) and [docs/policy-model.md](./policy-model.md).
+## Architectural Direction
+
+The architecture is intended to support more SDLC workflows over time, but the runtime should only claim support for workflows, agents, adapters, and integrations that are actually present and documented.
+
+For more detail on execution and policy behavior, see [runtime-model.md](runtime-model.md) and [policy-model.md](policy-model.md).
