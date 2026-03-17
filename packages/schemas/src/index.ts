@@ -314,6 +314,15 @@ export const implementationRequestSchema = z.object({
   approvalMode: z.enum(["proposal-only", "apply-capable"])
 });
 
+export const qaRequestSchema = z.object({
+  targetRef: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  executedChecks: z.array(z.string().min(1)).default([]),
+  focusAreas: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([]),
+  releaseContext: z.enum(["none", "candidate", "blocking"]).default("none")
+});
+
 export const normalizedValidationCommandSchema = z.object({
   command: z.string().min(1),
   source: z.enum(["request", "package-script", "workspace-script"]),
@@ -652,6 +661,7 @@ export const schemaRegistry = {
   planningRequest: planningRequestSchema,
   designRequest: designRequestSchema,
   implementationRequest: implementationRequestSchema,
+  qaRequest: qaRequestSchema,
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
   policyDocument: policyDocumentSchema,
@@ -853,6 +863,15 @@ const implementationRequestFixture = {
   approvalMode: "proposal-only"
 } as const;
 
+const qaRequestFixture = {
+  targetRef: ".agentops/runs/run-789/bundle.json",
+  evidenceSources: [".agentops/runs/run-789/summary.md"],
+  executedChecks: ["pnpm test -- --runInBand"],
+  focusAreas: ["coverage", "release-risk"],
+  constraints: ["Keep QA evidence collection read-only"],
+  releaseContext: "candidate"
+} as const;
+
 const normalizedValidationCommandFixture = {
   command: "pnpm test",
   source: "request",
@@ -983,6 +1002,7 @@ export const schemaFixtures = {
     questions: ["How should planning artifacts be referenced downstream?"]
   },
   implementationRequest: implementationRequestFixture,
+  qaRequest: qaRequestFixture,
   normalizedValidationCommand: normalizedValidationCommandFixture,
   implementationInventory: implementationInventoryFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,

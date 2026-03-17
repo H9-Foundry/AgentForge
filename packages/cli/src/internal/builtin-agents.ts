@@ -7,6 +7,7 @@ import {
   designArtifactSchema,
   implementationArtifactSchema,
   implementationInventorySchema,
+  qaRequestSchema,
   planningArtifactSchema
 } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
@@ -19,6 +20,7 @@ import type {
   NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
+  QaRequest,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
 
@@ -605,6 +607,74 @@ const implementationIntakeAgent: RuntimeAgent = {
         targetPaths: implementationRequest.targetPaths,
         validationCommands: implementationRequest.validationCommands,
         designDecisionSummary: designRecord.payload.decisionSummary
+      }
+    });
+  }
+};
+
+const qaIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "qa-intake",
+    displayName: "QA Intake",
+    category: "qa",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "test",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const qaRequest = getWorkflowInput<QaRequest>(stateSlice, "qaRequest");
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!qaRequest) {
+      throw new Error("qa-review requires a validated QA request before runtime execution.");
+    }
+
+    const targetType =
+      qaRequest.targetRef.endsWith("bundle.json")
+        ? "artifact-bundle"
+        : qaRequest.targetRef.endsWith(".xml") || qaRequest.targetRef.endsWith(".json") || qaRequest.targetRef.endsWith(".log")
+          ? "validation-output"
+          : "local-reference";
+
+    return agentOutputSchema.parse({
+      summary: `Loaded QA request from ${requestFile ?? ".agentops/requests/qa.yaml"} targeting ${qaRequest.targetRef}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...qaRequestSchema.parse({
+          ...qaRequest,
+          evidenceSources: [...new Set([qaRequest.targetRef, ...qaRequest.evidenceSources])]
+        }),
+        targetType
       }
     });
   }
@@ -1294,6 +1364,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["design-intake", designIntakeAgent],
     ["design-inventory", designInventoryAgent],
     ["implementation-intake", implementationIntakeAgent],
+    ["qa-intake", qaIntakeAgent],
     ["implementation-inventory", implementationInventoryAgent],
     ["implementation-planner", implementationPlannerAgent],
     ["design-analyst", designAnalystAgent],

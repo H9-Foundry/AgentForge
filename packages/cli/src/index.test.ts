@@ -571,4 +571,95 @@ describe("cli smoke flows", () => {
     const explanation = explainLastRun(root);
     expect(explanation.artifactKinds).toContain("implementation-proposal");
   });
+
+  it("runs qa-review after a valid implementation-proposal handoff", async () => {
+    const root = createGitFixture("agentops-qa-");
+
+    initProject(root);
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan a bounded QA workflow handoff",
+        "goals:",
+        "  - Produce a planning brief for the QA workflow",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "  - Keep the workflow read-only by default"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first QA workflow implementation shape",
+        "pathHints:",
+        "  - .agentops/agentops.yaml",
+        "  - .agentops/policy.yaml",
+        "alternatives:",
+        "  - single-pass-qa"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - .agentops/agentops.yaml",
+        "  - .agentops/policy.yaml",
+        "validationCommands:",
+        "  - pnpm test",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        `targetRef: .agentops/runs/${implementationRun.runId}/bundle.json`,
+        "evidenceSources:",
+        "  - .agentops/runs/" + implementationRun.runId + "/summary.md",
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - coverage",
+        "constraints:",
+        "  - Keep QA evidence collection read-only",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    expect(qaRun.status).toBe("success");
+
+    const bundle = JSON.parse(readFileSync(qaRun.jsonPath, "utf8")) as {
+      workflow: string;
+      lifecycleArtifacts: unknown[];
+    };
+    expect(bundle.workflow).toBe("qa-review");
+    expect(bundle.lifecycleArtifacts).toHaveLength(0);
+  });
+
+  it("rejects underspecified qa-review requests before reasoning", async () => {
+    const root = createGitFixture("agentops-qa-invalid-");
+
+    initProject(root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        "evidenceSources:",
+        "  - .agentops/policy.yaml",
+        "executedChecks:",
+        "  - pnpm test"
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("qa-review", root)).rejects.toThrow(/targetRef/i);
+  });
 });

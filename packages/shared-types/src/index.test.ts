@@ -11,6 +11,7 @@ import type {
   NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
+  QaRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
   ReleaseVersionTarget,
@@ -44,6 +45,7 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<DesignRequest["planningBriefRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
+    expectTypeOf<QaRequest["targetRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationInventory["resolvedAffectedPaths"]>().toEqualTypeOf<string[]>();
     expectTypeOf<NormalizedValidationCommand["classification"]>().toEqualTypeOf<
       "allow" | "approval_required" | "deny"

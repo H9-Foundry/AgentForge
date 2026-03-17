@@ -15,6 +15,7 @@ import {
   implementationRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
+  qaRequestSchema,
   workflowDefinitionSchema
 } from "@h9-foundry/agentforge-schemas";
 import type {
@@ -26,6 +27,7 @@ import type {
   ImplementationRequest,
   PlanningArtifact,
   PlanningRequest,
+  QaRequest,
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
@@ -218,6 +220,25 @@ nodes:
     outputs_to: reports.final
 `;
 
+const qaWorkflowTemplate = `version: 1
+name: qa-review
+description: Validate a bounded QA request and prepare it for later QA analysis stages.
+trigger: manual
+catalog:
+  domain: test
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: qa-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -365,6 +386,21 @@ function prepareWorkflowInputs(
     return {
       implementationRequest: implementationRequest satisfies ImplementationRequest,
       designRecord,
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "qa-review") {
+    const requestPath = ".agentops/requests/qa.yaml";
+    ensureReadablePath(policyEngine, requestPath, "QA request");
+    const qaRequest = readYamlFile(join(root, requestPath), qaRequestSchema, "QA request");
+    ensureReadablePath(policyEngine, qaRequest.targetRef, "QA target reference");
+    for (const evidenceSource of qaRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "QA evidence source");
+    }
+
+    return {
+      qaRequest: qaRequest satisfies QaRequest,
       requestFile: requestPath
     };
   }
@@ -532,6 +568,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "implementation-proposal.yaml"),
       contents: implementationWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "qa-review.yaml"),
+      contents: qaWorkflowTemplate
     }
   ];
 

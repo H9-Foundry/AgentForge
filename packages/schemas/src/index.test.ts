@@ -13,6 +13,7 @@ import {
   maintenanceArtifactSchema,
   normalizedValidationCommandSchema,
   policyDocumentSchema,
+  qaRequestSchema,
   planningRequestSchema,
   planningArtifactSchema,
   releaseArtifactSchema,
@@ -29,6 +30,7 @@ describe("schema fixtures", () => {
     expect(() => planningRequestSchema.parse(schemaFixtures.planningRequest)).not.toThrow();
     expect(() => designRequestSchema.parse(schemaFixtures.designRequest)).not.toThrow();
     expect(() => implementationRequestSchema.parse(schemaFixtures.implementationRequest)).not.toThrow();
+    expect(() => qaRequestSchema.parse(schemaFixtures.qaRequest)).not.toThrow();
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
   });
@@ -50,6 +52,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.planningRequest).toBeDefined();
     expect(jsonSchemas.designRequest).toBeDefined();
     expect(jsonSchemas.implementationRequest).toBeDefined();
+    expect(jsonSchemas.qaRequest).toBeDefined();
     expect(jsonSchemas.normalizedValidationCommand).toBeDefined();
     expect(jsonSchemas.implementationInventory).toBeDefined();
     expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
