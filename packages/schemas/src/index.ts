@@ -13,6 +13,16 @@ export const toolResultStatusSchema = z.enum(["success", "blocked", "failed"]);
 export const runStatusSchema = z.enum(["success", "partial", "failed"]);
 export const trustTierSchema = z.enum(["core", "verified", "community", "untrusted"]);
 export const trustSourceSchema = z.enum(["official", "local", "third-party"]);
+export const lifecycleArtifactKindSchema = z.enum([
+  "planning-brief",
+  "design-record",
+  "review-report",
+  "release-report",
+  "maintenance-report"
+]);
+export const lifecycleDomainSchema = z.enum(["plan", "design", "review", "release", "maintain"]);
+export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
+export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 
 export const trustMetadataSchema = z.object({
   tier: trustTierSchema.default("core"),
@@ -321,6 +331,49 @@ export const auditRedactionSchema = z.object({
   categories: z.array(z.string()).default([])
 });
 
+export const lifecycleArtifactWorkflowReferenceSchema = z.object({
+  name: z.string().min(1),
+  displayName: z.string().min(1).optional()
+});
+
+export const lifecycleArtifactSourceReferenceSchema = z.object({
+  sourceType: lifecycleArtifactSourceTypeSchema,
+  runId: z.string().min(1).optional(),
+  inputRefs: z.array(z.string()).default([]),
+  issueRefs: z.array(z.string()).default([])
+});
+
+export const lifecycleArtifactRepoReferenceSchema = z.object({
+  root: z.string().min(1),
+  name: z.string().min(1),
+  branch: z.string().default("unknown"),
+  commitSha: z.string().min(1).optional()
+});
+
+export const lifecycleArtifactAuditLinkSchema = z.object({
+  bundlePath: z.string().min(1).optional(),
+  entryIds: z.array(z.string()).default([]),
+  findingIds: z.array(z.string()).default([]),
+  proposedActionIds: z.array(z.string()).default([])
+});
+
+export const lifecycleArtifactEnvelopeSchema = z.object({
+  schemaVersion: z.string().min(1),
+  artifactKind: lifecycleArtifactKindSchema,
+  lifecycleDomain: lifecycleDomainSchema,
+  workflow: lifecycleArtifactWorkflowReferenceSchema,
+  source: lifecycleArtifactSourceReferenceSchema,
+  status: lifecycleArtifactStatusSchema,
+  generatedAt: z.string().datetime(),
+  updatedAt: z.string().datetime().optional(),
+  repo: lifecycleArtifactRepoReferenceSchema,
+  provenance: auditProvenanceSchema,
+  redaction: auditRedactionSchema,
+  auditLink: lifecycleArtifactAuditLinkSchema,
+  summary: z.string().min(1),
+  payload: z.record(z.string(), z.unknown())
+});
+
 export const auditBundleSchema = z.object({
   version: z.string().min(1),
   runId: z.string().min(1),
@@ -353,6 +406,11 @@ export const schemaRegistry = {
   auditComponent: auditComponentSchema,
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,
+  lifecycleArtifactWorkflowReference: lifecycleArtifactWorkflowReferenceSchema,
+  lifecycleArtifactSourceReference: lifecycleArtifactSourceReferenceSchema,
+  lifecycleArtifactRepoReference: lifecycleArtifactRepoReferenceSchema,
+  lifecycleArtifactAuditLink: lifecycleArtifactAuditLinkSchema,
+  lifecycleArtifactEnvelope: lifecycleArtifactEnvelopeSchema,
   agentOutput: agentOutputSchema,
   agentManifest: agentManifestSchema,
   agentPluginRegistration: agentPluginRegistrationSchema,
@@ -449,5 +507,51 @@ export const schemaFixtures = {
       { id: "review", kind: "reasoning", agent: "code-review", outputsTo: "agentResults.review" },
       { id: "report", kind: "report", outputsTo: "reports.final" }
     ]
+  },
+  lifecycleArtifactEnvelope: {
+    schemaVersion: "1.0.0",
+    artifactKind: "planning-brief",
+    lifecycleDomain: "plan",
+    workflow: {
+      name: "planning-discovery",
+      displayName: "Planning And Discovery"
+    },
+    source: {
+      sourceType: "workflow-run",
+      runId: "run-123",
+      inputRefs: ["docs/ROADMAP.md"],
+      issueRefs: ["#78"]
+    },
+    status: "complete",
+    generatedAt: "2026-03-17T12:00:00.000Z",
+    updatedAt: "2026-03-17T12:00:00.000Z",
+    repo: {
+      root: "/repo",
+      name: "AgentForge",
+      branch: "main",
+      commitSha: "abc123"
+    },
+    provenance: {
+      generatedBy: "agentforge-runtime",
+      schemaVersion: "1.0.0",
+      executionEnvironment: "local",
+      repoRoot: "/repo"
+    },
+    redaction: {
+      applied: true,
+      strategyVersion: "1.0.0",
+      categories: ["secrets"]
+    },
+    auditLink: {
+      bundlePath: ".agentops/runs/run-123/bundle.json",
+      entryIds: ["plan-collector"],
+      findingIds: [],
+      proposedActionIds: []
+    },
+    summary: "Initial planning brief generated for queue item #78.",
+    payload: {
+      problemStatement: "Define the next planning workflow slice.",
+      recommendedNextSteps: ["Draft workflow spec", "Open child implementation issues"]
+    }
   }
 } as const;
