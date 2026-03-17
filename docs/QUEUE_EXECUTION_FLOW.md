@@ -40,7 +40,7 @@ Rules:
 
 Current active lane:
 
-1. [#78](https://github.com/H9-Foundry/AgentForge/issues/78) planning/discovery workflow MVP
+1. [#79](https://github.com/H9-Foundry/AgentForge/issues/79) architecture/design workflow MVP
 
 ### Ready Lane
 
@@ -48,7 +48,8 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-2. [#79](https://github.com/H9-Foundry/AgentForge/issues/79) architecture/design workflow MVP
+2. validation-hygiene investigation under [#120](https://github.com/H9-Foundry/AgentForge/issues/120)
+3. planning/discovery implementation follow-ons under [#127](https://github.com/H9-Foundry/AgentForge/issues/127), [#128](https://github.com/H9-Foundry/AgentForge/issues/128), [#129](https://github.com/H9-Foundry/AgentForge/issues/129), and [#130](https://github.com/H9-Foundry/AgentForge/issues/130)
 
 ### Parallel Safe Lane
 
