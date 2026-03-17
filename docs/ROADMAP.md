@@ -74,6 +74,11 @@ The current shipped baseline is:
   - SDLC domain classification
   - support level, maturity, and trust-scope semantics
   - schema and CLI follow-up boundaries
+- [docs/ARTIFACT_SCHEMAS.md](ARTIFACT_SCHEMAS.md)
+  - shared lifecycle artifact envelope
+  - planning, design, review, release, and maintenance artifact families
+  - audit-bundle and markdown-summary boundaries
+  - schema/runtime/CLI follow-up boundaries
 
 ## Execution Flow
 
