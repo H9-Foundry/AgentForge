@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Platform vision and roadmap
+    url: https://github.com/H9-Foundry/AgentForge/blob/main/docs/PLATFORM_VISION.md
+    about: Read the current platform framing before opening broad roadmap work.
+  - name: Issue taxonomy
+    url: https://github.com/H9-Foundry/AgentForge/blob/main/docs/ISSUE_TAXONOMY.md
+    about: Use the documented labels, milestones, and issue structure when proposing work.

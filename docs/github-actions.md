@@ -38,6 +38,6 @@ The repository workflows are configured for the Node 24 JavaScript action runtim
 For release PR validation, AgentForge uses `pull_request_target` only for same-repository `changeset-release/*` branches and checks out the PR head SHA with persisted credentials disabled. Human-authored PRs continue to use the standard `pull_request` path.
 
 ## Tracker Issue
-- The default tracker issue is `#1`
+- The default tracker issue is the platform tracker `#45`
 - Manual dispatch can override the tracker issue number
-- The local `.agentops/agentops.yaml` template now includes `reporting.github.tracker_issue`
+- The local `.agentops/agentops.yaml` template now includes `reporting.github.tracker_issue: 45`

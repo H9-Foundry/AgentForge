@@ -1,24 +1,55 @@
 # Quickstart
 
+This quickstart walks through the current official AgentForge wedge: secure local repository review with auditable outputs.
+
+## Install And Build
+
 ```bash
 pnpm install
 pnpm build
 pnpm build:packages
+```
+
+## Initialize Local Config
+
+```bash
 node packages/cli/dist/bin.js init
+```
+
+This writes starter config under `.agentops/`.
+
+## Inspect The Repository
+
+```bash
 node packages/cli/dist/bin.js scan
+```
+
+## Run The Current Official Workflow
+
+```bash
 node packages/cli/dist/bin.js run pr-review
+```
+
+## Inspect The Latest Run
+
+```bash
 node packages/cli/dist/bin.js explain last-run
 ```
 
-The starter configuration is written under `.agentops/`. Run artifacts are written under `.agentops/runs/<run-id>/`.
+Run artifacts are written under `.agentops/runs/<run-id>/`.
 
-To dry-run the publishable package set:
+## Validate The Public Package Set
 
 ```bash
 pnpm pack:public
 pnpm release:verify
 ```
 
-For the GitHub CI wrapper and PR/issue reporting flow, see [docs/github-actions.md](./github-actions.md).
-For the Phase 1 security posture and build provenance approach, see [docs/security-model.md](./security-model.md) and [docs/release-trust.md](./release-trust.md).
-For contributor workflow and extension authoring, start with [CONTRIBUTING.md](../CONTRIBUTING.md), [docs/agent-manifest-guide.md](./agent-manifest-guide.md), and [docs/plugin-author-guide.md](./plugin-author-guide.md).
+## Related Docs
+
+- [README.md](../README.md)
+- [architecture.md](architecture.md)
+- [security-model.md](security-model.md)
+- [release-trust.md](release-trust.md)
+- [PLATFORM_VISION.md](PLATFORM_VISION.md)
+- [ROADMAP.md](ROADMAP.md)
