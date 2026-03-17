@@ -7,6 +7,7 @@
 3. Keep changes scoped to the package, agent, adapter, or doc surface you are modifying.
 4. Update tests and documentation when behavior or public contracts change.
 5. If you touch public packages or release automation, also run `pnpm pack:public` and `pnpm release:verify`.
+6. Maintainers should use signed commits for normal repo work. See [docs/maintainer-signing.md](docs/maintainer-signing.md).
 
 ## Planning And Tracking
 
@@ -36,3 +37,4 @@
 - Explain the change in the relevant GitHub issue.
 - Note any unverified behavior or residual risks.
 - Prefer small reviewable slices over broad mixed changes.
+- If you are a maintainer, confirm your commits show as `Verified` on GitHub before merging changes intended to satisfy issue `#40`.
