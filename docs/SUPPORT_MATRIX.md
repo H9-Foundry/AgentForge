@@ -74,6 +74,15 @@ This matrix separates current official support from roadmap intent.
 | general CI runtime support | Partial | Some workflow behavior exists in CI, but general CI workflow support is not complete. |
 | hosted multi-tenant service | Planned | Not implemented. |
 
+## Self-Hosting Scope
+
+| Self-hosted use | Maturity | Notes |
+| --- | --- | --- |
+| planning/design on the AgentForge repo | Partial | Supported as a process and docs pattern, not as a dedicated official workflow yet. |
+| PR review and QA on the AgentForge repo | Official | Covered by the current `pr-review` wedge and audit outputs. |
+| release/readiness verification on the AgentForge repo | Official | Covered by `release guide`, `release check`, and `release verify`. |
+| autonomous implementation on the AgentForge repo | Planned | Not an official supported mode yet. |
+
 ## Compatibility Notes
 
 - Current support is strongest for local repository execution and GitHub-centric release workflows.

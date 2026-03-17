@@ -59,6 +59,11 @@ The current shipped baseline is:
   - side-effect classes
   - context-slice contracts
   - runtime/policy/audit handoff
+- [docs/CONTEXT_SLICE_CONTRACTS.md](CONTEXT_SLICE_CONTRACTS.md)
+  - slice categories
+  - budget and truncation rules
+  - requested versus provided slice reporting
+  - context-engine/runtime/policy enforcement points
 
 ## Phase 2: General SDLC Expansion
 

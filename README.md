@@ -174,6 +174,13 @@ AgentForge is moving from a single secure `pr-review` wedge toward a broader SDL
 - **Ecosystem And Plugins:** improve adapters, plugin surfaces, and registry-facing workflows
 - **Enterprise / Governance / Scale:** add compatibility, governance, and scale-oriented controls
 
+Current dogfooding posture:
+
+- use AgentForge on AgentForge for planning, design, review, QA, and release verification
+- do not treat it as a broad autonomous implementation engine yet
+
+See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) and [docs/CONTEXT_SLICE_CONTRACTS.md](docs/CONTEXT_SLICE_CONTRACTS.md).
+
 Roadmap docs:
 
 - [docs/PLATFORM_VISION.md](docs/PLATFORM_VISION.md)
