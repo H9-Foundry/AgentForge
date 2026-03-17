@@ -1,5 +1,16 @@
 # @h9-foundry/agentforge-shared-types
 
+## 0.4.0
+
+### Minor Changes
+
+- 608b8cb: Update the published dependency surface for Commander 14 and Zod 4, and add repository CODEOWNERS for stricter branch protection.
+
+### Patch Changes
+
+- Updated dependencies [608b8cb]
+  - @h9-foundry/agentforge-schemas@0.4.0
+
 ## 0.3.2
 
 ### Patch Changes
