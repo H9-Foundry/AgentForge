@@ -1,5 +1,15 @@
-import { agentManifestSchema, agentOutputSchema, implementationArtifactSchema } from "@h9-foundry/agentforge-schemas";
-import type { DesignArtifact, ImplementationRequest, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import {
+  agentManifestSchema,
+  agentOutputSchema,
+  implementationArtifactSchema,
+  implementationInventorySchema
+} from "@h9-foundry/agentforge-schemas";
+import type {
+  DesignArtifact,
+  ImplementationInventory,
+  ImplementationRequest,
+  WorkflowStateEnvelope
+} from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -100,25 +110,37 @@ export const implementationPlannerAgent: RuntimeAgent = {
       throw new Error("implementation-proposal requires validated implementation inputs before proposal analysis.");
     }
 
-    const affectedPaths = [
-      ...new Set([
-        ...implementationRequest.targetPaths,
-        ...designRecord.payload.interfacesImpacted,
-        ...designRecord.payload.schemaChangesNeeded,
-        ...designRecord.payload.policyChangesNeeded
-      ])
-    ];
+    const inventoryMetadata = implementationInventorySchema.safeParse(stateSlice.agentResults?.inventory?.metadata);
+    const inventory = inventoryMetadata.success ? inventoryMetadata.data : undefined;
     const normalizedAffectedPaths =
-      affectedPaths.length > 0 ? affectedPaths : ["Repository paths still need deterministic build-surface confirmation."];
+      inventory && inventory.resolvedAffectedPaths.length > 0
+        ? inventory.resolvedAffectedPaths
+        : [
+            ...new Set([
+              ...implementationRequest.targetPaths,
+              ...designRecord.payload.interfacesImpacted,
+              ...designRecord.payload.schemaChangesNeeded,
+              ...designRecord.payload.policyChangesNeeded
+            ])
+          ];
+    const finalAffectedPaths =
+      normalizedAffectedPaths.length > 0
+        ? normalizedAffectedPaths
+        : ["Repository paths still need deterministic build-surface confirmation."];
     const proposedChanges = [
       `Prepare a bounded implementation plan for ${implementationRequest.implementationGoal}.`,
-      ...normalizedAffectedPaths.slice(0, 5).map((pathValue) => `Plan targeted edits for ${pathValue}.`)
+      ...finalAffectedPaths.slice(0, 5).map((pathValue) => `Plan targeted edits for ${pathValue}.`)
     ];
+    const selectedCommands = inventory
+      ? inventory.discoveredValidationCommands.filter(
+          (entry) =>
+            entry.classification === "approval_required" &&
+            (implementationRequest.validationCommands.length === 0 || entry.source === "request")
+        )
+      : [];
     const validationPlan =
-      implementationRequest.validationCommands.length > 0
-        ? implementationRequest.validationCommands.map(
-            (command) => `Review allowlist suitability for \`${command}\` before any future execution.`
-          )
+      selectedCommands.length > 0
+        ? selectedCommands.map((entry) => `Command \`${entry.command}\` is available but approval-required before execution.`)
         : ["Confirm allowlisted validation commands in the next deterministic implementation slice before execution."];
     const approvalRequiredSteps =
       implementationRequest.approvalMode === "apply-capable"
@@ -156,7 +178,7 @@ export const implementationPlannerAgent: RuntimeAgent = {
       payload: {
         designRecordRef: implementationRequest.designRecordRef,
         implementationGoal: implementationRequest.implementationGoal,
-        affectedPaths: normalizedAffectedPaths,
+        affectedPaths: finalAffectedPaths,
         proposedChanges,
         validationPlan,
         approvalRequiredSteps,
@@ -178,10 +200,11 @@ export const implementationPlannerAgent: RuntimeAgent = {
           targetPaths: implementationRequest.targetPaths,
           validationCommands: implementationRequest.validationCommands,
           constraints: implementationRequest.constraints,
-          designInterfaces: designRecord.payload.interfacesImpacted
+          designInterfaces: designRecord.payload.interfacesImpacted,
+          inventory: (inventory ?? null) satisfies ImplementationInventory | null
         },
         synthesizedProposal: {
-          affectedPaths: normalizedAffectedPaths,
+          affectedPaths: finalAffectedPaths,
           approvalRequiredSteps,
           openQuestions
         }

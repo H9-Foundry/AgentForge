@@ -12,7 +12,22 @@ function createGitFixture(prefix: string): string {
   execFileSync("git", ["init"], { cwd: root });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
   execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
-  writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify(
+      {
+        name: "fixture",
+        scripts: {
+          test: "echo test",
+          lint: "echo lint",
+          typecheck: "echo typecheck"
+        }
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
   writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
   execFileSync("git", ["add", "."], { cwd: root });
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
@@ -431,6 +446,55 @@ describe("cli smoke flows", () => {
     await expect(runLocalWorkflow("implementation-proposal", root)).rejects.toThrow();
   });
 
+  it("rejects non-allowlisted validation commands for implementation-proposal before reasoning", async () => {
+    const root = createGitFixture("agentops-cli-implementation-invalid-command-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "issueRefs:",
+        "  - '#127'",
+        "pathHints:",
+        "  - packages/runtime",
+        "  - packages/schemas"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first design workflow implementation shape",
+        "pathHints:",
+        "  - packages/runtime",
+        "  - packages/schemas",
+        "alternatives:",
+        "  - single-workflow-pass"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "validationCommands:",
+        "  - rm -rf ."
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("implementation-proposal", root)).rejects.toThrow(
+      "Implementation request contains non-allowlisted validation command: rm -rf ."
+    );
+  });
+
   it("runs implementation-proposal after a valid design-record handoff", async () => {
     const root = createGitFixture("agentops-cli-implementation-");
     initProject(root);
@@ -486,10 +550,23 @@ describe("cli smoke flows", () => {
 
     const bundle = JSON.parse(readFileSync(implementationRun.jsonPath, "utf8")) as {
       workflow: string;
-      lifecycleArtifacts: { artifactKind: string }[];
+      lifecycleArtifacts: {
+        artifactKind: string;
+        payload: {
+          affectedPaths: string[];
+          validationPlan: string[];
+        };
+      }[];
     };
     expect(bundle.workflow).toBe("implementation-proposal");
     expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "implementation-proposal")).toBe(true);
+    const implementationArtifact = bundle.lifecycleArtifacts.find((artifact) => artifact.artifactKind === "implementation-proposal");
+    expect(implementationArtifact?.payload.affectedPaths).toEqual(
+      expect.arrayContaining([".agentops/agentops.yaml", ".agentops/policy.yaml"])
+    );
+    expect(implementationArtifact?.payload.validationPlan).toEqual(
+      expect.arrayContaining(["Command `pnpm test` is available but approval-required before execution."])
+    );
 
     const explanation = explainLastRun(root);
     expect(explanation.artifactKinds).toContain("implementation-proposal");
