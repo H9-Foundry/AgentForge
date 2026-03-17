@@ -1,9 +1,10 @@
 import { buildAuditBundle, createAuditEntry } from "@h9-foundry/agentforge-audit";
-import { agentOutputSchema, toolResultSchema } from "@h9-foundry/agentforge-schemas";
+import { agentOutputSchema, lifecycleArtifactSchema, toolResultSchema } from "@h9-foundry/agentforge-schemas";
 import type {
   AuditComponent,
   AuditBundle,
   EffectivePolicySnapshot,
+  LifecycleArtifact,
   ToolRequest,
   ToolResult,
   WorkflowDefinition,
@@ -196,12 +197,41 @@ function sliceState(state: WorkflowStateEnvelope, sections: readonly string[]): 
   return slice;
 }
 
+function linkLifecycleArtifacts(
+  artifacts: readonly LifecycleArtifact[],
+  context: {
+    readonly runId: string;
+    readonly auditEntryId: string;
+    readonly bundlePath: string;
+    readonly findingIds: readonly string[];
+    readonly proposedActionIds: readonly string[];
+  }
+): LifecycleArtifact[] {
+  return artifacts.map((artifact) =>
+    lifecycleArtifactSchema.parse({
+      ...artifact,
+      source: {
+        ...artifact.source,
+        runId: artifact.source.sourceType === "workflow-run" ? context.runId : artifact.source.runId
+      },
+      auditLink: {
+        ...artifact.auditLink,
+        bundlePath: context.bundlePath,
+        entryIds: Array.from(new Set([...artifact.auditLink.entryIds, context.auditEntryId])),
+        findingIds: Array.from(new Set([...artifact.auditLink.findingIds, ...context.findingIds])),
+        proposedActionIds: Array.from(new Set([...artifact.auditLink.proposedActionIds, ...context.proposedActionIds]))
+      }
+    })
+  );
+}
+
 export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ state: WorkflowStateEnvelope; bundle: AuditBundle }> {
   const startedAt = new Date().toISOString();
   const state: WorkflowStateEnvelope = {
     ...deps.initialState,
     findings: [...(deps.initialState.findings ?? [])],
     proposedActions: [...(deps.initialState.proposedActions ?? [])],
+    lifecycleArtifacts: [...(deps.initialState.lifecycleArtifacts ?? [])],
     blockedPlugins: [...(deps.initialState.blockedPlugins ?? [])],
     agentResults: { ...(deps.initialState.agentResults ?? {}) },
     auditTrail: [...(deps.initialState.auditTrail ?? [])]
@@ -255,13 +285,26 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
       )
     );
 
-    state.agentResults[node.id] = output;
+    const auditEntryId = `${state.runId}-${node.id}`;
+    const linkedLifecycleArtifacts = linkLifecycleArtifacts(output.lifecycleArtifacts, {
+      runId: state.runId,
+      auditEntryId,
+      bundlePath: deps.artifactJsonPath,
+      findingIds: output.findings.map((finding) => finding.id),
+      proposedActionIds: output.proposedActions.map((action) => action.id)
+    });
+
+    state.agentResults[node.id] = {
+      ...output,
+      lifecycleArtifacts: linkedLifecycleArtifacts
+    };
     state.findings.push(...output.findings);
     state.proposedActions.push(...output.proposedActions);
+    state.lifecycleArtifacts.push(...linkedLifecycleArtifacts);
 
     state.auditTrail.push(
       createAuditEntry({
-        id: `${state.runId}-${node.id}`,
+        id: auditEntryId,
         nodeId: node.id,
         nodeName: agent.manifest.name,
         kind: agent.manifest.runtime.kind,
