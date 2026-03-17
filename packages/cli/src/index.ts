@@ -124,6 +124,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 function normalizeWorkflow(input: unknown): WorkflowDefinition {
   const parsed = input as Record<string, unknown>;
   return workflowDefinitionSchema.parse({
@@ -473,20 +477,23 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
     throw new Error("No recorded runs found.");
   }
 
-  const bundle = JSON.parse(readFileSync(join(runsRoot, latest, "bundle.json"), "utf8")) as {
-    runId: string;
-    status: string;
-    findings: unknown[];
-    blockedPlugins: unknown[];
-    entries: { blockedActions: unknown[] }[];
-  };
+  const bundle = JSON.parse(readFileSync(join(runsRoot, latest, "bundle.json"), "utf8")) as Record<string, unknown>;
+  const findings = asArray(bundle.findings);
+  const blockedPlugins = asArray(bundle.blockedPlugins);
+  const runEntries = asArray(bundle.entries);
 
   return {
-    runId: bundle.runId,
-    status: bundle.status,
-    findings: bundle.findings.length,
-    blockedActions: bundle.entries.reduce((total, entry) => total + entry.blockedActions.length, 0),
-    blockedPlugins: bundle.blockedPlugins.length,
+    runId: typeof bundle.runId === "string" ? bundle.runId : latest,
+    status: typeof bundle.status === "string" ? bundle.status : "unknown",
+    findings: findings.length,
+    blockedActions: runEntries.reduce<number>((total, entry) => {
+      if (!isRecord(entry)) {
+        return total;
+      }
+
+      return total + asArray(entry.blockedActions).length;
+    }, 0),
+    blockedPlugins: blockedPlugins.length,
     jsonPath: join(runsRoot, latest, "bundle.json"),
     markdownPath: join(runsRoot, latest, "summary.md")
   };
