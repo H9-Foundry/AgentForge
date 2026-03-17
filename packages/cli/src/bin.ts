@@ -13,7 +13,10 @@ import {
 
 const program = new Command();
 
-program.name("agentforge").description("Secure-by-default workflow runner for engineering agents.").version("0.1.0");
+program
+  .name("agentforge")
+  .description("Secure-by-default workflow runner for repository-aware SDLC workflows.")
+  .version("0.1.0");
 
 program
   .command("init")
@@ -44,8 +47,8 @@ program
 
 program
   .command("run")
-  .description("Run a starter workflow locally in safe mode.")
-  .argument("<workflow>", "Workflow name, for example pr-review")
+  .description("Run the current starter workflow wedge locally in safe mode.")
+  .argument("<workflow>", "Workflow name. Phase 1 currently supports: pr-review")
   .option("--json", "Print machine-readable JSON output.")
   .action(async (workflow, options: { json?: boolean }) => {
     const result = await runLocalWorkflow(workflow);
@@ -60,8 +63,8 @@ program
 
 program
   .command("explain")
-  .description("Explain the latest workflow run.")
-  .argument("<target>", "Currently only supports last-run")
+  .description("Explain the latest run from the current starter workflow wedge.")
+  .argument("<target>", "Target to explain. Phase 1 currently supports: last-run")
   .option("--json", "Print machine-readable JSON output.")
   .action((target, options: { json?: boolean }) => {
     if (target !== "last-run") {

@@ -233,6 +233,28 @@ describe("release preflight", () => {
     expect(result.stdout).toContain("AgentForge npm bootstrap guide");
   });
 
+  it("renders workflow-first help for the current wedge", () => {
+    const topLevel = spawnSync("pnpm", ["exec", "tsx", "packages/cli/src/bin.ts", "--help"], {
+      cwd: process.cwd(),
+      encoding: "utf8"
+    });
+    const runHelp = spawnSync("pnpm", ["exec", "tsx", "packages/cli/src/bin.ts", "run", "--help"], {
+      cwd: process.cwd(),
+      encoding: "utf8"
+    });
+    const explainHelp = spawnSync("pnpm", ["exec", "tsx", "packages/cli/src/bin.ts", "explain", "--help"], {
+      cwd: process.cwd(),
+      encoding: "utf8"
+    });
+
+    expect(topLevel.status).toBe(0);
+    expect(topLevel.stdout).toContain("repository-aware SDLC workflows");
+    expect(runHelp.status).toBe(0);
+    expect(runHelp.stdout).toContain("Phase 1 currently supports: pr-review");
+    expect(explainHelp.status).toBe(0);
+    expect(explainHelp.stdout).toContain("Phase 1 currently supports: last-run");
+  });
+
   it("exposes the release check command from the CLI", () => {
     const home = mkdtempSync(join(tmpdir(), "agentforge-home-"));
     const result = spawnSync("pnpm", ["exec", "tsx", "packages/cli/src/bin.ts", "release", "check"], {
