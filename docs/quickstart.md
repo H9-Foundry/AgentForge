@@ -1,6 +1,6 @@
 # Quickstart
 
-This quickstart walks through the current official AgentForge wedges: secure local repository review plus the first planning-to-design lifecycle handoff, all with auditable outputs.
+This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation lifecycle handoff, all with auditable outputs.
 
 ## Fastest Evaluator Path
 
@@ -90,6 +90,36 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 The design bundle should include one `design-record` lifecycle artifact and remain read-only on the normal path.
 
+## Run The Official Implementation Workflow
+
+`implementation-proposal` is implemented on current `main`. Until the next npm release includes it, use the source-build path for this workflow even if you used the published CLI for the earlier evaluator steps.
+
+Create an implementation request that points at the prior design bundle:
+
+```bash
+cat > .agentops/requests/implementation.yaml <<'EOF'
+designRecordRef: .agentops/runs/<design-run-id>/bundle.json
+implementationGoal: Prepare the next bounded implementation proposal
+approvalMode: proposal-only
+targetPaths:
+  - .agentops/agentops.yaml
+  - .agentops/policy.yaml
+validationCommands:
+  - pnpm test
+constraints:
+  - Keep the default path read-only
+EOF
+```
+
+Run the official implementation wedge from the current repo build:
+
+```bash
+node packages/cli/dist/bin.js run implementation-proposal --json
+node packages/cli/dist/bin.js explain last-run --json
+```
+
+The implementation bundle should include one `implementation-proposal` lifecycle artifact with deterministic affected-path inventory plus approval-required validation guidance. The default path remains read-only and proposal-only.
+
 ## Contributor And Source-Build Path
 
 If you want to work on AgentForge itself, build the monorepo locally:
@@ -120,6 +150,7 @@ node packages/cli/dist/bin.js scan
 node packages/cli/dist/bin.js run pr-review
 node packages/cli/dist/bin.js run planning-discovery
 node packages/cli/dist/bin.js run architecture-design-review
+node packages/cli/dist/bin.js run implementation-proposal
 ```
 
 ## Inspect The Latest Run

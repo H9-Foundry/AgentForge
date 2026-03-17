@@ -12,7 +12,7 @@ This document describes lifecycle coverage across AgentForge using three honest 
 | --- | --- | --- | --- |
 | Plan / intake / discovery | Available now | `planning-discovery` is an official local workflow that validates `.agentops/requests/planning.yaml` and emits a `planning-brief` artifact. | Harden the planning workflow with richer request fixtures, policy overlays, and follow-on implementation workflow handoff. |
 | Architecture / design | Available now | `architecture-design-review` is an official local workflow that validates `.agentops/requests/design.yaml`, requires a `planningBriefRef`, and emits a `design-record` artifact. | Expand deterministic impact inventory and downstream implementation/design review handoff. |
-| Build / implementation | Planned | No official workflow yet. | Add implementation workflow support with explicit safe-side-effect policies. |
+| Build / implementation | Available now | `implementation-proposal` is an official local workflow that validates `.agentops/requests/implementation.yaml`, requires a `designRecordRef`, and emits an `implementation-proposal` artifact without widening the default side-effect posture. | Expand from proposal-only implementation planning into downstream QA, security review, and gated apply-capable follow-ons. |
 | Review / test / QA | Available now | `pr-review` workflow with context, security audit, code review, and proposed test generation. | Broaden into dedicated review/test/QA workflow variants. |
 | Security / compliance / DevSecOps | In progress | Policy, redaction, trust metadata, release trust, and audit exist. | Add richer security workflow coverage and security-specific adapters/evals. |
 | Release / CI/CD | In progress | Release verification, trusted publishing, package validation, and GitHub workflows exist. | Add broader release/CI workflow coverage beyond package publishing. |
@@ -32,17 +32,18 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `architecture-design-review`
   - location: `.agentops/workflows/architecture-design-review.yaml`
   - purpose: validate a design request, consume a planning brief, and emit a `design-record` lifecycle artifact
+- `implementation-proposal`
+  - location: `.agentops/workflows/implementation-proposal.yaml`
+  - purpose: validate an implementation request, consume a design record, and emit an `implementation-proposal` lifecycle artifact
 
 ### In progress
 
-- build / implementation
 - security / DevSecOps
 - release / CI-CD
 - maintenance / dependency / docs hygiene
 
 ### Planned
 
-- build/implementation
 - dedicated test/QA
 - security/DevSecOps
 - release/CI-CD
@@ -59,10 +60,10 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `test-generation`
 - `planning-analyst`
 - `design-analyst`
+- `implementation-planner`
 
 ### Planned expansion areas
 
-- implementation/build assistance
 - release coordination
 - incident and operational handoff
 - maintenance and upgrade hygiene

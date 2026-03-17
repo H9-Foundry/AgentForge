@@ -7,8 +7,8 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 ## What You Can Do Today
 
 - try the current official workflow wedge with the published CLI, without cloning this monorepo
-- initialize a repository, scan it, run `pr-review`, `planning-discovery`, and `architecture-design-review`
-- inspect generated audit bundles plus lifecycle artifacts such as `planning-brief` and `design-record`
+- initialize a repository, scan it, run `pr-review`, `planning-discovery`, and `architecture-design-review`, then use the current repo build for `implementation-proposal` until the next package release ships it
+- inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, and `implementation-proposal`
 - evaluate the secure-by-default runtime model before broader SDLC workflow support lands
 
 ## Try It In 2 Minutes
@@ -63,10 +63,11 @@ For the new lifecycle wedges, `bundle.json` also persists one structured lifecyc
 
 - `planning-discovery` emits `planning-brief`
 - `architecture-design-review` emits `design-record`
+- `implementation-proposal` emits an `implementation-proposal` artifact with deterministic inventory, validation-command classification, and a proposal-only next-step plan
 
 ## Project Definition
 
-AgentForge provides the runtime, policy, context, audit, and packaging foundation for software engineering workflows that need to reason over a repository without abandoning deterministic controls. The current product wedge is a local, repo-first `pr-review` workflow that demonstrates the model end to end.
+AgentForge provides the runtime, policy, context, audit, and packaging foundation for software engineering workflows that need to reason over a repository without abandoning deterministic controls. The current official workflow surface is local and repo-first: `pr-review`, `planning-discovery`, `architecture-design-review`, and `implementation-proposal`.
 
 ## Problem Statement
 
@@ -94,11 +95,12 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 ### Available Now
 
 - secure-by-default runtime, policy, context, audit, and schema foundation
-- three official local workflow slices:
+- four official local workflow slices:
   - `.agentops/workflows/pr-review.yaml`
   - `.agentops/workflows/planning-discovery.yaml`
   - `.agentops/workflows/architecture-design-review.yaml`
-- official starter agents for context collection, planning analysis, design analysis, security audit, code review, and test generation
+  - `.agentops/workflows/implementation-proposal.yaml`
+- official starter agents for context collection, planning analysis, design analysis, implementation planning, security audit, code review, and test generation
 - internal starter adapters for filesystem, git, shell, and GitHub-aware mediation
 - public npm packages for the runtime core, CLI, contracts, and audit surfaces
 - GitHub Actions release automation, trusted publishing, and package verification tooling
@@ -125,7 +127,7 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 | --- | --- | --- |
 | Plan / intake / discovery | Available now | `planning-discovery` is an official local workflow that emits a `planning-brief` artifact. |
 | Architecture / design | Available now | `architecture-design-review` is an official local workflow that consumes a planning brief and emits a `design-record` artifact. |
-| Build / implementation | Planned | No implementation workflow yet beyond secure runtime scaffolding. |
+| Build / implementation | Available now | `implementation-proposal` is an official local workflow that consumes a design record, emits an `implementation-proposal` artifact, and keeps the default path read-only and proposal-only. |
 | Review / test / QA | Available now | The `pr-review` wedge covers review, security audit, and proposed test-generation outputs. |
 | Security / compliance / DevSecOps | Partial | Policy, trust, redaction, and audit exist; broader security workflows are planned. |
 | Release / CI/CD | Partial | Release verification and package publishing exist; broader CI/CD workflow coverage is planned. |
@@ -153,7 +155,7 @@ Current runtime flow:
 5. Adapters are invoked only after policy mediation.
 6. Audit bundles and summaries are written under `.agentops/runs/<run-id>/`.
 
-For the official planning and design wedges, the same run directory now also persists lifecycle artifacts inside `bundle.json`, which makes the planning-to-design handoff inspectable without widening the side-effect posture.
+For the official planning, design, and implementation wedges, the same run directory now also persists lifecycle artifacts inside `bundle.json`, which makes the planning-to-design-to-implementation handoff inspectable without widening the side-effect posture.
 
 See [docs/architecture.md](docs/architecture.md), [docs/runtime-model.md](docs/runtime-model.md), [docs/policy-model.md](docs/policy-model.md), and [docs/security-model.md](docs/security-model.md).
 

@@ -1,10 +1,8 @@
 # Build And Implementation Workflow MVP
 
-This document defines the design target for issue [#53](https://github.com/H9-Foundry/AgentForge/issues/53).
+This document defines the build/implementation workflow direction for issue [#53](https://github.com/H9-Foundry/AgentForge/issues/53).
 
-It describes the first build/implementation workflow wedge AgentForge should add after planning/discovery and architecture/design.
-
-It does **not** claim that this workflow is implemented or officially shipped today.
+It now describes both the first shipped build/implementation wedge and the next follow-on expansion targets after planning/discovery and architecture/design.
 
 ## Why This Exists
 
@@ -65,14 +63,14 @@ Available now:
 - lifecycle artifact envelopes and family schemas
 - lifecycle artifact sanitization and audit linkage
 - runtime/policy contracts for capability envelopes and side-effect classes
-- one official `pr-review` workflow and release/readiness tooling
+- official local workflows for `pr-review`, `planning-discovery`, `architecture-design-review`, and `implementation-proposal`
+- implementation request validation, deterministic inventory, and `implementation-proposal` artifact emission
 
 Not yet available:
 
-- an official build/implementation workflow asset
-- an implementation proposal artifact emitted by the runtime
-- approval-class wiring for proposal versus apply/build execution
-- deterministic build-target inventory as workflow output
+- apply-capable implementation execution on the default path
+- approval-gated build/test execution beyond proposal planning
+- downstream QA, security-review, and release-readiness workflow handoff from implementation artifacts
 
 ## Recommended MVP Wedge
 
@@ -281,4 +279,3 @@ This epic should be decomposed into at least:
 2. `implementation-planner` starter agent and `implementation-proposal` artifact emission
 3. deterministic affected-surface and allowlisted validation-command inventory
 4. approval-gated apply/build execution mediation that preserves read-only defaults
-
