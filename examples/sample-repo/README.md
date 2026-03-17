@@ -4,7 +4,7 @@ This example is a minimal standalone repository shape for trying the Phase 1 loc
 
 ## Intended Use
 
-Copy this directory outside the AgentForge monorepo, initialize it as its own git repository, and then run the built CLI against it.
+Copy this directory outside the AgentForge monorepo, initialize it as its own git repository, and then run the published CLI against it.
 
 Example:
 
@@ -14,9 +14,15 @@ cd /tmp/agentforge-sample
 git init
 git add .
 git commit -m "initial sample"
-node /path/to/AgentForge/.build/packages/cli/src/bin.js init
-node /path/to/AgentForge/.build/packages/cli/src/bin.js scan --json
-node /path/to/AgentForge/.build/packages/cli/src/bin.js run pr-review --json
+npx @h9-foundry/agentforge-cli init
+npx @h9-foundry/agentforge-cli scan --json
+npx @h9-foundry/agentforge-cli run pr-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
-The sample code is intentionally small so the audit output is easy to inspect.
+Inspect the generated artifacts under `.agentops/runs/<run-id>/`:
+
+- `bundle.json` for the structured audit bundle
+- `summary.md` for the human-readable run summary
+
+The sample code is intentionally small so the first-run output is easy to inspect.
