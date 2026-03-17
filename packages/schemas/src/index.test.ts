@@ -4,6 +4,7 @@ import {
   agentManifestSchema,
   auditBundleSchema,
   getJsonSchemas,
+  lifecycleArtifactEnvelopeSchema,
   policyDocumentSchema,
   schemaFixtures,
   workflowDefinitionSchema
@@ -30,6 +31,7 @@ describe("schema fixtures", () => {
 
     expect(jsonSchemas.agentManifest).toBeDefined();
     expect(jsonSchemas.workflowDefinition).toBeDefined();
+    expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
   });
 
   it("validates audit bundle metadata", () => {
@@ -84,5 +86,27 @@ describe("schema fixtures", () => {
         ]
       })
     ).not.toThrow();
+  });
+
+  it("validates the shared lifecycle artifact envelope fixture", () => {
+    expect(() =>
+      lifecycleArtifactEnvelopeSchema.parse(schemaFixtures.lifecycleArtifactEnvelope)
+    ).not.toThrow();
+  });
+
+  it("rejects invalid lifecycle artifact envelopes", () => {
+    expect(() =>
+      lifecycleArtifactEnvelopeSchema.parse({
+        ...schemaFixtures.lifecycleArtifactEnvelope,
+        artifactKind: "incident-report"
+      })
+    ).toThrow();
+
+    expect(() =>
+      lifecycleArtifactEnvelopeSchema.parse({
+        ...schemaFixtures.lifecycleArtifactEnvelope,
+        summary: ""
+      })
+    ).toThrow();
   });
 });

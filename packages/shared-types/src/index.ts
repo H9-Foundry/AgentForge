@@ -9,6 +9,11 @@ import {
   approvalCheckpointSchema,
   auditBundleSchema,
   auditComponentSchema,
+  lifecycleArtifactAuditLinkSchema,
+  lifecycleArtifactEnvelopeSchema,
+  lifecycleArtifactRepoReferenceSchema,
+  lifecycleArtifactSourceReferenceSchema,
+  lifecycleArtifactWorkflowReferenceSchema,
   auditProvenanceSchema,
   auditRedactionSchema,
   auditEntrySchema,
@@ -36,6 +41,11 @@ export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
+export type LifecycleArtifactWorkflowReference = Infer<typeof lifecycleArtifactWorkflowReferenceSchema>;
+export type LifecycleArtifactSourceReference = Infer<typeof lifecycleArtifactSourceReferenceSchema>;
+export type LifecycleArtifactRepoReference = Infer<typeof lifecycleArtifactRepoReferenceSchema>;
+export type LifecycleArtifactAuditLink = Infer<typeof lifecycleArtifactAuditLinkSchema>;
+export type LifecycleArtifactEnvelope = Infer<typeof lifecycleArtifactEnvelopeSchema>;
 export type AgentOutput = Infer<typeof agentOutputSchema>;
 export type AgentManifest = Infer<typeof agentManifestSchema>;
 export type AgentPluginRegistration = Infer<typeof agentPluginRegistrationSchema>;
