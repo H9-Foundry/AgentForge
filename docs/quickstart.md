@@ -2,7 +2,39 @@
 
 This quickstart walks through the current official AgentForge wedge: secure local repository review with auditable outputs.
 
-## Install And Build
+## Fastest Evaluator Path
+
+Use the published CLI if you want to try the current wedge without cloning the monorepo.
+
+```bash
+mkdir agentforge-demo
+cd agentforge-demo
+git init
+npx @h9-foundry/agentforge-cli init
+npx @h9-foundry/agentforge-cli scan --json
+npx @h9-foundry/agentforge-cli run pr-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
+```
+
+That flow creates `.agentops/` locally and writes run artifacts under `.agentops/runs/<run-id>/`.
+
+## What To Inspect After The First Run
+
+- `.agentops/runs/<run-id>/bundle.json`
+  - structured audit bundle with workflow metadata, findings, proposed actions, redaction state, and audit entries
+- `.agentops/runs/<run-id>/summary.md`
+  - human-readable summary of workflow status and the audit trail
+
+For a small clean repository, a successful run should report:
+
+- workflow `pr-review`
+- `status: success`
+- zero findings, blocked actions, and blocked plugins
+- completed audit steps for `context-collector`, `security-audit`, `code-review`, `test-generation`, and `final-report`
+
+## Contributor And Source-Build Path
+
+If you want to work on AgentForge itself, build the monorepo locally:
 
 ```bash
 pnpm install

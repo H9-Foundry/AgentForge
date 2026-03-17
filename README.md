@@ -28,6 +28,34 @@ That path creates `.agentops/` locally and writes run artifacts under `.agentops
 
 If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
 
+## What Success Looks Like
+
+After a clean `pr-review` run, the CLI returns a compact JSON summary like this:
+
+```json
+{
+  "runId": "1773758683225-4271ed",
+  "status": "success",
+  "findings": 0,
+  "blockedActions": 0,
+  "blockedPlugins": 0,
+  "jsonPath": ".agentops/runs/1773758683225-4271ed/bundle.json",
+  "markdownPath": ".agentops/runs/1773758683225-4271ed/summary.md"
+}
+```
+
+Inspect these two artifacts next:
+
+- `bundle.json`: structured audit bundle for tools, automation, or deeper review
+- `summary.md`: human-readable run summary with workflow status and audit trail
+
+For a small clean repository, the markdown summary will usually show:
+
+- workflow `pr-review`
+- `status: success`
+- zero findings, blocked actions, and blocked plugins
+- an audit trail for `context-collector`, `security-audit`, `code-review`, `test-generation`, and `final-report`
+
 ## Project Definition
 
 AgentForge provides the runtime, policy, context, audit, and packaging foundation for software engineering workflows that need to reason over a repository without abandoning deterministic controls. The current product wedge is a local, repo-first `pr-review` workflow that demonstrates the model end to end.
@@ -151,6 +179,11 @@ npx @h9-foundry/agentforge-cli scan --json
 npx @h9-foundry/agentforge-cli run pr-review --json
 npx @h9-foundry/agentforge-cli explain last-run --json
 ```
+
+The last command should point you to:
+
+- `.agentops/runs/<run-id>/bundle.json`
+- `.agentops/runs/<run-id>/summary.md`
 
 ### Contributor And Source-Build Path
 
