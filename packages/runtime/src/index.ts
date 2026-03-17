@@ -33,6 +33,7 @@ export interface PolicyEngineLike {
     reason?: string;
   };
   redactSecrets(value: string): string;
+  sanitizeLifecycleArtifact(artifact: LifecycleArtifact): LifecycleArtifact;
 }
 
 export interface WorkflowRunDependencies {
@@ -292,7 +293,7 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
       bundlePath: deps.artifactJsonPath,
       findingIds: output.findings.map((finding) => finding.id),
       proposedActionIds: output.proposedActions.map((action) => action.id)
-    });
+    }).map((artifact) => deps.policyEngine.sanitizeLifecycleArtifact(artifact));
 
     state.agentResults[node.id] = {
       ...output,

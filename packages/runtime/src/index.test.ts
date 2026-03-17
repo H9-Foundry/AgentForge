@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { agentOutputSchema, lifecycleArtifactSchema, schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
-import type { Finding, LifecycleArtifact, ProposedAction, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import type { Finding, ProposedAction, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 
 import { runWorkflow } from "./index.js";
 
@@ -116,7 +116,8 @@ describe("runtime", () => {
         canReadPath: () => ({ allowed: true, effect: "allow", requiresApproval: false }),
         canWritePath: () => ({ allowed: false, effect: "approval_required", requiresApproval: true, reason: "Write requires approval." }),
         evaluateToolRequest: () => ({ allowed: false, effect: "deny", requiresApproval: false }),
-        redactSecrets: (value) => value
+        redactSecrets: (value) => value,
+        sanitizeLifecycleArtifact: (artifact) => artifact
       },
       artifactJsonPath: ".agentops/runs/run-1/bundle.json",
       artifactMarkdownPath: ".agentops/runs/run-1/summary.md"
@@ -197,7 +198,8 @@ describe("runtime", () => {
           requiresApproval: true,
           reason: "Tool requires approval: filesystem.write-file"
         }),
-        redactSecrets: (value) => value
+        redactSecrets: (value) => value,
+        sanitizeLifecycleArtifact: (artifact) => artifact
       },
       artifactJsonPath: ".agentops/runs/run-1/bundle.json",
       artifactMarkdownPath: ".agentops/runs/run-1/summary.md"
@@ -227,15 +229,28 @@ describe("runtime", () => {
           targetPaths: [],
           approvalRequired: true
         };
-        const lifecycleArtifact: LifecycleArtifact = lifecycleArtifactSchema.parse(
+        const lifecycleArtifact = lifecycleArtifactSchema.parse(
           JSON.parse(JSON.stringify(schemaFixtures.planningArtifact))
         );
+        expect(lifecycleArtifact.artifactKind).toBe("planning-brief");
+        if (lifecycleArtifact.artifactKind !== "planning-brief") {
+          throw new Error("Expected planning artifact fixture");
+        }
 
         return {
-          summary: "Produced a planning artifact",
+          summary: "Produced a planning artifact token=ghp_1234567890ABCDE",
           findings: [finding],
           proposedActions: [proposedAction],
-          lifecycleArtifacts: [lifecycleArtifact],
+          lifecycleArtifacts: [
+            {
+              ...lifecycleArtifact,
+              summary: "Artifact password=hunter2",
+              payload: {
+                ...lifecycleArtifact.payload,
+                assumptions: ["Bearer sk-abcdef123456"]
+              }
+            }
+          ],
           requestedTools: [],
           blockedActionFlags: [],
           metadata: {}
@@ -261,7 +276,24 @@ describe("runtime", () => {
         canReadPath: () => ({ allowed: true, effect: "allow", requiresApproval: false }),
         canWritePath: () => ({ allowed: false, effect: "approval_required", requiresApproval: true, reason: "Write requires approval." }),
         evaluateToolRequest: () => ({ allowed: false, effect: "deny", requiresApproval: false }),
-        redactSecrets: (value) => value
+        redactSecrets: (value) =>
+          value
+            .replaceAll("ghp_1234567890ABCDE", "[REDACTED_GITHUB_TOKEN]")
+            .replaceAll("hunter2", "[REDACTED_PASSWORD]")
+            .replaceAll("sk-abcdef123456", "[REDACTED_API_KEY]"),
+        sanitizeLifecycleArtifact: (artifact) =>
+          artifact.artifactKind === "planning-brief"
+            ? lifecycleArtifactSchema.parse({
+                ...artifact,
+                summary: artifact.summary.replaceAll("password=hunter2", "password=[REDACTED_PASSWORD]"),
+                payload: {
+                  ...artifact.payload,
+                  assumptions: artifact.payload.assumptions.map((value: string) =>
+                    value.replaceAll("Bearer sk-abcdef123456", "Bearer [REDACTED_API_KEY]")
+                  )
+                }
+              })
+            : artifact
       },
       artifactJsonPath: ".agentops/runs/run-1/bundle.json",
       artifactMarkdownPath: ".agentops/runs/run-1/summary.md"
@@ -273,6 +305,13 @@ describe("runtime", () => {
     expect(result.state.lifecycleArtifacts[0]?.auditLink.entryIds).toContain("run-1-plan");
     expect(result.state.lifecycleArtifacts[0]?.auditLink.findingIds).toContain("finding-1");
     expect(result.state.lifecycleArtifacts[0]?.auditLink.proposedActionIds).toContain("action-1");
-    expect(result.bundle.entries[0]?.summary).toBe("Produced a planning artifact");
+    expect(result.state.lifecycleArtifacts[0]?.summary).toContain("[REDACTED_PASSWORD]");
+    const emittedArtifact = result.state.lifecycleArtifacts[0];
+    expect(emittedArtifact?.artifactKind).toBe("planning-brief");
+    if (!emittedArtifact || emittedArtifact.artifactKind !== "planning-brief") {
+      throw new Error("Expected emitted planning artifact");
+    }
+    expect(emittedArtifact.payload.assumptions[0]).toContain("[REDACTED_API_KEY]");
+    expect(result.bundle.entries[0]?.summary).toContain("[REDACTED_GITHUB_TOKEN]");
   });
 });
