@@ -122,6 +122,14 @@ Use [#97](https://github.com/H9-Foundry/AgentForge/issues/97) as the parallel Ph
 - relies on Phase 1 schema, runtime, and policy expansion
 - requires clearer support boundaries for official vs planned workflows
 
+### Current Workflow Design Work
+
+- [docs/PLANNING_DISCOVERY_WORKFLOW.md](PLANNING_DISCOVERY_WORKFLOW.md)
+  - workflow identity and evaluator path
+  - request contract and workflow stages
+  - deterministic vs agentic boundaries
+  - planning artifact and follow-on implementation slices
+
 ## Phase 3: Ecosystem And Plugins
 
 ### Target Outcomes
