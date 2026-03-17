@@ -18,7 +18,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `pr-review` | Official | The current official workflow wedge. |
 | `planning-discovery` | Official | CLI-first planning and intake workflow that emits a `planning-brief` artifact. |
 | `architecture-design-review` | Official | CLI-first design workflow that consumes a planning brief and emits a `design-record` artifact. |
-| build / implementation | Planned | Roadmap item only. |
+| `implementation-proposal` | Official | CLI-first implementation workflow that consumes a design record, emits an `implementation-proposal` artifact, and keeps the default path read-only and proposal-only. |
 | test / QA | Planned | The current `pr-review` flow touches QA, but there is no dedicated official QA workflow yet. |
 | security / DevSecOps | Planned | Security controls exist, but not a broader official security workflow family. |
 | release / CI-CD | Planned | Release automation exists, but not as a broader official SDLC workflow family. |
@@ -32,10 +32,10 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `context-collector` | Official | Current starter agent. |
 | `planning-analyst` | Official | Starter planning agent for `planning-discovery`. |
 | `design-analyst` | Official | Starter design agent for `architecture-design-review`. |
+| `implementation-planner` | Official | Starter implementation agent for `implementation-proposal`. |
 | `security-audit` | Official | Current starter agent. |
 | `code-review` | Official | Current starter agent. |
 | `test-generation` | Official | Current starter agent. |
-| build/implementation agents | Planned | Not implemented yet. |
 | release/operations/maintenance agents | Planned | Not implemented yet. |
 
 ## Adapter And Integration Support
@@ -81,6 +81,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | Self-hosted use | Maturity | Notes |
 | --- | --- | --- |
 | planning/design on the AgentForge repo | Official | Covered by `planning-discovery` and `architecture-design-review` with lifecycle artifact output. |
+| implementation planning on the AgentForge repo | Official | Covered by `implementation-proposal` with deterministic inventory and proposal-only output. |
 | PR review and QA on the AgentForge repo | Official | Covered by the current `pr-review` wedge and audit outputs. |
 | release/readiness verification on the AgentForge repo | Official | Covered by `release guide`, `release check`, and `release verify`. |
 | autonomous implementation on the AgentForge repo | Planned | Not an official supported mode yet. |
