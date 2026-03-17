@@ -66,12 +66,16 @@ Current parallel safe lane:
 - [#100](https://github.com/H9-Foundry/AgentForge/issues/100) quickstart and sample repo external-evaluation flow
 - [#101](https://github.com/H9-Foundry/AgentForge/issues/101) contributor onboarding split
 - [#102](https://github.com/H9-Foundry/AgentForge/issues/102) CLI help and first-run UX review
+- [#116](https://github.com/H9-Foundry/AgentForge/issues/116) sample repo evaluator path alignment
+- [#114](https://github.com/H9-Foundry/AgentForge/issues/114) top-level CLI help and command descriptions
+- [#115](https://github.com/H9-Foundry/AgentForge/issues/115) plain-text first-run guidance after `run pr-review`
 
 Rules:
 
 - this lane can run in parallel with the active foundation chain when it does not depend on runtime or policy changes
 - it must not reorder `#90` through `#94`
 - it should optimize first for evaluators trying the current wedge and early contributors making small changes
+- `#114` is the current active usability slice, with `#115` ready behind it
 
 ### Mapped Lane
 
@@ -161,6 +165,7 @@ Add:
 
 - `agentforge release check --json`
 - `agentforge release verify --json`
+- track local validation ambiguity separately when the suite output is passing but the process does not return a final exit, as in [#120](https://github.com/H9-Foundry/AgentForge/issues/120)
 
 ## Dogfooding Rules
 
