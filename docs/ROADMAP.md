@@ -91,12 +91,9 @@ Use [#83](https://github.com/H9-Foundry/AgentForge/issues/83) as the live execut
 - dependency ordering across the next slices
 - dogfooding and validation gates for each slice
 
-Use [#97](https://github.com/H9-Foundry/AgentForge/issues/97) as the parallel Phase 1 newcomer-usability track for:
+The first Phase 1 newcomer-usability lane was completed under [#97](https://github.com/H9-Foundry/AgentForge/issues/97).
 
-- CLI-first first-run evaluation
-- concrete output examples and artifact walkthroughs
-- quickstart and sample-repo usability
-- newcomer versus maintainer contribution paths
+Open a new bounded issue for any future newcomer-facing follow-up rather than reusing that closed umbrella epic.
 
 ## Phase 2: General SDLC Expansion
 
@@ -129,6 +126,11 @@ Use [#97](https://github.com/H9-Foundry/AgentForge/issues/97) as the parallel Ph
   - request contract and workflow stages
   - deterministic vs agentic boundaries
   - planning artifact and follow-on implementation slices
+- [docs/ARCHITECTURE_DESIGN_WORKFLOW.md](ARCHITECTURE_DESIGN_WORKFLOW.md)
+  - downstream design request and planning-brief dependency
+  - design record artifact and workflow stages
+  - deterministic interface discovery versus design reasoning
+  - follow-on implementation slices
 
 ## Phase 3: Ecosystem And Plugins
 
