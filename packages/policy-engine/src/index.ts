@@ -4,10 +4,11 @@ import { isAbsolute, relative, resolve } from "node:path";
 import yaml from "js-yaml";
 import picomatch from "picomatch";
 
-import { policyDocumentSchema } from "@h9-foundry/agentforge-schemas";
+import { lifecycleArtifactSchema, policyDocumentSchema } from "@h9-foundry/agentforge-schemas";
 import type {
   EffectivePolicySnapshot,
   ExecutionEnvironment,
+  LifecycleArtifact,
   PolicyDocument,
   TrustMetadata,
   ToolRequest
@@ -165,6 +166,24 @@ function matchesAny(pathValue: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => picomatch(pattern)(pathValue));
 }
 
+function sanitizeUnknown(value: unknown, redactSecrets: (value: string) => string): unknown {
+  if (typeof value === "string") {
+    return redactSecrets(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeUnknown(entry, redactSecrets));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, sanitizeUnknown(entry, redactSecrets)])
+    );
+  }
+
+  return value;
+}
+
 export function loadPolicyDocument(policyPath: string): PolicyDocument {
   const fileContents = readFileSync(policyPath, "utf8");
   const parsed = yaml.load(fileContents);
@@ -264,6 +283,10 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
       .replaceAll(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]");
   }
 
+  function sanitizeLifecycleArtifact(artifact: LifecycleArtifact): LifecycleArtifact {
+    return lifecycleArtifactSchema.parse(sanitizeUnknown(artifact, redactSecrets));
+  }
+
   return {
     snapshot: policy,
     canReadPath(pathValue: string): PolicyDecision {
@@ -277,6 +300,7 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
     filterBlockedPaths(paths: readonly string[]): string[] {
       return paths.filter((pathValue) => evaluatePath(pathValue, "read").allowed);
     },
-    redactSecrets
+    redactSecrets,
+    sanitizeLifecycleArtifact
   };
 }
