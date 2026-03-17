@@ -4,6 +4,30 @@ AgentForge is an open-source, secure-by-default SDLC workflow platform core for 
 
 It is workflow-first, not chat-first: workflows define the job, policy defines what is allowed, the runtime decides what executes, tools perform the work, and humans approve side effects when required.
 
+## What You Can Do Today
+
+- try the current official workflow wedge with the published CLI, without cloning this monorepo
+- initialize a repository, scan it, run `pr-review`, and inspect the generated audit artifacts
+- evaluate the secure-by-default runtime model before broader SDLC workflow support lands
+
+## Try It In 2 Minutes
+
+The fastest evaluator path is the published CLI, not a source build.
+
+```bash
+mkdir agentforge-demo
+cd agentforge-demo
+git init
+npx @h9-foundry/agentforge-cli init
+npx @h9-foundry/agentforge-cli scan --json
+npx @h9-foundry/agentforge-cli run pr-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
+```
+
+That path creates `.agentops/` locally and writes run artifacts under `.agentops/runs/<run-id>/`.
+
+If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
+
 ## Project Definition
 
 AgentForge provides the runtime, policy, context, audit, and packaging foundation for software engineering workflows that need to reason over a repository without abandoning deterministic controls. The current product wedge is a local, repo-first `pr-review` workflow that demonstrates the model end to end.
@@ -117,7 +141,20 @@ Internal packages remain private until their APIs stabilize and their support ex
 
 ## Quickstart
 
-Install and build the workspace:
+### Fastest Evaluator Path
+
+Use the published CLI if you want to try the current wedge quickly:
+
+```bash
+npx @h9-foundry/agentforge-cli init
+npx @h9-foundry/agentforge-cli scan --json
+npx @h9-foundry/agentforge-cli run pr-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
+```
+
+### Contributor And Source-Build Path
+
+Install and build the monorepo if you want to work on AgentForge itself:
 
 ```bash
 pnpm install
