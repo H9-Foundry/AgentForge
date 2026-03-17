@@ -557,6 +557,156 @@ export function getJsonSchemas(): Record<string, object> {
   );
 }
 
+const lifecycleArtifactFixtureBase = {
+  schemaVersion: "1.0.0",
+  workflow: {
+    name: "planning-discovery",
+    displayName: "Planning And Discovery"
+  },
+  source: {
+    sourceType: "workflow-run",
+    runId: "run-123",
+    inputRefs: ["docs/ROADMAP.md"],
+    issueRefs: ["#78"]
+  },
+  status: "complete",
+  generatedAt: "2026-03-17T12:00:00.000Z",
+  updatedAt: "2026-03-17T12:00:00.000Z",
+  repo: {
+    root: "/repo",
+    name: "AgentForge",
+    branch: "main",
+    commitSha: "abc123"
+  },
+  provenance: {
+    generatedBy: "agentforge-runtime",
+    schemaVersion: "1.0.0",
+    executionEnvironment: "local",
+    repoRoot: "/repo"
+  },
+  redaction: {
+    applied: true,
+    strategyVersion: "1.0.0",
+    categories: ["secrets"]
+  },
+  auditLink: {
+    bundlePath: ".agentops/runs/run-123/bundle.json",
+    entryIds: ["plan-collector"],
+    findingIds: [],
+    proposedActionIds: []
+  }
+} as const;
+
+const planningArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "planning-brief",
+  lifecycleDomain: "plan",
+  summary: "Initial planning brief generated for queue item #78.",
+  payload: {
+    problemStatement: "Define the next planning workflow slice.",
+    objectives: ["Create a safe planning wedge"],
+    constraints: ["Keep the current wedge honest"],
+    assumptions: ["CLI remains the primary entry point"],
+    inScope: ["Planning artifact design"],
+    outOfScope: ["Runtime implementation"],
+    recommendedNextSteps: ["Draft workflow spec", "Open child implementation issues"],
+    linkedIssues: ["#78"]
+  }
+} as const;
+
+const designArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "design-record",
+  lifecycleDomain: "design",
+  summary: "Design record for workflow-scoped lifecycle artifacts.",
+  payload: {
+    decisionSummary: "Use workflow-scoped design artifacts.",
+    context: "The platform needs structured design outputs.",
+    optionsConsidered: [
+      { option: "artifact-first", summary: "Add explicit design artifacts." },
+      { option: "audit-only", summary: "Reuse only the audit bundle." }
+    ],
+    chosenApproach: "artifact-first",
+    tradeOffs: ["More schema surface to maintain"],
+    risks: ["Design records could drift from implementation"],
+    followUpWork: ["Implement runtime emission later"]
+  }
+} as const;
+
+const reviewArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "review-report",
+  lifecycleDomain: "review",
+  summary: "Review report for the initial lifecycle artifact contracts.",
+  payload: {
+    findings: [
+      {
+        id: "finding-1",
+        title: "Suspicious write attempt",
+        summary: "The workflow proposed a write outside approved paths.",
+        severity: "high",
+        rationale: "Blocked paths and policy do not permit this target.",
+        confidence: 0.91,
+        location: "src/index.ts",
+        tags: ["policy", "write"]
+      }
+    ],
+    recommendations: ["Address the blocked-path concern"],
+    riskLevel: "medium",
+    coverageNotes: ["Static review only"]
+  }
+} as const;
+
+const releaseArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "release-report",
+  lifecycleDomain: "release",
+  summary: "Release readiness report for the lifecycle artifact schema work.",
+  payload: {
+    releaseScope: "Patch release for schema contracts",
+    versionTargets: [{ name: "@h9-foundry/agentforge-schemas", version: "0.4.1" }],
+    readinessStatus: "ready",
+    verificationChecks: [{ name: "release-verify", status: "passed" }],
+    publishingPlan: ["Merge version PR", "Let GitHub Actions publish"],
+    trustStatus: "trusted-publishing-configured"
+  }
+} as const;
+
+const maintenanceArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "maintenance-report",
+  lifecycleDomain: "maintain",
+  summary: "Maintenance report for documentation and dependency hygiene.",
+  payload: {
+    maintenanceScope: "Docs and dependency hygiene",
+    currentFindings: ["README needs clearer first-run guidance"],
+    recommendedActions: ["Rewrite quickstart", "Refresh sample repo docs"],
+    priorityAssessment: "high",
+    dependencyUpdates: ["vitest@4.1.0"],
+    docsUpdates: ["docs/quickstart.md"],
+    stalenessSignals: ["example repo path is source-centric"],
+    followUpIssues: ["#98", "#100"]
+  }
+} as const;
+
+const invalidLifecycleArtifactEnvelopeFixture = {
+  ...planningArtifactFixture,
+  artifactKind: "incident-report",
+  summary: ""
+} as const;
+
+const invalidPlanningArtifactFixture = {
+  ...planningArtifactFixture,
+  payload: {
+    decisionSummary: "This is not a planning payload."
+  }
+} as const;
+
+const invalidReviewArtifactFixture = {
+  ...reviewArtifactFixture,
+  lifecycleDomain: "release"
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -633,50 +783,13 @@ export const schemaFixtures = {
       { id: "report", kind: "report", outputsTo: "reports.final" }
     ]
   },
-  lifecycleArtifactEnvelope: {
-    schemaVersion: "1.0.0",
-    artifactKind: "planning-brief",
-    lifecycleDomain: "plan",
-    workflow: {
-      name: "planning-discovery",
-      displayName: "Planning And Discovery"
-    },
-    source: {
-      sourceType: "workflow-run",
-      runId: "run-123",
-      inputRefs: ["docs/ROADMAP.md"],
-      issueRefs: ["#78"]
-    },
-    status: "complete",
-    generatedAt: "2026-03-17T12:00:00.000Z",
-    updatedAt: "2026-03-17T12:00:00.000Z",
-    repo: {
-      root: "/repo",
-      name: "AgentForge",
-      branch: "main",
-      commitSha: "abc123"
-    },
-    provenance: {
-      generatedBy: "agentforge-runtime",
-      schemaVersion: "1.0.0",
-      executionEnvironment: "local",
-      repoRoot: "/repo"
-    },
-    redaction: {
-      applied: true,
-      strategyVersion: "1.0.0",
-      categories: ["secrets"]
-    },
-    auditLink: {
-      bundlePath: ".agentops/runs/run-123/bundle.json",
-      entryIds: ["plan-collector"],
-      findingIds: [],
-      proposedActionIds: []
-    },
-    summary: "Initial planning brief generated for queue item #78.",
-    payload: {
-      problemStatement: "Define the next planning workflow slice.",
-      recommendedNextSteps: ["Draft workflow spec", "Open child implementation issues"]
-    }
-  }
+  lifecycleArtifactEnvelope: planningArtifactFixture,
+  planningArtifact: planningArtifactFixture,
+  designArtifact: designArtifactFixture,
+  reviewArtifact: reviewArtifactFixture,
+  releaseArtifact: releaseArtifactFixture,
+  maintenanceArtifact: maintenanceArtifactFixture,
+  invalidLifecycleArtifactEnvelope: invalidLifecycleArtifactEnvelopeFixture,
+  invalidPlanningArtifact: invalidPlanningArtifactFixture,
+  invalidReviewArtifact: invalidReviewArtifactFixture
 } as const;
