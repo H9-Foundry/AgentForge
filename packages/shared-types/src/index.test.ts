@@ -4,6 +4,7 @@ import type {
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
+  ImplementationArtifact,
   ImplementationRequest,
   MaintenanceArtifact,
   PlanningArtifact,
@@ -20,6 +21,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<PlanningArtifact["lifecycleDomain"]>().toEqualTypeOf<"plan">();
     expectTypeOf<DesignArtifact["artifactKind"]>().toEqualTypeOf<"design-record">();
     expectTypeOf<DesignArtifact["lifecycleDomain"]>().toEqualTypeOf<"design">();
+    expectTypeOf<ImplementationArtifact["artifactKind"]>().toEqualTypeOf<"implementation-proposal">();
+    expectTypeOf<ImplementationArtifact["lifecycleDomain"]>().toEqualTypeOf<"build">();
     expectTypeOf<ReviewArtifact["artifactKind"]>().toEqualTypeOf<"review-report">();
     expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
     expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();

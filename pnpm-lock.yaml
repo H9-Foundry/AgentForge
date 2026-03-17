@@ -114,6 +114,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared-types
 
+  agents/implementation-planner:
+    dependencies:
+      '@h9-foundry/agentforge-schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      '@h9-foundry/agentforge-sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@h9-foundry/agentforge-shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+
   agents/planning-analyst:
     dependencies:
       '@h9-foundry/agentforge-schemas':
