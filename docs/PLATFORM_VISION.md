@@ -76,6 +76,24 @@ AgentForge should expand from the `pr-review` wedge into adjacent SDLC workflows
 - operations and incident response handoff
 - maintenance, upgrades, and documentation hygiene
 
+## Self-Hosting Posture
+
+AgentForge should be used on the AgentForge repository itself, but only in a narrow-assist mode for now.
+
+Allowed near-term self-hosting roles:
+
+- planning and design-doc generation
+- PR review, QA checks, and structured findings
+- release and readiness verification
+
+Not yet supported as official self-hosting behavior:
+
+- broad autonomous implementation
+- unconstrained write-heavy workflows
+- hidden side effects behind planning or design prompts
+
+See [docs/SELF_HOSTING.md](SELF_HOSTING.md).
+
 ## Longer-Term Platform Direction
 
 Longer-term platform work is expected to include:

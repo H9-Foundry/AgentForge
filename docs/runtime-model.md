@@ -81,4 +81,4 @@ The current model is enough for the initial `pr-review` wedge, but broader SDLC 
 - context-slice contracts and budget handling
 - clearer runtime versus policy responsibilities
 
-See [docs/RUNTIME_INTERACTION_HARDENING.md](RUNTIME_INTERACTION_HARDENING.md) for the Phase 1 design target that will drive the next runtime, policy, and schema hardening work.
+See [docs/RUNTIME_INTERACTION_HARDENING.md](RUNTIME_INTERACTION_HARDENING.md) for the Phase 1 design target and [docs/CONTEXT_SLICE_CONTRACTS.md](CONTEXT_SLICE_CONTRACTS.md) for the dedicated slice-category, budget, truncation, and audit contract.
