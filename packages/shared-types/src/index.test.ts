@@ -4,6 +4,7 @@ import type {
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
+  ImplementationRequest,
   MaintenanceArtifact,
   PlanningArtifact,
   PlanningRequest,
@@ -36,5 +37,7 @@ describe("shared lifecycle artifact types", () => {
   it("exports workflow request helper types", () => {
     expectTypeOf<PlanningRequest["problemStatement"]>().toEqualTypeOf<string>();
     expectTypeOf<DesignRequest["planningBriefRef"]>().toEqualTypeOf<string>();
+    expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
+    expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
   });
 });

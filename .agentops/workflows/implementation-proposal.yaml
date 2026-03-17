@@ -1,0 +1,17 @@
+version: 1
+name: implementation-proposal
+description: Validate a bounded implementation request and prepare it for later proposal stages.
+trigger: manual
+catalog:
+  domain: build
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: implementation-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final

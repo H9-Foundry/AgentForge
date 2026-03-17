@@ -10,7 +10,9 @@ import { runWorkflow } from "@h9-foundry/agentforge-runtime";
 import {
   agentforgeConfigSchema,
   auditBundleSchema,
+  designArtifactSchema,
   designRequestSchema,
+  implementationRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
   workflowDefinitionSchema
@@ -19,7 +21,9 @@ import type {
   AgentForgeConfig,
   AgentPluginRegistration,
   BlockedPlugin,
+  DesignArtifact,
   DesignRequest,
+  ImplementationRequest,
   PlanningArtifact,
   PlanningRequest,
   WorkflowDefinition
@@ -187,6 +191,25 @@ nodes:
     outputs_to: reports.final
 `;
 
+const implementationWorkflowTemplate = `version: 1
+name: implementation-proposal
+description: Validate a bounded implementation request and prepare it for later proposal stages.
+trigger: manual
+catalog:
+  domain: build
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: implementation-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -240,7 +263,7 @@ function validateWorkflowLifecyclePosture(
   policyEngine: ReturnType<typeof createPolicyEngine>
 ): void {
   const domain = workflow.catalog?.domain;
-  if (domain !== "plan" && domain !== "design") {
+  if (domain !== "plan" && domain !== "design" && domain !== "build") {
     return;
   }
 
@@ -269,6 +292,24 @@ function loadPlanningBundleArtifact(root: string, planningBriefRef: string): Pla
   }
 
   return planningArtifactSchema.parse(planningArtifact);
+}
+
+function loadDesignBundleArtifact(root: string, designRecordRef: string): DesignArtifact {
+  const bundlePath = join(root, designRecordRef);
+  if (!existsSync(bundlePath)) {
+    throw new Error(`Referenced design bundle not found: ${designRecordRef}`);
+  }
+
+  const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
+  const designArtifact = bundle.lifecycleArtifacts.find(
+    (artifact): artifact is DesignArtifact => artifact.artifactKind === "design-record"
+  );
+
+  if (!designArtifact) {
+    throw new Error(`Referenced bundle does not contain a design-record artifact: ${designRecordRef}`);
+  }
+
+  return designArtifactSchema.parse(designArtifact);
 }
 
 function prepareWorkflowInputs(
@@ -302,6 +343,20 @@ function prepareWorkflowInputs(
     return {
       designRequest: designRequest satisfies DesignRequest,
       planningBrief,
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "implementation-proposal") {
+    const requestPath = ".agentops/requests/implementation.yaml";
+    ensureReadablePath(policyEngine, requestPath, "implementation request");
+    const implementationRequest = readYamlFile(join(root, requestPath), implementationRequestSchema, "implementation request");
+    ensureReadablePath(policyEngine, implementationRequest.designRecordRef, "design record reference");
+    const designRecord = loadDesignBundleArtifact(root, implementationRequest.designRecordRef);
+
+    return {
+      implementationRequest: implementationRequest satisfies ImplementationRequest,
+      designRecord,
       requestFile: requestPath
     };
   }
@@ -465,6 +520,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "architecture-design-review.yaml"),
       contents: designWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "implementation-proposal.yaml"),
+      contents: implementationWorkflowTemplate
     }
   ];
 

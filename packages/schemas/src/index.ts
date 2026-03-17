@@ -304,6 +304,15 @@ export const designRequestSchema = z.object({
   questions: z.array(z.string().min(1)).default([])
 });
 
+export const implementationRequestSchema = z.object({
+  designRecordRef: z.string().min(1),
+  implementationGoal: z.string().min(1),
+  targetPaths: z.array(z.string().min(1)).default([]),
+  validationCommands: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([]),
+  approvalMode: z.enum(["proposal-only", "apply-capable"])
+});
+
 export const repoMetadataSchema = z.object({
   root: z.string().min(1),
   name: z.string().min(1),
@@ -604,6 +613,7 @@ export const schemaRegistry = {
   agentforgeConfig: agentforgeConfigSchema,
   planningRequest: planningRequestSchema,
   designRequest: designRequestSchema,
+  implementationRequest: implementationRequestSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -771,6 +781,15 @@ const invalidReviewArtifactFixture = {
   lifecycleDomain: "release"
 } as const;
 
+const implementationRequestFixture = {
+  designRecordRef: ".agentops/runs/run-456/bundle.json",
+  implementationGoal: "Prepare a bounded implementation proposal for the next workflow wedge.",
+  targetPaths: ["packages/cli", "packages/runtime"],
+  validationCommands: ["pnpm test", "pnpm typecheck"],
+  constraints: ["Keep the default path read-only"],
+  approvalMode: "proposal-only"
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -875,6 +894,7 @@ export const schemaFixtures = {
     alternatives: ["single-agent workflow", "deterministic intake plus reasoning"],
     questions: ["How should planning artifacts be referenced downstream?"]
   },
+  implementationRequest: implementationRequestFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,

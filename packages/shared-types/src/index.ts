@@ -25,6 +25,7 @@ import {
   designRequestSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
+  implementationRequestSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
   policyDocumentSchema,
@@ -70,6 +71,7 @@ export type DesignArtifactOption = Infer<typeof designArtifactOptionSchema>;
 export type DesignArtifactPayload = Infer<typeof designArtifactPayloadSchema>;
 export type DesignArtifact = Infer<typeof designArtifactSchema>;
 export type DesignRequest = Infer<typeof designRequestSchema>;
+export type ImplementationRequest = Infer<typeof implementationRequestSchema>;
 export type ReviewArtifactPayload = Infer<typeof reviewArtifactPayloadSchema>;
 export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;
 export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSchema>;
