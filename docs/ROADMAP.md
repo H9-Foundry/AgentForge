@@ -44,6 +44,7 @@ The current shipped baseline is:
 - runtime interaction model hardening
 - policy engine expansion
 - manifest and schema expansion
+- CLI-first onboarding and newcomer usability
 - support matrix and compatibility framing
 - contributor and community scaffolding
 
@@ -89,6 +90,13 @@ Use [#83](https://github.com/H9-Foundry/AgentForge/issues/83) as the live execut
 - active versus ready versus mapped versus deferred queue lanes
 - dependency ordering across the next slices
 - dogfooding and validation gates for each slice
+
+Use [#97](https://github.com/H9-Foundry/AgentForge/issues/97) as the parallel Phase 1 newcomer-usability track for:
+
+- CLI-first first-run evaluation
+- concrete output examples and artifact walkthroughs
+- quickstart and sample-repo usability
+- newcomer versus maintainer contribution paths
 
 ## Phase 2: General SDLC Expansion
 

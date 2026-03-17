@@ -26,7 +26,7 @@ See [docs/SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## Queue Lanes
 
-The backlog is managed in four lanes.
+The backlog is managed in four lanes plus one parallel safe lane for newcomer usability work.
 
 ### Active Lane
 
@@ -53,6 +53,25 @@ Current ready lane:
 
 5. [#78](https://github.com/H9-Foundry/AgentForge/issues/78) planning/discovery workflow MVP
 6. [#79](https://github.com/H9-Foundry/AgentForge/issues/79) architecture/design workflow MVP
+
+### Parallel Safe Lane
+
+Work that improves first-time evaluation and contributor usability without reordering the core foundation dependency chain.
+
+Current parallel safe lane:
+
+- [#97](https://github.com/H9-Foundry/AgentForge/issues/97) CLI-first onboarding and newcomer usability
+- [#98](https://github.com/H9-Foundry/AgentForge/issues/98) CLI-first README and quick trial path
+- [#99](https://github.com/H9-Foundry/AgentForge/issues/99) first-run output example and artifact walkthrough
+- [#100](https://github.com/H9-Foundry/AgentForge/issues/100) quickstart and sample repo external-evaluation flow
+- [#101](https://github.com/H9-Foundry/AgentForge/issues/101) contributor onboarding split
+- [#102](https://github.com/H9-Foundry/AgentForge/issues/102) CLI help and first-run UX review
+
+Rules:
+
+- this lane can run in parallel with the active foundation chain when it does not depend on runtime or policy changes
+- it must not reorder `#90` through `#94`
+- it should optimize first for evaluators trying the current wedge and early contributors making small changes
 
 ### Mapped Lane
 
@@ -131,6 +150,10 @@ Required:
 - `agentforge run pr-review`
 - `agentforge explain last-run`
 - docs/support updates only if capability actually becomes available
+- one explicit usability note in the PR or linked issue comment that answers:
+  - does this slice improve, preserve, or worsen first-time usability?
+  - do README, quickstart, or examples need an update?
+  - can a new evaluator still complete the documented CLI-first wedge without reading maintainer-only docs?
 
 ### Release / Public Package Slices
 
@@ -163,6 +186,7 @@ A slice is done when:
 - required validation commands passed
 - dogfooding evidence was captured where required
 - docs remain honest about current capability
+- newcomer usability impact was assessed for user-visible or public-contract changes
 - residual risks are called out explicitly
 
 The queue tracker stays open until the current dependency chain and active execution rules change materially.
