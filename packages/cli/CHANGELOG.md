@@ -1,5 +1,28 @@
 # @h9-foundry/agentforge-cli
 
+## 0.6.0
+
+### Minor Changes
+
+- 01934f6: Add deterministic implementation inventory metadata and allowlisted validation command normalization for the implementation-proposal workflow.
+- b32f49a: Add implementation-proposal artifact emission and the bounded implementation planner workflow node.
+- ed5d181: Add the implementation request schema and local workflow intake path for `implementation-proposal`.
+- 5ec8683: Add the bounded QA request contract and the initial official `qa-review` workflow asset with deterministic intake validation.
+
+### Patch Changes
+
+- Updated dependencies [01934f6]
+- Updated dependencies [b32f49a]
+- Updated dependencies [ed5d181]
+- Updated dependencies [5ec8683]
+  - @h9-foundry/agentforge-schemas@0.6.0
+  - @h9-foundry/agentforge-shared-types@0.6.0
+  - @h9-foundry/agentforge-context-engine@0.6.0
+  - @h9-foundry/agentforge-policy-engine@0.6.0
+  - @h9-foundry/agentforge-runtime@0.6.0
+  - @h9-foundry/agentforge-audit@0.6.0
+  - @h9-foundry/agentforge-sdk@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
