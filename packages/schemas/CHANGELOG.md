@@ -1,5 +1,14 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.4.1
+
+### Patch Changes
+
+- 6bd74e6: Add a shared lifecycle artifact envelope schema and inferred types for future SDLC artifact families.
+- 86edea7: Add the initial planning, design, review, release, and maintenance lifecycle artifact family schemas.
+- b78fb05: Add lifecycle artifact fixtures and focused schema coverage.
+- 65eb7e0: Add runtime lifecycle artifact emission and audit linkage support.
+
 ## 0.4.0
 
 ### Minor Changes

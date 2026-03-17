@@ -1,5 +1,18 @@
 # @h9-foundry/agentforge-policy-engine
 
+## 0.4.1
+
+### Patch Changes
+
+- 2772d1d: Add lifecycle artifact sanitization and redaction handling.
+- Updated dependencies [6bd74e6]
+- Updated dependencies [86edea7]
+- Updated dependencies [0c1af6b]
+- Updated dependencies [b78fb05]
+- Updated dependencies [65eb7e0]
+  - @h9-foundry/agentforge-schemas@0.4.1
+  - @h9-foundry/agentforge-shared-types@0.4.1
+
 ## 0.4.0
 
 ### Patch Changes

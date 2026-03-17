@@ -1,5 +1,23 @@
 # @h9-foundry/agentforge-cli
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [6bd74e6]
+- Updated dependencies [86edea7]
+- Updated dependencies [0c1af6b]
+- Updated dependencies [b78fb05]
+- Updated dependencies [2772d1d]
+- Updated dependencies [65eb7e0]
+  - @h9-foundry/agentforge-schemas@0.4.1
+  - @h9-foundry/agentforge-shared-types@0.4.1
+  - @h9-foundry/agentforge-policy-engine@0.4.1
+  - @h9-foundry/agentforge-runtime@0.4.1
+  - @h9-foundry/agentforge-context-engine@0.4.1
+  - @h9-foundry/agentforge-audit@0.4.1
+  - @h9-foundry/agentforge-sdk@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes

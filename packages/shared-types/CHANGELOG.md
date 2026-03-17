@@ -1,5 +1,18 @@
 # @h9-foundry/agentforge-shared-types
 
+## 0.4.1
+
+### Patch Changes
+
+- 6bd74e6: Add a shared lifecycle artifact envelope schema and inferred types for future SDLC artifact families.
+- 0c1af6b: Export the initial lifecycle artifact family types from shared-types.
+- 65eb7e0: Add runtime lifecycle artifact emission and audit linkage support.
+- Updated dependencies [6bd74e6]
+- Updated dependencies [86edea7]
+- Updated dependencies [b78fb05]
+- Updated dependencies [65eb7e0]
+  - @h9-foundry/agentforge-schemas@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes
