@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-context-engine",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Repository and execution context collection for AgentForge workflows.",
   "license": "MIT",
   "author": "H9 Foundry",
