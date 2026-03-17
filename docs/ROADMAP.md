@@ -52,6 +52,14 @@ The current shipped baseline is:
 - roadmap docs and issue taxonomy should land before broad backlog growth
 - runtime and policy hardening should precede broad new workflow claims
 
+### Current Foundation Design Work
+
+- [docs/RUNTIME_INTERACTION_HARDENING.md](RUNTIME_INTERACTION_HARDENING.md)
+  - capability envelopes
+  - side-effect classes
+  - context-slice contracts
+  - runtime/policy/audit handoff
+
 ## Phase 2: General SDLC Expansion
 
 ### Target Outcomes
