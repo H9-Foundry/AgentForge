@@ -1,0 +1,33 @@
+import { describe, expectTypeOf, it } from "vitest";
+
+import type {
+  DesignArtifact,
+  DesignArtifactOption,
+  MaintenanceArtifact,
+  PlanningArtifact,
+  ReleaseArtifact,
+  ReleaseVerificationCheck,
+  ReleaseVersionTarget,
+  ReviewArtifact
+} from "./index.js";
+
+describe("shared lifecycle artifact types", () => {
+  it("exports family-specific artifact literals", () => {
+    expectTypeOf<PlanningArtifact["artifactKind"]>().toEqualTypeOf<"planning-brief">();
+    expectTypeOf<PlanningArtifact["lifecycleDomain"]>().toEqualTypeOf<"plan">();
+    expectTypeOf<DesignArtifact["artifactKind"]>().toEqualTypeOf<"design-record">();
+    expectTypeOf<DesignArtifact["lifecycleDomain"]>().toEqualTypeOf<"design">();
+    expectTypeOf<ReviewArtifact["artifactKind"]>().toEqualTypeOf<"review-report">();
+    expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
+    expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();
+    expectTypeOf<ReleaseArtifact["lifecycleDomain"]>().toEqualTypeOf<"release">();
+    expectTypeOf<MaintenanceArtifact["artifactKind"]>().toEqualTypeOf<"maintenance-report">();
+    expectTypeOf<MaintenanceArtifact["lifecycleDomain"]>().toEqualTypeOf<"maintain">();
+  });
+
+  it("exports nested payload helper types", () => {
+    expectTypeOf<DesignArtifact["payload"]["optionsConsidered"]>().toEqualTypeOf<DesignArtifactOption[]>();
+    expectTypeOf<ReleaseArtifact["payload"]["verificationChecks"]>().toEqualTypeOf<ReleaseVerificationCheck[]>();
+    expectTypeOf<ReleaseArtifact["payload"]["versionTargets"]>().toEqualTypeOf<ReleaseVersionTarget[]>();
+  });
+});

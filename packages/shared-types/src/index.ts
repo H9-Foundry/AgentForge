@@ -18,10 +18,23 @@ import {
   auditRedactionSchema,
   auditEntrySchema,
   blockedPluginSchema,
+  designArtifactOptionSchema,
+  designArtifactPayloadSchema,
+  designArtifactSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
+  maintenanceArtifactPayloadSchema,
+  maintenanceArtifactSchema,
   policyDocumentSchema,
+  planningArtifactPayloadSchema,
+  planningArtifactSchema,
   proposedActionSchema,
+  releaseArtifactPayloadSchema,
+  releaseArtifactSchema,
+  releaseVerificationCheckSchema,
+  releaseVersionTargetSchema,
+  reviewArtifactPayloadSchema,
+  reviewArtifactSchema,
   trustMetadataSchema,
   trustSourceSchema,
   trustTierSchema,
@@ -46,6 +59,19 @@ export type LifecycleArtifactSourceReference = Infer<typeof lifecycleArtifactSou
 export type LifecycleArtifactRepoReference = Infer<typeof lifecycleArtifactRepoReferenceSchema>;
 export type LifecycleArtifactAuditLink = Infer<typeof lifecycleArtifactAuditLinkSchema>;
 export type LifecycleArtifactEnvelope = Infer<typeof lifecycleArtifactEnvelopeSchema>;
+export type PlanningArtifactPayload = Infer<typeof planningArtifactPayloadSchema>;
+export type PlanningArtifact = Infer<typeof planningArtifactSchema>;
+export type DesignArtifactOption = Infer<typeof designArtifactOptionSchema>;
+export type DesignArtifactPayload = Infer<typeof designArtifactPayloadSchema>;
+export type DesignArtifact = Infer<typeof designArtifactSchema>;
+export type ReviewArtifactPayload = Infer<typeof reviewArtifactPayloadSchema>;
+export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;
+export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSchema>;
+export type ReleaseVersionTarget = Infer<typeof releaseVersionTargetSchema>;
+export type ReleaseArtifactPayload = Infer<typeof releaseArtifactPayloadSchema>;
+export type ReleaseArtifact = Infer<typeof releaseArtifactSchema>;
+export type MaintenanceArtifactPayload = Infer<typeof maintenanceArtifactPayloadSchema>;
+export type MaintenanceArtifact = Infer<typeof maintenanceArtifactSchema>;
 export type AgentOutput = Infer<typeof agentOutputSchema>;
 export type AgentManifest = Infer<typeof agentManifestSchema>;
 export type AgentPluginRegistration = Infer<typeof agentPluginRegistrationSchema>;
