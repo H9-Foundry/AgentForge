@@ -71,3 +71,14 @@ The audit bundle includes:
 - `inspect`: no side effects, focus on observation and reporting
 - `suggest`: recommendations are allowed, writes still require approval
 - `apply`: reserved for more explicit change application flows and still subject to policy
+
+## Next Hardening Layer
+
+The current model is enough for the initial `pr-review` wedge, but broader SDLC workflows need a stricter interaction contract around:
+
+- capability envelopes per workflow node
+- explicit side-effect classes
+- context-slice contracts and budget handling
+- clearer runtime versus policy responsibilities
+
+See [docs/RUNTIME_INTERACTION_HARDENING.md](RUNTIME_INTERACTION_HARDENING.md) for the Phase 1 design target that will drive the next runtime, policy, and schema hardening work.
