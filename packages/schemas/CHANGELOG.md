@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.5.0
+
+### Minor Changes
+
+- b8a25bb: Ship official `planning-discovery` and `architecture-design-review` workflow wedges with validated request inputs, lifecycle artifact emission, and CLI-first evaluator docs.
+
 ## 0.4.2
 
 ## 0.4.1
