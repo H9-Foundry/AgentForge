@@ -70,6 +70,16 @@ The current shipped baseline is:
   - precedence and narrowing semantics
   - policy-to-audit expectations
 
+## Execution Flow
+
+The backlog execution model is documented in [docs/QUEUE_EXECUTION_FLOW.md](QUEUE_EXECUTION_FLOW.md).
+
+Use [#83](https://github.com/H9-Foundry/AgentForge/issues/83) as the live execution tracker for:
+
+- active versus ready versus mapped versus deferred queue lanes
+- dependency ordering across the next slices
+- dogfooding and validation gates for each slice
+
 ## Phase 2: General SDLC Expansion
 
 ### Target Outcomes

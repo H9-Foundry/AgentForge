@@ -8,6 +8,7 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 - read [docs/PLATFORM_VISION.md](docs/PLATFORM_VISION.md)
 - read [docs/ROADMAP.md](docs/ROADMAP.md)
 - read [docs/ISSUE_TAXONOMY.md](docs/ISSUE_TAXONOMY.md)
+- read [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md)
 - read [docs/github-issue-source-of-truth.md](docs/github-issue-source-of-truth.md)
 
 ## Planning And Tracking
@@ -25,10 +26,12 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 1. Install dependencies with `pnpm install`.
 2. Create or link the relevant GitHub issue before broad work.
 3. Keep changes scoped to the package, workflow, adapter, or doc surface you are modifying.
-4. Update tests and documentation when behavior or public contracts change.
-5. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build` before proposing changes.
-6. If you touch public packages or release automation, also run `pnpm build:packages`, `pnpm pack:public`, and `pnpm release:verify`.
-7. Maintainers should use signed commits for normal repo work. See [docs/maintainer-signing.md](docs/maintainer-signing.md).
+4. Follow the active queue order in [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md) and the live tracker [#83](https://github.com/H9-Foundry/AgentForge/issues/83).
+5. Produce a design-first slice when a feature is not yet decision-complete.
+6. Update tests and documentation when behavior or public contracts change.
+7. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build` before proposing changes.
+8. If you touch public packages or release automation, also run `pnpm build:packages`, `pnpm pack:public`, and `pnpm release:verify`.
+9. Maintainers should use signed commits for normal repo work. See [docs/maintainer-signing.md](docs/maintainer-signing.md).
 
 ## Repository Structure
 
@@ -53,6 +56,17 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 - keep labels consistent with [docs/ISSUE_TAXONOMY.md](docs/ISSUE_TAXONOMY.md)
 - update roadmap docs when the platform direction materially changes
 - avoid merging broad planning changes without updating both the docs and the GitHub issue state
+- keep only one active slice per dependency chain unless parallel execution is explicitly safe
+- move issues between `needs-design`, `ready`, `in-progress`, and `blocked` deliberately
+
+## Maintainer Loop
+
+1. pick the next issue from the active queue lane
+2. set the issue status and link the branch or PR
+3. produce the smallest useful design or implementation slice
+4. run the required validation commands
+5. dogfood through currently supported AgentForge surfaces when the slice type requires it
+6. merge the slice and update or close the issue
 
 ## Before Opening A Pull Request
 
@@ -61,6 +75,7 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 - prefer small reviewable slices over broad mixed changes
 - use the pull request template
 - if you are a maintainer, confirm your commits show as `Verified` on GitHub
+- record the validation commands and any dogfooding evidence in the PR body or linked issue comment
 
 ## Help
 

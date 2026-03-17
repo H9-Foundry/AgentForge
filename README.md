@@ -179,7 +179,7 @@ Current dogfooding posture:
 - use AgentForge on AgentForge for planning, design, review, QA, and release verification
 - do not treat it as a broad autonomous implementation engine yet
 
-See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) and [docs/CONTEXT_SLICE_CONTRACTS.md](docs/CONTEXT_SLICE_CONTRACTS.md).
+See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md), [docs/CONTEXT_SLICE_CONTRACTS.md](docs/CONTEXT_SLICE_CONTRACTS.md), and [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md).
 
 Roadmap docs:
 
