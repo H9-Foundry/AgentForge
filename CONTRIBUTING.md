@@ -5,7 +5,7 @@ AgentForge is an open-source SDLC workflow platform core with a deliberately nar
 ## Start Here
 
 - if you are new and want to evaluate the current wedge quickly, follow the CLI-first path in [README.md](README.md) and [docs/quickstart.md](docs/quickstart.md) first
-- if you want to improve first-time usability, start with the newcomer-usability track under [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
+- if you want to improve first-time usability, start from the completed newcomer-usability baseline in [#97](https://github.com/H9-Foundry/AgentForge/issues/97) and open a new bounded follow-up issue
 - read [README.md](README.md)
 - read [docs/PLATFORM_VISION.md](docs/PLATFORM_VISION.md)
 - read [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -21,11 +21,12 @@ If you want to make a small or first contribution, use this path first.
 2. Pick one bounded issue that does not require broad roadmap or release ownership.
 3. Make the smallest useful change that closes the issue or moves it forward clearly.
 4. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build`.
+   If you are validating from a long-lived interactive wrapper and `pnpm test` prints a full passing suite but the session does not return, rerun it as `pnpm test; echo EXIT:$?` in a direct shell before treating that as a repo failure.
 5. Open a PR that links the issue, explains what changed, and calls out any unverified behavior or residual risk.
 
 Good first contribution shapes in this repo:
 
-- docs and onboarding issues in the newcomer-usability lane under [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
+- docs and onboarding follow-ups that build on the newcomer-usability baseline from [#97](https://github.com/H9-Foundry/AgentForge/issues/97)
 - focused schema fixture or test coverage work
 - small CLI ergonomics fixes that do not widen capability claims
 - narrow policy, audit, or reporting improvements with explicit issue scope
@@ -58,6 +59,7 @@ You do not need to absorb the full queue tracker or maintainer release workflow 
 5. Produce a design-first slice when a feature is not yet decision-complete.
 6. Update tests and documentation when behavior or public contracts change.
 7. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build` before proposing changes.
+   If `pnpm test` is being run from a wrapper session that appears to stall after printing the full pass summary, confirm the direct-shell exit code with `pnpm test; echo EXIT:$?`.
 8. If you touch public packages or release automation, also run `pnpm build:packages`, `pnpm pack:public`, and `pnpm release:verify`.
 9. Maintainers should use signed commits for normal repo work. See [docs/maintainer-signing.md](docs/maintainer-signing.md).
 

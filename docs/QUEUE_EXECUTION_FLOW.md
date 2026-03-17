@@ -163,7 +163,8 @@ Add:
 
 - `agentforge release check --json`
 - `agentforge release verify --json`
-- track local validation ambiguity separately when the suite output is passing but the process does not return a final exit, as in [#120](https://github.com/H9-Foundry/AgentForge/issues/120)
+- if `pnpm test` is being run from a long-lived wrapper session, confirm the direct-shell exit code with `pnpm test; echo EXIT:$?` before treating a stalled session as a repo failure
+- [#120](https://github.com/H9-Foundry/AgentForge/issues/120) tracks the earlier validation ambiguity and its local-guidance resolution
 
 ## Dogfooding Rules
 
