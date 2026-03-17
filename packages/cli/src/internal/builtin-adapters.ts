@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { dirname, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import type { ToolAdapter } from "@h9-foundry/agentforge-sdk";
 

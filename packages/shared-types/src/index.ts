@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/consistent-type-imports */
-import type { infer as Infer } from "zod";
+import type { infer as Infer } from "zod/v3";
 
 import {
   agentManifestSchema,

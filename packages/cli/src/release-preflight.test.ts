@@ -240,12 +240,13 @@ describe("release preflight", () => {
       encoding: "utf8",
       env: {
         ...process.env,
-        HOME: home
+        HOME: home,
+        AGENTFORGE_SKIP_LOCAL_COMMANDS: "1"
       }
     });
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("Target scope: @h9-foundry");
     expect(result.stdout).toContain("[fail] npm auth file");
-  }, 40000);
+  });
 });
