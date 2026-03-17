@@ -131,6 +131,34 @@ Open a new bounded issue for any future newcomer-facing follow-up rather than re
   - design record artifact and workflow stages
   - deterministic interface discovery versus design reasoning
   - follow-on implementation slices
+- [docs/BUILD_IMPLEMENTATION_WORKFLOW.md](BUILD_IMPLEMENTATION_WORKFLOW.md)
+  - implementation proposal workflow identity and approval-gated apply boundary
+  - deterministic build inventory versus implementation reasoning
+  - implementation-proposal artifact and follow-on slices
+- [docs/TEST_QA_WORKFLOWS.md](TEST_QA_WORKFLOWS.md)
+  - dedicated QA workflow family separate from `pr-review`
+  - QA evidence normalization and `qa-report` artifact target
+  - follow-on slices for workflow, agent, evidence collection, and policy wiring
+- [docs/SECURITY_DEVSECOPS_WORKFLOWS.md](SECURITY_DEVSECOPS_WORKFLOWS.md)
+  - security-review workflow wedge and security artifact target
+  - deterministic security evidence versus security analysis boundaries
+  - follow-on slices for workflow, agent, evidence, and policy wiring
+- [docs/GITHUB_INTEGRATION_MATURITY.md](GITHUB_INTEGRATION_MATURITY.md)
+  - current GitHub baseline versus broader host-agnostic goals
+  - bounded GitHub handoff and evidence-ingestion surface
+  - follow-on slices for normalization, handoff, and policy guidance
+- [docs/RELEASE_CICD_WORKFLOWS.md](RELEASE_CICD_WORKFLOWS.md)
+  - release-readiness workflow wedge and `release-report` artifact target
+  - separation between current release tooling and broader CI/CD workflow intent
+  - follow-on slices for workflow, agent, CI evidence, and gated publish orchestration
+- [docs/OPERATIONS_INCIDENT_WORKFLOWS.md](OPERATIONS_INCIDENT_WORKFLOWS.md)
+  - incident-handoff workflow wedge and staged operational evidence posture
+  - `incident-brief` artifact target and redaction boundaries
+  - follow-on slices for workflow, agent, evidence normalization, and policy wiring
+- [docs/MAINTENANCE_WORKFLOWS.md](MAINTENANCE_WORKFLOWS.md)
+  - maintenance-triage workflow wedge and `maintenance-report` artifact target
+  - dependency/docs/release signal collection and routing boundaries
+  - follow-on slices for workflow, agent, routing, and GitHub/release handoff
 
 ## Phase 3: Ecosystem And Plugins
 
