@@ -36,7 +36,7 @@ Until AgentForge has a second active maintainer, `main` should stay protected wi
 - require a changeset whenever public packages change
 - prefer no-op direct pushes to `main`; use pull requests even for maintainer-owned release work
 - keep `require_code_owner_reviews` disabled until another maintainer or reviewer identity exists
-- keep required signed commits deferred until local signing is stable end to end
+- use signed maintainer commits as the intended steady state and track the branch-protection cutover in issue `#40`
 
 Use this lightweight release checklist for solo releases:
 
@@ -45,6 +45,7 @@ Use this lightweight release checklist for solo releases:
 - required PR checks are green
 - no blocking security or Dependabot alerts are open
 - `Release Packages` succeeded on `main`
+- maintainer commits for release-related PRs are signed and visible as `Verified`
 
 ## Trusted Publishing
 
