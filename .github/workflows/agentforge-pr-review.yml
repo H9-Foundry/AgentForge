@@ -6,6 +6,10 @@ env:
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  pull_request_target:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       workflow_name:
@@ -24,6 +28,17 @@ permissions:
 
 jobs:
   pr-review:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        !startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+      ) ||
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+      )
     runs-on: ubuntu-latest
     env:
       AGENTFORGE_WORKFLOW_NAME: ${{ github.event.inputs.workflow_name || 'pr-review' }}
@@ -33,6 +48,8 @@ jobs:
         uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4.4.0

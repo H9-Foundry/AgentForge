@@ -7,6 +7,7 @@ AgentForge includes a GitHub Actions wrapper for the starter `pr-review` workflo
 - `.github/workflows/agentforge-pr-review.yml`
   - pull request and manual workflow execution
   - comments on PRs and the configured tracker issue
+  - validates bot-created `changeset-release/*` version PRs through a same-repo `pull_request_target` path so protected-branch checks still attach to Changesets release PRs
 - `.github/workflows/release-provenance.yml`
   - build artifact provenance for the workspace
   - attests the workspace build artifact by default when the repository is public
@@ -23,6 +24,7 @@ AgentForge includes a GitHub Actions wrapper for the starter `pr-review` workflo
 - uploads the JSON bundle and markdown summary as workflow artifacts
 - appends the run summary to the GitHub Actions step summary
 - comments on the pull request when triggered by `pull_request`
+- comments on bot-created `changeset-release/*` release PRs when triggered through the same-repo `pull_request_target` path
 - comments on the configured tracker issue so GitHub issues remain the planning source of truth
 
 ## Permissions
@@ -32,6 +34,8 @@ AgentForge includes a GitHub Actions wrapper for the starter `pr-review` workflo
 - `id-token: write` for release provenance and trusted publishing workflows
 
 The repository workflows are configured for the Node 24 JavaScript action runtime transition. Trusted publishing should continue using GitHub OIDC instead of a long-lived npm token.
+
+For release PR validation, AgentForge uses `pull_request_target` only for same-repository `changeset-release/*` branches and checks out the PR head SHA with persisted credentials disabled. Human-authored PRs continue to use the standard `pull_request` path.
 
 ## Tracker Issue
 - The default tracker issue is `#1`
