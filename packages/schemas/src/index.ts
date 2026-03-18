@@ -324,6 +324,14 @@ export const qaRequestSchema = z.object({
   releaseContext: z.enum(["none", "candidate", "blocking"]).default("none")
 });
 
+export const securityRequestSchema = z.object({
+  targetRef: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  focusAreas: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([]),
+  releaseContext: z.enum(["none", "candidate", "blocking"]).default("none")
+});
+
 export const normalizedValidationCommandSchema = z.object({
   command: z.string().min(1),
   source: z.enum(["request", "package-script", "workspace-script"]),
@@ -694,6 +702,7 @@ export const schemaRegistry = {
   designRequest: designRequestSchema,
   implementationRequest: implementationRequestSchema,
   qaRequest: qaRequestSchema,
+  securityRequest: securityRequestSchema,
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
@@ -932,6 +941,14 @@ const qaRequestFixture = {
   releaseContext: "candidate"
 } as const;
 
+const securityRequestFixture = {
+  targetRef: ".agentops/runs/run-790/bundle.json",
+  evidenceSources: [".agentops/runs/run-790/summary.md"],
+  focusAreas: ["dependency-risk", "release-readiness"],
+  constraints: ["Keep security evidence collection read-only"],
+  releaseContext: "candidate"
+} as const;
+
 const normalizedValidationCommandFixture = {
   command: "pnpm test",
   source: "request",
@@ -1083,6 +1100,7 @@ export const schemaFixtures = {
   },
   implementationRequest: implementationRequestFixture,
   qaRequest: qaRequestFixture,
+  securityRequest: securityRequestFixture,
   normalizedValidationCommand: normalizedValidationCommandFixture,
   implementationInventory: implementationInventoryFixture,
   qaEvidenceNormalization: qaEvidenceNormalizationFixture,

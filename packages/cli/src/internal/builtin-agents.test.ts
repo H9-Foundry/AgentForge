@@ -238,3 +238,64 @@ describe("builtin qa evidence normalizer", () => {
     expect(output.metadata?.unrecognizedExecutedChecks).toEqual([]);
   });
 });
+
+describe("builtin security intake agent", () => {
+  it("records bounded security request metadata and referenced artifact kinds", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agentforge-security-intake-"));
+    mkdirSync(join(root, ".agentops", "runs", "run-impl"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "runs", "run-impl", "bundle.json"),
+      JSON.stringify(
+        {
+          lifecycleArtifacts: [
+            {
+              artifactKind: "implementation-proposal"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(root, ".agentops", "runs", "run-impl", "summary.md"), "# summary\n");
+
+    const agent = createBuiltinAgentRegistry().get("security-intake");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        repo: {
+          root,
+          name: "fixture-root",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        workflowInputs: {
+          securityRequest: {
+            targetRef: ".agentops/runs/run-impl/bundle.json",
+            evidenceSources: [".agentops/runs/run-impl/summary.md"],
+            focusAreas: ["dependency-risk"],
+            constraints: ["Keep the workflow read-only"],
+            releaseContext: "candidate"
+          },
+          securityTargetArtifactKinds: ["implementation-proposal"],
+          requestFile: ".agentops/requests/security.yaml"
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.summary).toContain(".agentops/requests/security.yaml");
+    expect(output.metadata?.targetType).toBe("artifact-bundle");
+    expect(output.metadata?.referencedArtifactKinds).toEqual(["implementation-proposal"]);
+    expect(output.metadata?.evidenceSources).toEqual([
+      ".agentops/runs/run-impl/bundle.json",
+      ".agentops/runs/run-impl/summary.md"
+    ]);
+  });
+});

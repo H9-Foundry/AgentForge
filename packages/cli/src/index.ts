@@ -16,6 +16,7 @@ import {
   planningArtifactSchema,
   planningRequestSchema,
   qaRequestSchema,
+  securityRequestSchema,
   workflowDefinitionSchema
 } from "@h9-foundry/agentforge-schemas";
 import type {
@@ -28,6 +29,7 @@ import type {
   PlanningArtifact,
   PlanningRequest,
   QaRequest,
+  SecurityRequest,
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
@@ -247,6 +249,25 @@ nodes:
     outputs_to: reports.final
 `;
 
+const securityWorkflowTemplate = `version: 1
+name: security-review
+description: Validate a bounded security request while preserving the default local security posture.
+trigger: manual
+catalog:
+  domain: security
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: security-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -300,7 +321,7 @@ function validateWorkflowLifecyclePosture(
   policyEngine: ReturnType<typeof createPolicyEngine>
 ): void {
   const domain = workflow.catalog?.domain;
-  if (domain !== "plan" && domain !== "design" && domain !== "build") {
+  if (domain !== "plan" && domain !== "design" && domain !== "build" && domain !== "security") {
     return;
   }
 
@@ -347,6 +368,16 @@ function loadDesignBundleArtifact(root: string, designRecordRef: string): Design
   }
 
   return designArtifactSchema.parse(designArtifact);
+}
+
+function loadLifecycleArtifactKinds(root: string, bundleRef: string): string[] {
+  const bundlePath = join(root, bundleRef);
+  if (!existsSync(bundlePath)) {
+    throw new Error(`Referenced bundle not found: ${bundleRef}`);
+  }
+
+  const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
+  return bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind);
 }
 
 function prepareWorkflowInputs(
@@ -409,6 +440,35 @@ function prepareWorkflowInputs(
 
     return {
       qaRequest: qaRequest satisfies QaRequest,
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "security-review") {
+    const requestPath = ".agentops/requests/security.yaml";
+    ensureReadablePath(policyEngine, requestPath, "security request");
+    const securityRequest = readYamlFile(join(root, requestPath), securityRequestSchema, "security request");
+    ensureReadablePath(policyEngine, securityRequest.targetRef, "security target reference");
+    if (!existsSync(join(root, securityRequest.targetRef))) {
+      throw new Error(`Security target reference not found: ${securityRequest.targetRef}`);
+    }
+    for (const evidenceSource of securityRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "security evidence source");
+    }
+
+    const referencedArtifactKinds = securityRequest.targetRef.endsWith("bundle.json")
+      ? loadLifecycleArtifactKinds(root, securityRequest.targetRef)
+      : [];
+    const allowedSecurityTargets = new Set(["design-record", "implementation-proposal", "qa-report", "release-report"]);
+    if (securityRequest.targetRef.endsWith("bundle.json") && !referencedArtifactKinds.some((kind) => allowedSecurityTargets.has(kind))) {
+      throw new Error(
+        `Referenced security bundle does not contain a supported lifecycle artifact: ${securityRequest.targetRef}`
+      );
+    }
+
+    return {
+      securityRequest: securityRequest satisfies SecurityRequest,
+      securityTargetArtifactKinds: referencedArtifactKinds,
       requestFile: requestPath
     };
   }
@@ -580,6 +640,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "qa-review.yaml"),
       contents: qaWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "security-review.yaml"),
+      contents: securityWorkflowTemplate
     }
   ];
 

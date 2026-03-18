@@ -1,0 +1,17 @@
+version: 1
+name: security-review
+description: Validate a bounded security request while preserving the default local security posture.
+trigger: manual
+catalog:
+  domain: security
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: security-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final

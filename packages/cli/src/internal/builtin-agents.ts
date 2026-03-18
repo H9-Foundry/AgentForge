@@ -10,6 +10,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  securityRequestSchema,
   planningArtifactSchema
 } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
@@ -25,6 +26,7 @@ import type {
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
+  SecurityRequest,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
 
@@ -734,6 +736,71 @@ const qaIntakeAgent: RuntimeAgent = {
           evidenceSources: [...new Set([qaRequest.targetRef, ...qaRequest.evidenceSources])]
         }),
         targetType
+      }
+    });
+  }
+};
+
+const securityIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "security-intake",
+    displayName: "Security Intake",
+    category: "security",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "security",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const securityRequest = getWorkflowInput<SecurityRequest>(stateSlice, "securityRequest");
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const referencedArtifactKinds = getWorkflowInput<string[]>(stateSlice, "securityTargetArtifactKinds") ?? [];
+    if (!securityRequest) {
+      throw new Error("security-review requires a validated security request before runtime execution.");
+    }
+
+    const targetType = securityRequest.targetRef.endsWith("bundle.json") ? "artifact-bundle" : "local-reference";
+
+    return agentOutputSchema.parse({
+      summary: `Loaded security request from ${requestFile ?? ".agentops/requests/security.yaml"} targeting ${securityRequest.targetRef}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...securityRequestSchema.parse({
+          ...securityRequest,
+          evidenceSources: [...new Set([securityRequest.targetRef, ...securityRequest.evidenceSources])]
+        }),
+        targetType,
+        referencedArtifactKinds
       }
     });
   }
@@ -1664,6 +1731,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["design-inventory", designInventoryAgent],
     ["implementation-intake", implementationIntakeAgent],
     ["qa-intake", qaIntakeAgent],
+    ["security-intake", securityIntakeAgent],
     ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],
     ["qa-analyst", qaAnalystAgent],
     ["implementation-inventory", implementationInventoryAgent],
