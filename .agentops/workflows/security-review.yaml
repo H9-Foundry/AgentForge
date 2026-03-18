@@ -12,6 +12,10 @@ nodes:
     kind: deterministic
     agent: security-intake
     outputs_to: agentResults.intake
+  - id: security
+    kind: reasoning
+    agent: security-analyst
+    outputs_to: agentResults.security
   - id: report
     kind: report
     outputs_to: reports.final
