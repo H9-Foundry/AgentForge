@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 
+import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
+import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 
 import { explainLastRun, initProject, runLocalWorkflow, scanProject } from "./index.js";
 
@@ -33,6 +35,27 @@ function createGitFixture(prefix: string): string {
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
   writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
   return root;
+}
+
+function createFixtureRepo(): string {
+  return createGitFixture("agentops-cli-");
+}
+
+function initializeWorkspace(root: string, options?: { trackerIssue?: number }): void {
+  void options;
+  initProject(root);
+}
+
+function ensureRequestsDir(root: string): void {
+  mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+}
+
+function writeYamlFile(filePath: string, value: unknown): void {
+  writeFileSync(filePath, yaml.dump(value));
+}
+
+function readJson<T>(filePath: string): T {
+  return JSON.parse(readFileSync(filePath, "utf8")) as T;
 }
 
 let builtCli = false;
@@ -718,5 +741,160 @@ describe("cli smoke flows", () => {
     );
 
     await expect(runLocalWorkflow("qa-review", root)).rejects.toThrow(/QA target reference not found/i);
+  });
+
+  it("fails security-review before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root, { trackerIssue: 141 });
+
+    await expect(runLocalWorkflow("security-review", root)).rejects.toThrow("Missing security request");
+  });
+
+  it("rejects security-review when the referenced security target does not exist", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root, { trackerIssue: 141 });
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "security.yaml"), {
+      targetRef: ".agentops/runs/does-not-exist/bundle.json",
+      evidenceSources: [],
+      focusAreas: ["dependency-risk"],
+      constraints: ["Keep the workflow read-only"],
+      releaseContext: "candidate"
+    });
+
+    await expect(runLocalWorkflow("security-review", root)).rejects.toThrow(/security target reference not found/i);
+  });
+
+  it("rejects security-review when the referenced bundle lacks a supported lifecycle artifact", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root, { trackerIssue: 141 });
+    ensureRequestsDir(root);
+    const bundleDir = join(root, ".agentops", "runs", "run-review");
+    mkdirSync(bundleDir, { recursive: true });
+    writeFileSync(
+      join(bundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-review",
+          workflow: "pr-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.reviewArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-review/bundle.json",
+            markdown: ".agentops/runs/run-review/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(bundleDir, "summary.md"), "# summary\n");
+    writeYamlFile(join(root, ".agentops", "requests", "security.yaml"), {
+      targetRef: ".agentops/runs/run-review/bundle.json",
+      evidenceSources: [],
+      focusAreas: ["dependency-risk"],
+      constraints: ["Keep the workflow read-only"],
+      releaseContext: "candidate"
+    });
+
+    await expect(runLocalWorkflow("security-review", root)).rejects.toThrow(/does not contain a supported lifecycle artifact/i);
+  });
+
+  it("runs security-review after a valid implementation-proposal handoff", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root, { trackerIssue: 141 });
+    ensureRequestsDir(root);
+    const implementationBundleDir = join(root, ".agentops", "runs", "run-impl");
+    mkdirSync(implementationBundleDir, { recursive: true });
+    writeFileSync(
+      join(implementationBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-impl",
+          workflow: "implementation-proposal",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.implementationArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-impl/bundle.json",
+            markdown: ".agentops/runs/run-impl/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(implementationBundleDir, "summary.md"), "# implementation summary\n");
+    writeYamlFile(join(root, ".agentops", "requests", "security.yaml"), {
+      targetRef: ".agentops/runs/run-impl/bundle.json",
+      evidenceSources: [".agentops/runs/run-impl/summary.md"],
+      focusAreas: ["dependency-risk"],
+      constraints: ["Keep the workflow read-only"],
+      releaseContext: "candidate"
+    });
+
+    const securityRun = await runLocalWorkflow("security-review", root);
+
+    expect(securityRun.status).toBe("success");
+    expect(securityRun.findings).toBe(0);
+    expect(securityRun.artifactKinds).toEqual([]);
+
+    const bundle = readJson<{ workflow: string }>(securityRun.jsonPath);
+    expect(bundle.workflow).toBe("security-review");
   });
 });

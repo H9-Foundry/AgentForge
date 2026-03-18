@@ -14,6 +14,7 @@ import type {
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
+  SecurityRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
   ReleaseVersionTarget,
@@ -50,6 +51,7 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
     expectTypeOf<QaRequest["targetRef"]>().toEqualTypeOf<string>();
+    expectTypeOf<SecurityRequest["targetRef"]>().toEqualTypeOf<string>();
     expectTypeOf<QaEvidenceNormalization["targetType"]>().toEqualTypeOf<
       "artifact-bundle" | "validation-output" | "local-reference"
     >();
