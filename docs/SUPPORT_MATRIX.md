@@ -21,10 +21,11 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `implementation-proposal` | Official | CLI-first implementation workflow that consumes a design record, emits an `implementation-proposal` artifact, and keeps the default path read-only and proposal-only. |
 | `qa-review` | Official | Dedicated QA workflow that consumes an implementation proposal and emits a `qa-report` artifact with deterministic evidence normalization ahead of reasoning. |
 | `security-review` | Official | Dedicated security workflow that consumes bounded local evidence, emits a `security-report` artifact, and keeps the default path read-only with tighter policy handling. |
+| `maintenance-triage` | Official | Dedicated maintenance workflow that consumes bounded maintenance evidence, emits a `maintenance-report` artifact, and keeps the default path read-only with deterministic routing support. |
 | security / DevSecOps extensions | Planned | Additional security variants beyond `security-review` are not implemented yet. |
 | release / CI-CD | Planned | Release automation exists, but not as a broader official SDLC workflow family. |
 | operations / incident handoff | Planned | Roadmap item only. |
-| maintenance / dependency/docs hygiene | Planned | Roadmap item only. |
+| maintenance / dependency/docs hygiene variants | Planned | Additional maintenance variants beyond `maintenance-triage` are not implemented yet. |
 
 ## Agent Support
 
@@ -36,10 +37,11 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `implementation-planner` | Official | Starter implementation agent for `implementation-proposal`. |
 | `qa-analyst` | Official | Starter QA agent for `qa-review`. |
 | `security-analyst` | Official | Starter security agent for `security-review`. |
+| `maintenance-analyst` | Official | Starter maintenance agent for `maintenance-triage`. |
 | `security-audit` | Official | Current starter agent. |
 | `code-review` | Official | Current starter agent. |
 | `test-generation` | Official | Current starter agent. |
-| release/operations/maintenance agents | Planned | Not implemented yet. |
+| release/operations agents | Planned | Not implemented yet. |
 
 ## Adapter And Integration Support
 
@@ -86,6 +88,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | planning/design on the AgentForge repo | Official | Covered by `planning-discovery` and `architecture-design-review` with lifecycle artifact output. |
 | implementation planning on the AgentForge repo | Official | Covered by `implementation-proposal` with deterministic inventory and proposal-only output. |
 | PR review and QA on the AgentForge repo | Official | Covered by `pr-review` for repository review and `qa-review` for dedicated QA handoff and `qa-report` artifacts. |
+| security and maintenance triage on the AgentForge repo | Official | Covered by `security-review` and `maintenance-triage` with bounded evidence normalization and lifecycle artifact output. |
 | release/readiness verification on the AgentForge repo | Official | Covered by `release guide`, `release check`, and `release verify`. |
 | autonomous implementation on the AgentForge repo | Planned | Not an official supported mode yet. |
 

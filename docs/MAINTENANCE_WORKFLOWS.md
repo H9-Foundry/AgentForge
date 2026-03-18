@@ -4,7 +4,7 @@ This document defines the design target for issue [#61](https://github.com/H9-Fo
 
 It describes how AgentForge should support routine maintenance work as a lifecycle domain separate from review and release.
 
-It does **not** claim that the broader maintenance workflow family is fully implemented or officially promoted today.
+It does **not** claim that the broader maintenance workflow family is fully implemented today.
 
 ## Why This Exists
 
@@ -44,8 +44,7 @@ Available now:
 
 Not yet available:
 
-- deterministic dependency/docs/release signal collection and routing classification
-- official promotion of `maintenance-triage` before the later maintenance slices land
+- broader maintenance variants beyond the first `maintenance-triage` wedge
 
 ## Recommended Initial Workflow Family
 
@@ -59,7 +58,7 @@ Later planned variants can include:
 - `docs-hygiene-review`
 - `maintenance-backlog-refresh`
 
-`maintenance-triage` is now implemented as an intake-plus-evidence-plus-analysis wedge. The later maintenance variants remain planned, and public promotion remains blocked on `explain last-run` reliability.
+`maintenance-triage` is now implemented and officially promoted as an intake-plus-evidence-plus-analysis wedge. The later maintenance variants remain planned.
 
 ## User Jobs
 
