@@ -295,6 +295,10 @@ nodes:
     kind: deterministic
     agent: release-intake
     outputs_to: agentResults.intake
+  - id: release
+    kind: reasoning
+    agent: release-analyst
+    outputs_to: agentResults.release
   - id: report
     kind: report
     outputs_to: reports.final

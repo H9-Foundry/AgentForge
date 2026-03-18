@@ -35,10 +35,10 @@ Available now:
 - package/version verification
 - audit and lifecycle artifact infrastructure
 - bounded `release-readiness` request validation and workflow asset scaffolding
+- bounded `release-report` artifact emission from the local `release-readiness` workflow
 
 Not yet available:
 
-- a release-candidate lifecycle artifact emitted by the runtime
 - explicit CI evidence ingestion into a release workflow
 - support for broader host-agnostic pipeline orchestration
 
