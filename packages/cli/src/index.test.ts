@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -373,6 +373,60 @@ describe("cli smoke flows", () => {
     expect(explanation.runId).toBe(secondRun.runId);
     expect(explanation.runId).not.toBe(firstRun.runId);
     expect(explanation.jsonPath).toBe(secondRun.jsonPath);
+  });
+
+  it("prefers bundle completion timestamps over misleading bundle mtimes", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentops-cli-explain-finished-at-"));
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+    initProject(root);
+
+    const olderRunRoot = join(root, ".agentops", "runs", "1773850000000-old");
+    mkdirSync(olderRunRoot, { recursive: true });
+    writeFileSync(
+      join(olderRunRoot, "bundle.json"),
+      JSON.stringify(
+        {
+          runId: "1773850000000-old",
+          startedAt: "2026-03-18T17:00:00.000Z",
+          finishedAt: "2026-03-18T17:00:01.000Z",
+          status: "success",
+          findings: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [],
+          entries: []
+        },
+        null,
+        2
+      )
+    );
+
+    const newerRunRoot = join(root, ".agentops", "runs", "1773850001000-new");
+    mkdirSync(newerRunRoot, { recursive: true });
+    const newerBundlePath = join(newerRunRoot, "bundle.json");
+    writeFileSync(
+      newerBundlePath,
+      JSON.stringify(
+        {
+          runId: "1773850001000-new",
+          startedAt: "2026-03-18T17:00:02.000Z",
+          finishedAt: "2026-03-18T17:00:03.000Z",
+          status: "success",
+          findings: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [],
+          entries: []
+        },
+        null,
+        2
+      )
+    );
+
+    const staleTime = new Date("2026-03-18T16:59:00.000Z");
+    utimesSync(newerBundlePath, staleTime, staleTime);
+
+    const explanation = explainLastRun(root);
+    expect(explanation.runId).toBe("1773850001000-new");
+    expect(explanation.jsonPath).toBe(newerBundlePath);
   });
 
   it("maps bounded local workflow outcomes to GitHub handoff statuses", () => {
