@@ -43,6 +43,7 @@ import {
   incidentRequestSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
+  maintenanceRequestSchema,
   normalizedValidationCommandSchema,
   policyDocumentSchema,
   qaArtifactPayloadSchema,
@@ -136,6 +137,7 @@ export type ReleaseArtifactPayload = Infer<typeof releaseArtifactPayloadSchema>;
 export type ReleaseArtifact = Infer<typeof releaseArtifactSchema>;
 export type MaintenanceArtifactPayload = Infer<typeof maintenanceArtifactPayloadSchema>;
 export type MaintenanceArtifact = Infer<typeof maintenanceArtifactSchema>;
+export type MaintenanceRequest = Infer<typeof maintenanceRequestSchema>;
 export type AgentOutput = Infer<typeof agentOutputSchema>;
 export type AgentManifest = Infer<typeof agentManifestSchema>;
 export type AgentPluginRegistration = Infer<typeof agentPluginRegistrationSchema>;

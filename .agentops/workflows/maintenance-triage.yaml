@@ -1,0 +1,17 @@
+version: 1
+name: maintenance-triage
+description: Validate a bounded maintenance request while keeping the default path local, read-only, and routing-oriented.
+trigger: manual
+catalog:
+  domain: maintain
+  supportLevel: partial
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: maintenance-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final

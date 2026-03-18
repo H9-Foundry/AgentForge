@@ -11,6 +11,7 @@ import type {
   IncidentEvidenceNormalization,
   IncidentRequest,
   MaintenanceArtifact,
+  MaintenanceRequest,
   NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
@@ -69,6 +70,7 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<IncidentEvidenceNormalization["severityHint"]>().toEqualTypeOf<
       "unknown" | "low" | "medium" | "high" | "critical"
     >();
+    expectTypeOf<MaintenanceRequest["maintenanceGoal"]>().toEqualTypeOf<string>();
     expectTypeOf<QaRequest["targetRef"]>().toEqualTypeOf<string>();
     expectTypeOf<SecurityRequest["targetRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ReleaseRequest["releaseScope"]>().toEqualTypeOf<string>();

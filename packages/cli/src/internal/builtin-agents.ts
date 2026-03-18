@@ -11,6 +11,7 @@ import {
   incidentArtifactSchema,
   incidentEvidenceNormalizationSchema,
   incidentRequestSchema,
+  maintenanceRequestSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
@@ -36,6 +37,7 @@ import type {
   IncidentArtifact,
   IncidentEvidenceNormalization,
   IncidentRequest,
+  MaintenanceRequest,
   NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
@@ -1208,6 +1210,77 @@ const incidentEvidenceNormalizationAgent: RuntimeAgent = {
       requestedTools: [],
       blockedActionFlags: [],
       metadata: normalization satisfies IncidentEvidenceNormalization
+    });
+  }
+};
+
+const maintenanceIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "maintenance-intake",
+    displayName: "Maintenance Intake",
+    category: "maintain",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.md", "**/*.txt"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "maintain",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const maintenanceRequest = getWorkflowInput<MaintenanceRequest>(stateSlice, "maintenanceRequest");
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const maintenanceIssueRefs = getWorkflowInput<string[]>(stateSlice, "maintenanceIssueRefs") ?? [];
+    const maintenanceGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "maintenanceGithubRefs") ?? [];
+    if (!maintenanceRequest) {
+      throw new Error("maintenance-triage requires a validated maintenance request before runtime execution.");
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded maintenance request from ${requestFile ?? ".agentops/requests/maintenance.yaml"} for ${maintenanceRequest.maintenanceGoal}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...maintenanceRequestSchema.parse({
+          ...maintenanceRequest,
+          dependencyAlertRefs: [...new Set(maintenanceRequest.dependencyAlertRefs)],
+          docsTaskRefs: [...new Set(maintenanceRequest.docsTaskRefs)],
+          releaseReportRefs: [...new Set(maintenanceRequest.releaseReportRefs)],
+          issueRefs: [...new Set(maintenanceRequest.issueRefs)]
+        }),
+        maintenanceIssueRefs,
+        maintenanceGithubRefs,
+        evidenceSourceCount:
+          maintenanceRequest.dependencyAlertRefs.length +
+          maintenanceRequest.docsTaskRefs.length +
+          maintenanceRequest.releaseReportRefs.length
+      }
     });
   }
 };
@@ -3001,6 +3074,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["security-intake", securityIntakeAgent],
     ["incident-intake", incidentIntakeAgent],
     ["incident-evidence-normalizer", incidentEvidenceNormalizationAgent],
+    ["maintenance-intake", maintenanceIntakeAgent],
     ["incident-analyst", incidentAnalystAgent],
     ["release-intake", releaseIntakeAgent],
     ["release-evidence-normalizer", releaseEvidenceNormalizationAgent],

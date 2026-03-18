@@ -15,6 +15,7 @@ import {
   designRequestSchema,
   implementationRequestSchema,
   incidentRequestSchema,
+  maintenanceRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
   qaRequestSchema,
@@ -32,6 +33,7 @@ import type {
   GithubWorkflowStatusMapping,
   ImplementationRequest,
   IncidentRequest,
+  MaintenanceRequest,
   PlanningArtifact,
   PlanningRequest,
   QaRequest,
@@ -337,6 +339,25 @@ nodes:
     outputs_to: reports.final
 `;
 
+const maintenanceWorkflowTemplate = `version: 1
+name: maintenance-triage
+description: Validate a bounded maintenance request while keeping the default path local, read-only, and routing-oriented.
+trigger: manual
+catalog:
+  domain: maintain
+  supportLevel: partial
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: maintenance-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -562,6 +583,21 @@ function validateIncidentRequestCompleteness(request: IncidentRequest): Incident
   if (evidenceSignalCount === 0) {
     throw new Error(
       "Incident request is underspecified. Add at least one of evidenceSources or releaseReportRefs."
+    );
+  }
+
+  return request;
+}
+
+function validateMaintenanceRequestCompleteness(request: MaintenanceRequest): MaintenanceRequest {
+  const supportingSignalCount =
+    request.dependencyAlertRefs.length +
+    request.docsTaskRefs.length +
+    request.releaseReportRefs.length +
+    request.issueRefs.length;
+  if (supportingSignalCount === 0) {
+    throw new Error(
+      "Maintenance request is underspecified. Add at least one of dependencyAlertRefs, docsTaskRefs, releaseReportRefs, or issueRefs."
     );
   }
 
@@ -890,6 +926,54 @@ function prepareWorkflowInputs(
     };
   }
 
+  if (workflow.name === "maintenance-triage") {
+    const requestPath = ".agentops/requests/maintenance.yaml";
+    ensureReadablePath(policyEngine, requestPath, "maintenance request");
+    const maintenanceRequest = validateMaintenanceRequestCompleteness(
+      readYamlFile(join(root, requestPath), maintenanceRequestSchema, "maintenance request")
+    );
+
+    const repoContext = inferGitHubRepoContext(root);
+    const maintenanceIssueRefs = new Set<string>(maintenanceRequest.issueRefs);
+    const maintenanceGithubRefMap = new Map<string, GithubReference>();
+    for (const githubRef of normalizeGitHubReferences(maintenanceRequest.issueRefs, repoContext)) {
+      maintenanceGithubRefMap.set(githubRef.canonical, githubRef);
+    }
+
+    for (const releaseReportRef of maintenanceRequest.releaseReportRefs) {
+      ensureReadablePath(policyEngine, releaseReportRef, "release report reference");
+      ensureBundleContainsArtifactKind(root, releaseReportRef, "release-report", "release report reference");
+      const refs = loadLifecycleArtifactSourceReferences(root, releaseReportRef);
+      for (const issueRef of refs.issueRefs) {
+        maintenanceIssueRefs.add(issueRef);
+      }
+      for (const githubRef of refs.githubRefs) {
+        maintenanceGithubRefMap.set(githubRef.canonical, githubRef);
+      }
+    }
+
+    for (const dependencyAlertRef of maintenanceRequest.dependencyAlertRefs) {
+      ensureReadablePath(policyEngine, dependencyAlertRef, "dependency alert reference");
+      if (!existsSync(join(root, dependencyAlertRef))) {
+        throw new Error(`Dependency alert reference not found: ${dependencyAlertRef}`);
+      }
+    }
+
+    for (const docsTaskRef of maintenanceRequest.docsTaskRefs) {
+      ensureReadablePath(policyEngine, docsTaskRef, "docs task reference");
+      if (!existsSync(join(root, docsTaskRef))) {
+        throw new Error(`Docs task reference not found: ${docsTaskRef}`);
+      }
+    }
+
+    return {
+      maintenanceRequest: maintenanceRequest satisfies MaintenanceRequest,
+      maintenanceIssueRefs: [...maintenanceIssueRefs],
+      maintenanceGithubRefs: [...maintenanceGithubRefMap.values()],
+      requestFile: requestPath
+    };
+  }
+
   return {};
 }
 
@@ -1106,6 +1190,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "incident-handoff.yaml"),
       contents: incidentWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "maintenance-triage.yaml"),
+      contents: maintenanceWorkflowTemplate
     }
   ];
 

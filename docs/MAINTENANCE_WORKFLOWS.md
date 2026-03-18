@@ -4,7 +4,7 @@ This document defines the design target for issue [#61](https://github.com/H9-Fo
 
 It describes how AgentForge should support routine maintenance work as a lifecycle domain separate from review and release.
 
-It does **not** claim that these workflows are implemented or officially shipped today.
+It does **not** claim that the broader maintenance workflow family is fully implemented or officially promoted today.
 
 ## Why This Exists
 
@@ -38,12 +38,14 @@ Available now:
 - GitHub issue planning and queue tracking
 - newcomer and contributor docs/process scaffolding
 - lifecycle artifact and audit infrastructure
+- official `maintenance-triage` workflow asset with bounded maintenance request intake
+- deterministic maintenance request validation and release-report reference checks
 
 Not yet available:
 
-- official maintenance workflow assets
-- dedicated maintenance artifacts in runtime use
-- explicit dependency/docs-hygiene workflow boundaries
+- `maintenance-analyst` and `maintenance-report` artifact emission
+- deterministic dependency/docs/release signal collection and routing classification
+- official promotion of `maintenance-triage` before the later maintenance slices land
 
 ## Recommended Initial Workflow Family
 
@@ -57,7 +59,7 @@ Later planned variants can include:
 - `docs-hygiene-review`
 - `maintenance-backlog-refresh`
 
-Only `maintenance-triage` should be targeted for first implementation planning.
+`maintenance-triage` is now implemented as an intake-only wedge. The later maintenance variants remain planned.
 
 ## User Jobs
 
@@ -97,7 +99,7 @@ Recommended input model:
 ### Workflow Stages
 
 1. intake normalization
-2. deterministic maintenance evidence collection
+2. deterministic maintenance reference validation
 3. maintenance analysis
 4. report and artifact emission
 
@@ -156,10 +158,13 @@ Adapter expectations:
 
 ## Follow-On Implementation Slices
 
-This epic should be decomposed into at least:
+Implemented on current `main`:
 
 1. maintenance request schema and official `maintenance-triage` workflow asset
-2. `maintenance-analyst` starter agent and `maintenance-report` artifact emission
-3. deterministic dependency/docs/release signal collection and routing classification
-4. GitHub and release/readiness handoff wiring for maintenance follow-up work
+2. deterministic validation of dependency alert refs, docs task refs, release-report refs, and backlog issue refs before reasoning
 
+Next maintenance family follow-ons:
+
+1. `maintenance-analyst` starter agent and `maintenance-report` artifact emission
+2. deterministic dependency/docs/release signal collection and routing classification
+3. GitHub and release/readiness handoff wiring for maintenance follow-up work
