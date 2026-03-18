@@ -234,6 +234,10 @@ nodes:
     kind: deterministic
     agent: qa-intake
     outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: qa-evidence-normalizer
+    outputs_to: agentResults.evidence
   - id: qa
     kind: reasoning
     agent: qa-analyst

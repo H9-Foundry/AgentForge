@@ -104,11 +104,19 @@ export const qaAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const normalizedEvidenceSources = asStringArray(intakeMetadata.evidenceSources);
-    const normalizedExecutedChecks = asStringArray(intakeMetadata.executedChecks);
+    const evidenceMetadata = isRecord(stateSlice.agentResults?.evidence?.metadata) ? stateSlice.agentResults.evidence.metadata : {};
+    const normalizedEvidenceSources = asStringArray(evidenceMetadata.normalizedEvidenceSources);
+    const normalizedExecutedChecks = asStringArray(evidenceMetadata.normalizedExecutedChecks);
     const normalizedFocusAreas = asStringArray(intakeMetadata.focusAreas);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
-    const targetType = typeof intakeMetadata.targetType === "string" ? intakeMetadata.targetType : "local-reference";
+    const missingEvidenceSources = asStringArray(evidenceMetadata.missingEvidenceSources);
+    const unrecognizedExecutedChecks = asStringArray(evidenceMetadata.unrecognizedExecutedChecks);
+    const targetType =
+      typeof evidenceMetadata.targetType === "string"
+        ? evidenceMetadata.targetType
+        : typeof intakeMetadata.targetType === "string"
+          ? intakeMetadata.targetType
+          : "local-reference";
     const evidenceSources =
       normalizedEvidenceSources.length > 0
         ? normalizedEvidenceSources
@@ -141,8 +149,10 @@ export const qaAnalystAgent: RuntimeAgent = {
           ];
     const coverageGaps = [
       ...(evidenceSources.length === 0 ? ["No QA evidence sources were provided beyond the target reference."] : []),
+      ...missingEvidenceSources.map((pathValue) => `Referenced QA evidence is missing: ${pathValue}`),
       ...(focusAreas.includes("coverage") ? ["Coverage evidence still needs deterministic normalization before it can be promoted to an official QA signal."] : []),
-      ...(executedChecks.length === 0 ? ["No executed validation checks were recorded in the request."] : [])
+      ...(executedChecks.length === 0 ? ["No executed validation checks were recorded in the request."] : []),
+      ...unrecognizedExecutedChecks.map((command) => `Executed check is outside the bounded allowlist and still needs manual interpretation: ${command}`)
     ];
     const recommendedNextChecks = [
       ...executedChecks.map((command) => `Review the recorded output for \`${command}\` before promotion.`),

@@ -138,3 +138,103 @@ describe("builtin implementation inventory agent", () => {
     );
   });
 });
+
+describe("builtin qa evidence normalizer", () => {
+  it("normalizes bounded QA evidence and allowlisted validation commands", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agentforge-qa-evidence-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-root",
+          scripts: {
+            test: "vitest run",
+            lint: "eslint ."
+          }
+        },
+        null,
+        2
+      )
+    );
+    mkdirSync(join(root, ".agentops", "runs", "run-impl"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "runs", "run-impl", "bundle.json"),
+      JSON.stringify(
+        {
+          lifecycleArtifacts: [
+            {
+              artifactKind: "implementation-proposal",
+              payload: {
+                affectedPaths: ["packages/app/src/index.ts"]
+              }
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(root, ".agentops", "runs", "run-impl", "summary.md"), "# summary\n");
+    mkdirSync(join(root, "packages", "app"), { recursive: true });
+    writeFileSync(
+      join(root, "packages", "app", "package.json"),
+      JSON.stringify(
+        {
+          name: "@fixture/app",
+          scripts: {
+            test: "vitest run"
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const agent = createBuiltinAgentRegistry().get("qa-evidence-normalizer");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        repo: {
+          root,
+          name: "fixture-root",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        workflowInputs: {
+          qaRequest: {
+            targetRef: ".agentops/runs/run-impl/bundle.json",
+            evidenceSources: [".agentops/runs/run-impl/summary.md"],
+            executedChecks: ["pnpm test"],
+            focusAreas: ["coverage"],
+            constraints: ["Keep QA evidence collection read-only"],
+            releaseContext: "candidate"
+          }
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              targetType: "artifact-bundle"
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.metadata?.normalizedEvidenceSources).toEqual([
+      ".agentops/runs/run-impl/bundle.json",
+      ".agentops/runs/run-impl/summary.md"
+    ]);
+    expect(output.metadata?.referencedArtifactKinds).toContain("implementation-proposal");
+    expect(output.metadata?.allowedValidationCommands).toEqual(
+      expect.arrayContaining([expect.objectContaining({ command: "pnpm test", classification: "approval_required" })])
+    );
+    expect(output.metadata?.unrecognizedExecutedChecks).toEqual([]);
+  });
+});
