@@ -736,6 +736,15 @@ export const incidentRequestSchema = z.object({
   constraints: z.array(z.string().min(1)).default([])
 });
 
+export const maintenanceRequestSchema = z.object({
+  maintenanceGoal: z.string().min(1),
+  dependencyAlertRefs: z.array(z.string().min(1)).default([]),
+  docsTaskRefs: z.array(z.string().min(1)).default([]),
+  releaseReportRefs: z.array(z.string().min(1)).default([]),
+  issueRefs: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([])
+});
+
 export const releaseEvidenceNormalizationSchema = z.object({
   qaReportRefs: z.array(z.string().min(1)).default([]),
   securityReportRefs: z.array(z.string().min(1)).default([]),
@@ -924,6 +933,7 @@ export const schemaRegistry = {
   securityRequest: securityRequestSchema,
   releaseRequest: releaseRequestSchema,
   incidentRequest: incidentRequestSchema,
+  maintenanceRequest: maintenanceRequestSchema,
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
@@ -1273,6 +1283,15 @@ const incidentRequestFixture = {
   constraints: ["Keep staged incident evidence read-only"]
 } as const;
 
+const maintenanceRequestFixture = {
+  maintenanceGoal: "Triage dependency and docs hygiene follow-up after the latest release.",
+  dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+  docsTaskRefs: [".agentops/evidence/docs-task.md"],
+  releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+  issueRefs: ["#145"],
+  constraints: ["Keep maintenance triage read-only"]
+} as const;
+
 const normalizedValidationCommandFixture = {
   command: "pnpm test",
   source: "request",
@@ -1606,6 +1625,7 @@ export const schemaFixtures = {
   securityRequest: securityRequestFixture,
   releaseRequest: releaseRequestFixture,
   incidentRequest: incidentRequestFixture,
+  maintenanceRequest: maintenanceRequestFixture,
   githubReference: githubReferenceFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,

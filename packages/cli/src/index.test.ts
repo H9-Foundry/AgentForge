@@ -1507,6 +1507,102 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.redaction?.categories).toContain("operational-sensitive");
   });
 
+  it("fails maintenance-triage before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    await expect(runLocalWorkflow("maintenance-triage", root)).rejects.toThrow("Missing maintenance request");
+  });
+
+  it("rejects underspecified maintenance-triage requests before reasoning", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "maintenance.yaml"), {
+      maintenanceGoal: "Triage routine maintenance work."
+    });
+
+    await expect(runLocalWorkflow("maintenance-triage", root)).rejects.toThrow(/Maintenance request is underspecified/i);
+  });
+
+  it("runs maintenance-triage after valid maintenance request references", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+
+    const releaseBundleDir = join(root, ".agentops", "runs", "run-release");
+    mkdirSync(releaseBundleDir, { recursive: true });
+    writeFileSync(
+      join(releaseBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-release",
+          workflow: "release-readiness",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.releaseArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-release/bundle.json",
+            markdown: ".agentops/runs/run-release/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(releaseBundleDir, "summary.md"), "# release summary\n");
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(join(root, ".agentops", "evidence", "dependency-alerts.json"), JSON.stringify({ alerts: ["vitest upgrade"] }, null, 2));
+    writeFileSync(join(root, ".agentops", "evidence", "docs-task.md"), "# docs task\n");
+    writeYamlFile(join(root, ".agentops", "requests", "maintenance.yaml"), {
+      maintenanceGoal: "Triage dependency and docs hygiene follow-up after the latest release.",
+      dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+      docsTaskRefs: [".agentops/evidence/docs-task.md"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      issueRefs: ["#145"],
+      constraints: ["Keep maintenance triage read-only"]
+    });
+
+    const maintenanceRun = await runLocalWorkflow("maintenance-triage", root);
+
+    expect(maintenanceRun.status).toBe("success");
+    expect(maintenanceRun.artifactCount).toBe(0);
+
+    const bundle = readJson<{
+      workflow: string;
+      entries: Array<{ nodeId: string }>;
+    }>(maintenanceRun.jsonPath);
+    expect(bundle.workflow).toBe("maintenance-triage");
+    expect(bundle.entries.some((entry) => entry.nodeId === "intake")).toBe(true);
+  });
+
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {
     const root = createGitFixture("agentops-github-refs-");
     initProject(root);
