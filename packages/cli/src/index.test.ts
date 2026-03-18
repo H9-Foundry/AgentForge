@@ -1283,11 +1283,27 @@ describe("cli smoke flows", () => {
     const releaseRun = await runLocalWorkflow("release-readiness", root);
 
     expect(releaseRun.status).toBe("success");
-    expect(releaseRun.artifactCount).toBe(0);
+    expect(releaseRun.artifactKinds).toContain("release-report");
 
-    const bundle = readJson<{ workflow: string; lifecycleArtifacts: Array<{ artifactKind: string }> }>(releaseRun.jsonPath);
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          releaseScope?: string;
+          readinessStatus?: string;
+          verificationChecks?: Array<{ name: string; status: string }>;
+        };
+      }>;
+    }>(releaseRun.jsonPath);
     expect(bundle.workflow).toBe("release-readiness");
-    expect(bundle.lifecycleArtifacts).toHaveLength(0);
+    expect(bundle.lifecycleArtifacts).toHaveLength(1);
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("release-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.releaseScope).toBe("Prepare the 0.7.0 candidate for maintainer review");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.readinessStatus).toBe("ready");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.map((check) => check.name)).toEqual(
+      expect.arrayContaining(["qa-report-refs", "security-report-refs", "local-release-evidence"])
+    );
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

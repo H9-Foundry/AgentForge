@@ -11,6 +11,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  releaseArtifactSchema,
   releaseRequestSchema,
   securityArtifactSchema,
   securityEvidenceNormalizationSchema,
@@ -33,6 +34,7 @@ import type {
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
+  ReleaseArtifact,
   ReleaseRequest,
   SecurityArtifact,
   SecurityEvidenceNormalization,
@@ -1025,6 +1027,158 @@ const releaseIntakeAgent: RuntimeAgent = {
         releaseGithubRefs,
         evidenceSourceCount:
           releaseRequest.qaReportRefs.length + releaseRequest.securityReportRefs.length + releaseRequest.evidenceSources.length
+      }
+    });
+  }
+};
+
+const releaseAnalystAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "release-analyst",
+    displayName: "Release Analyst",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "reasoning"
+    },
+    permissions: {
+      model: true,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["lifecycleArtifacts"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ state, stateSlice }) {
+    const releaseRequest = getWorkflowInput<ReleaseRequest>(stateSlice, "releaseRequest");
+    const releaseIssueRefs = getWorkflowInput<string[]>(stateSlice, "releaseIssueRefs") ?? [];
+    const releaseGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "releaseGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!releaseRequest) {
+      throw new Error("release-readiness requires validated release inputs before release analysis.");
+    }
+
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const qaReportRefs = asStringArray(intakeMetadata.qaReportRefs).length > 0
+      ? asStringArray(intakeMetadata.qaReportRefs)
+      : releaseRequest.qaReportRefs;
+    const securityReportRefs = asStringArray(intakeMetadata.securityReportRefs).length > 0
+      ? asStringArray(intakeMetadata.securityReportRefs)
+      : releaseRequest.securityReportRefs;
+    const evidenceSources = asStringArray(intakeMetadata.evidenceSources).length > 0
+      ? asStringArray(intakeMetadata.evidenceSources)
+      : releaseRequest.evidenceSources;
+    const constraints = asStringArray(intakeMetadata.constraints);
+    const allEvidenceRefs = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
+    const verificationChecks = [
+      {
+        name: "qa-report-refs",
+        status: qaReportRefs.length > 0 ? "passed" : "skipped",
+        detail: qaReportRefs.length > 0
+          ? `Using ${qaReportRefs.length} validated QA report reference(s).`
+          : "No QA report references were supplied."
+      },
+      {
+        name: "security-report-refs",
+        status: securityReportRefs.length > 0 ? "passed" : "skipped",
+        detail: securityReportRefs.length > 0
+          ? `Using ${securityReportRefs.length} validated security report reference(s).`
+          : "No security report references were supplied."
+      },
+      {
+        name: "local-release-evidence",
+        status: evidenceSources.length > 0 ? "passed" : "skipped",
+        detail: evidenceSources.length > 0
+          ? `Using ${evidenceSources.length} bounded local release evidence source(s).`
+          : "No additional local release evidence sources were supplied."
+      }
+    ] as const;
+    const readinessStatus =
+      qaReportRefs.length > 0 && securityReportRefs.length > 0
+        ? "ready"
+        : qaReportRefs.length > 0 || securityReportRefs.length > 0
+          ? "partial"
+          : "blocked";
+    const summary = `Release report prepared for ${releaseRequest.releaseScope}.`;
+    const publishingPlan = [
+      "Review the bounded QA and security evidence before invoking any publish or promotion step.",
+      "Run `agentforge release check --json` and `agentforge release verify --json` before any release cut.",
+      "Keep trusted publishing and tag or publish actions outside this default read-only workflow path."
+    ];
+    const rollbackNotes = [
+      "Use the release report to decide whether to pause or defer promotion before any publish step.",
+      "If readiness remains partial or blocked, keep the current version set unchanged and resolve evidence gaps first."
+    ];
+    const externalDependencies = [
+      ...(qaReportRefs.length > 0 ? ["Validated QA report inputs remain available for reviewer inspection."] : []),
+      ...(securityReportRefs.length > 0 ? ["Validated security report inputs remain available for reviewer inspection."] : [])
+    ];
+    const releaseReport = releaseArtifactSchema.parse({
+      ...buildLifecycleArtifactEnvelopeBase(
+        state,
+        "Release Readiness",
+        summary,
+        [requestFile ?? ".agentops/requests/release.yaml", ...allEvidenceRefs],
+        releaseIssueRefs,
+        releaseGithubRefs
+      ),
+      artifactKind: "release-report",
+      lifecycleDomain: "release",
+      payload: {
+        releaseScope: releaseRequest.releaseScope,
+        versionTargets: releaseRequest.versionTargets,
+        readinessStatus,
+        verificationChecks: verificationChecks.map((check) => ({ ...check })),
+        publishingPlan,
+        trustStatus: "trusted-publishing-reviewed-separately",
+        publishedPackages: [],
+        tagRefs: [],
+        provenanceRefs: allEvidenceRefs,
+        rollbackNotes,
+        externalDependencies
+      }
+    });
+
+    return agentOutputSchema.parse({
+      summary,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [releaseReport satisfies ReleaseArtifact],
+      requestedTools: [],
+      blockedActionFlags: [],
+      confidence: 0.77,
+      metadata: {
+        deterministicInputs: {
+          versionTargets: releaseRequest.versionTargets,
+          qaReportRefs,
+          securityReportRefs,
+          evidenceSources,
+          constraints
+        },
+        synthesizedAssessment: {
+          readinessStatus,
+          publishingPlan,
+          rollbackNotes
+        }
       }
     });
   }
@@ -2247,6 +2401,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["qa-intake", qaIntakeAgent],
     ["security-intake", securityIntakeAgent],
     ["release-intake", releaseIntakeAgent],
+    ["release-analyst", releaseAnalystAgent],
     ["security-evidence-normalizer", securityEvidenceNormalizationAgent],
     ["security-analyst", securityAnalystAgent],
     ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],
