@@ -348,6 +348,37 @@ describe("builtin security intake agent", () => {
   });
 });
 
+describe("builtin incident intake agent", () => {
+  it("records bounded incident request metadata and staged evidence references", async () => {
+    const agent = createBuiltinAgentRegistry().get("incident-intake");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        workflowInputs: {
+          incidentRequest: {
+            incidentSummary: "Customers saw elevated 500s after the latest release candidate.",
+            severityHint: "high",
+            evidenceSources: [".agentops/evidence/incident-summary.md", ".agentops/evidence/alerts.json"],
+            releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+            issueRefs: ["#144"],
+            constraints: ["Keep staged incident evidence read-only"]
+          },
+          requestFile: ".agentops/requests/incident.yaml"
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.summary).toContain(".agentops/requests/incident.yaml");
+    expect(output.metadata?.incidentSummary).toContain("elevated 500s");
+    expect(output.metadata?.releaseReportRefs).toEqual([".agentops/runs/run-release/bundle.json"]);
+    expect(output.metadata?.evidenceSourceCount).toBe(3);
+  });
+});
+
 describe("builtin security analyst agent", () => {
   it("emits a security-report artifact from bounded security inputs", async () => {
     const agent = createBuiltinAgentRegistry().get("security-analyst");

@@ -2,9 +2,9 @@
 
 This document defines the design target for issue [#60](https://github.com/H9-Foundry/AgentForge/issues/60).
 
-It describes how AgentForge should support operational handoff and incident response workflows without pretending to be a hosted observability platform.
+It now records the implemented `incident-handoff` intake wedge and the remaining planned expansion beyond that first operations entry point.
 
-It does **not** claim that these workflows are implemented or officially shipped today.
+It does **not** claim that the broader operations or incident workflow family is fully implemented or officially promoted today.
 
 ## Why This Exists
 
@@ -30,14 +30,16 @@ The first operations expansion should define one bounded incident-handoff wedge 
 Available now:
 
 - context, policy, artifact, and audit infrastructure
-- planning and design workflow design targets
-- release/readiness tooling
+- official `incident-handoff` workflow asset with bounded staged-evidence intake
+- deterministic incident request validation and release-report reference checks
+- explicit local staged-evidence posture with read-only default behavior
 
 Not yet available:
 
-- official operations or incident workflow assets
-- explicit observability evidence adapters
-- incident-oriented lifecycle artifacts in runtime use
+- `incident-analyst`
+- `incident-brief` lifecycle artifact emission
+- deterministic staged incident-evidence normalization and routing
+- broader operations or observability adapter support
 
 ## Recommended Initial Workflow Family
 
@@ -51,15 +53,15 @@ Later planned variants can include:
 - `alert-triage`
 - `operational-readiness-review`
 
-Only `incident-handoff` should be targeted for first implementation planning.
+`incident-handoff` is now implemented as an intake-only wedge. The later incident and operations variants remain planned.
 
 ## User Jobs
 
-The first incident wedge should solve these jobs:
+The current incident intake wedge solves these jobs:
 
 1. capture bounded operational evidence for an incident or production issue
-2. summarize likely impacted repository areas and follow-up work
-3. hand off incident findings into planning, maintenance, or security workflows
+2. validate release-report handoff inputs and staged local evidence before reasoning
+3. preserve a clean handoff into the later incident analysis slice
 4. keep sensitive operational data policy-aware and auditable
 
 ## Non-Goals
@@ -77,7 +79,8 @@ This expansion should not:
 - workflow name: `incident-handoff`
 - trigger: `manual`
 - primary lifecycle domain: `operate`
-- support level at first implementation: `official`
+- support level at the intake-only implementation slice: `partial`
+- official promotion only after `incident-analyst`, `incident-brief`, deterministic evidence normalization, and the evaluator path are all implemented and validated
 - maturity at first implementation: `mvp`
 
 ### Entry Model
@@ -91,7 +94,7 @@ Recommended input model:
 ### Workflow Stages
 
 1. intake normalization
-2. deterministic evidence staging and normalization
+2. deterministic evidence staging and release-report reference validation
 3. incident analysis
 4. report and artifact emission
 
@@ -154,10 +157,13 @@ Adapter expectations:
 
 ## Follow-On Implementation Slices
 
-This epic should be decomposed into at least:
+Implemented on current `main`:
 
 1. incident request schema and official `incident-handoff` workflow asset
-2. `incident-analyst` starter agent and `incident-brief` artifact emission
-3. deterministic staged incident-evidence normalization and source provenance capture
-4. redaction/policy wiring for sensitive operational evidence and follow-up routing
+2. deterministic validation of staged incident evidence and referenced `release-report` artifacts before reasoning
 
+Next incident family follow-ons:
+
+1. `incident-analyst` starter agent and `incident-brief` artifact emission
+2. deterministic staged incident-evidence normalization and source provenance capture
+3. redaction/policy wiring for sensitive operational evidence and follow-up routing

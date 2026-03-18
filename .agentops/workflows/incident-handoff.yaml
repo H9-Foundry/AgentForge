@@ -1,0 +1,17 @@
+version: 1
+name: incident-handoff
+description: Validate staged incident evidence while keeping the default path local, read-only, and explicit.
+trigger: manual
+catalog:
+  domain: operate
+  supportLevel: partial
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: incident-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final

@@ -37,6 +37,7 @@ import {
   implementationArtifactSchema,
   implementationInventorySchema,
   implementationRequestSchema,
+  incidentRequestSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
   normalizedValidationCommandSchema,
@@ -107,6 +108,7 @@ export type ImplementationArtifactPayload = Infer<typeof implementationArtifactP
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
 export type ImplementationInventory = Infer<typeof implementationInventorySchema>;
 export type ImplementationRequest = Infer<typeof implementationRequestSchema>;
+export type IncidentRequest = Infer<typeof incidentRequestSchema>;
 export type QaArtifactPayload = Infer<typeof qaArtifactPayloadSchema>;
 export type QaArtifact = Infer<typeof qaArtifactSchema>;
 export type QaEvidenceNormalization = Infer<typeof qaEvidenceNormalizationSchema>;
