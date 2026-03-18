@@ -59,7 +59,7 @@ Later planned variants can include:
 - `docs-hygiene-review`
 - `maintenance-backlog-refresh`
 
-`maintenance-triage` is now implemented as an intake-plus-analysis wedge. The later maintenance variants remain planned.
+`maintenance-triage` is now implemented as an intake-plus-evidence-plus-analysis wedge. The later maintenance variants remain planned, and public promotion remains blocked on `explain last-run` reliability.
 
 ## User Jobs
 
@@ -163,8 +163,8 @@ Implemented on current `main`:
 1. maintenance request schema and official `maintenance-triage` workflow asset
 2. deterministic validation of dependency alert refs, docs task refs, release-report refs, and backlog issue refs before reasoning
 3. `maintenance-analyst` starter agent and `maintenance-report` lifecycle artifact emission
+4. deterministic dependency/docs/release signal collection and routing classification before reasoning
 
 Next maintenance family follow-ons:
 
-1. deterministic dependency/docs/release signal collection and routing classification
-2. GitHub and release/readiness handoff wiring for maintenance follow-up work
+1. GitHub and release/readiness handoff wiring for maintenance follow-up work

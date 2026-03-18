@@ -545,6 +545,43 @@ describe("builtin incident analyst agent", () => {
 });
 
 describe("builtin maintenance analyst agent", () => {
+  it("normalizes maintenance evidence and routing before reasoning", async () => {
+    const agent = createBuiltinAgentRegistry().get("maintenance-evidence-normalizer");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        workflowInputs: {
+          maintenanceRequest: {
+            maintenanceGoal: "Triage dependency and docs hygiene follow-up.",
+            dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+            docsTaskRefs: ["docs/quickstart.md"],
+            releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+            issueRefs: ["#152"],
+            constraints: ["Keep maintenance triage read-only"]
+          }
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+              docsTaskRefs: ["docs/quickstart.md"],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"]
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect((output.metadata as { routingRecommendation?: string } | undefined)?.routingRecommendation).toBe("implementation-proposal");
+    expect((output.metadata as { followUpWorkflowRefs?: string[] } | undefined)?.followUpWorkflowRefs).toEqual(
+      expect.arrayContaining(["implementation-proposal", "release-readiness"])
+    );
+  });
+
   it("emits a maintenance-report artifact from bounded maintenance inputs", async () => {
     const agent = createBuiltinAgentRegistry().get("maintenance-analyst");
     expect(agent).toBeDefined();
@@ -610,6 +647,31 @@ describe("builtin maintenance analyst agent", () => {
               releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
               constraints: ["Keep maintenance triage read-only"]
             }
+          },
+          evidence: {
+            metadata: {
+              maintenanceGoal: "Triage dependency and docs hygiene follow-up.",
+              dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+              docsTaskRefs: [".agentops/evidence/docs-task.md"],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+              normalizedEvidenceSources: [
+                ".agentops/evidence/dependency-alerts.json",
+                ".agentops/evidence/docs-task.md",
+                ".agentops/runs/run-release/bundle.json"
+              ],
+              missingEvidenceSources: [],
+              referencedArtifactKinds: ["release-report"],
+              affectedPackagesOrDocs: ["packages/cli", ".agentops/evidence/docs-task.md"],
+              maintenanceSignals: [
+                "Observed source .agentops/evidence/dependency-alerts.json during deterministic intake."
+              ],
+              followUpWorkflowRefs: ["implementation-proposal", "release-readiness"],
+              routingRecommendation: "implementation-proposal",
+              provenanceRefs: [
+                ".agentops/evidence/dependency-alerts.json",
+                ".agentops/runs/run-release/bundle.json#release-report"
+              ]
+            }
           }
         }
       } as never,
@@ -625,6 +687,11 @@ describe("builtin maintenance analyst agent", () => {
     }
 
     expect(artifact.payload.maintenanceScope).toContain("dependency and docs hygiene");
+    expect(artifact.payload.evidenceSources).toContain(".agentops/runs/run-release/bundle.json");
+    expect(artifact.payload.affectedPackagesOrDocs).toContain("packages/cli");
+    expect(artifact.payload.routingRecommendation).toBe("implementation-proposal");
+    expect(artifact.payload.followUpWorkflowRefs).toContain("release-readiness");
+    expect(artifact.payload.risks.length).toBeGreaterThan(0);
     expect(artifact.payload.dependencyUpdates).toContain(".agentops/evidence/dependency-alerts.json");
     expect(artifact.payload.docsUpdates).toContain(".agentops/evidence/docs-task.md");
     expect(artifact.payload.followUpIssues).toContain("#152");
