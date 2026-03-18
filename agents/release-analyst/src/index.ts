@@ -1,6 +1,17 @@
-import { agentManifestSchema, agentOutputSchema, releaseArtifactSchema } from "@h9-foundry/agentforge-schemas";
+import {
+  agentManifestSchema,
+  agentOutputSchema,
+  releaseApprovalRecommendationSchema,
+  releaseArtifactSchema,
+  releaseEvidenceNormalizationSchema
+} from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
-import type { GithubReference, ReleaseArtifact, ReleaseRequest, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import type {
+  GithubReference,
+  ReleaseArtifact,
+  ReleaseRequest,
+  WorkflowStateEnvelope
+} from "@h9-foundry/agentforge-shared-types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -113,18 +124,27 @@ export const releaseAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const qaReportRefs = asStringArray(intakeMetadata.qaReportRefs).length > 0
+    const evidenceMetadata = releaseEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const qaReportRefs = normalizedEvidence?.qaReportRefs && normalizedEvidence.qaReportRefs.length > 0
+      ? normalizedEvidence.qaReportRefs
+      : asStringArray(intakeMetadata.qaReportRefs).length > 0
       ? asStringArray(intakeMetadata.qaReportRefs)
       : releaseRequest.qaReportRefs;
-    const securityReportRefs = asStringArray(intakeMetadata.securityReportRefs).length > 0
+    const securityReportRefs = normalizedEvidence?.securityReportRefs && normalizedEvidence.securityReportRefs.length > 0
+      ? normalizedEvidence.securityReportRefs
+      : asStringArray(intakeMetadata.securityReportRefs).length > 0
       ? asStringArray(intakeMetadata.securityReportRefs)
       : releaseRequest.securityReportRefs;
-    const evidenceSources = asStringArray(intakeMetadata.evidenceSources).length > 0
+    const evidenceSources = normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+      ? normalizedEvidence.normalizedEvidenceSources
+      : asStringArray(intakeMetadata.evidenceSources).length > 0
       ? asStringArray(intakeMetadata.evidenceSources)
       : releaseRequest.evidenceSources;
     const constraints = asStringArray(intakeMetadata.constraints);
     const allEvidenceRefs = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
-    const verificationChecks = [
+    const versionResolutions = normalizedEvidence?.versionResolutions ?? [];
+    const verificationChecks = normalizedEvidence?.localReadinessChecks ?? [
       {
         name: "qa-report-refs",
         status: qaReportRefs.length > 0 ? "passed" : "skipped",
@@ -147,16 +167,32 @@ export const releaseAnalystAgent: RuntimeAgent = {
           : "No additional local release evidence sources were supplied."
       }
     ] as const;
-    const readinessStatus =
-      qaReportRefs.length > 0 && securityReportRefs.length > 0
+    const readinessStatus = normalizedEvidence?.readinessStatus ??
+      (qaReportRefs.length > 0 && securityReportRefs.length > 0
         ? "ready"
         : qaReportRefs.length > 0 || securityReportRefs.length > 0
           ? "partial"
-          : "blocked";
+          : "blocked");
+    const approvalRecommendations = normalizedEvidence?.approvalRecommendations ?? [
+      {
+        action: "publish-packages",
+        classification: readinessStatus === "ready" ? "approval_required" : "deny",
+        reason:
+          readinessStatus === "ready"
+            ? "Package publication remains outside the default read-only workflow path and needs explicit release approval."
+            : "Keep package publication blocked until bounded release evidence is complete and normalized."
+      }
+    ];
     const summary = `Release report prepared for ${releaseRequest.releaseScope}.`;
     const publishingPlan = [
+      ...(versionResolutions.length > 0
+        ? [`Resolved ${versionResolutions.length} workspace version target(s) before any publish or promotion step.`]
+        : []),
       "Review the bounded QA and security evidence before invoking any publish or promotion step.",
       "Run `agentforge release check --json` and `agentforge release verify --json` before any release cut.",
+      ...approvalRecommendations.map(
+        (recommendation) => `${recommendation.action}: ${recommendation.classification.replaceAll("_", " ")} (${recommendation.reason})`
+      ),
       "Keep trusted publishing and tag or publish actions outside this default read-only workflow path."
     ];
     const rollbackNotes = [
@@ -182,6 +218,10 @@ export const releaseAnalystAgent: RuntimeAgent = {
         versionTargets: releaseRequest.versionTargets,
         readinessStatus,
         verificationChecks: verificationChecks.map((check) => ({ ...check })),
+        versionResolutions,
+        approvalRecommendations: approvalRecommendations.map((recommendation) =>
+          releaseApprovalRecommendationSchema.parse(recommendation)
+        ),
         publishingPlan,
         trustStatus: "trusted-publishing-reviewed-separately",
         publishedPackages: [],
@@ -206,10 +246,12 @@ export const releaseAnalystAgent: RuntimeAgent = {
           qaReportRefs,
           securityReportRefs,
           evidenceSources,
-          constraints
+          constraints,
+          normalizedEvidence: normalizedEvidence ?? null
         },
         synthesizedAssessment: {
           readinessStatus,
+          approvalRecommendations,
           publishingPlan,
           rollbackNotes
         }

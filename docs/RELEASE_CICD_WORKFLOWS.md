@@ -36,6 +36,8 @@ Available now:
 - audit and lifecycle artifact infrastructure
 - bounded `release-readiness` request validation and workflow asset scaffolding
 - bounded `release-report` artifact emission from the local `release-readiness` workflow
+- deterministic release-state normalization across bounded local evidence, QA/security report refs, and workspace version targets
+- approval-classified publish or promotion follow-on recommendations that remain read-only by default
 
 Not yet available:
 
@@ -82,7 +84,7 @@ This expansion should not:
 - trigger: `manual`
 - primary lifecycle domain: `release`
 - support level at the intake-only implementation slice: `partial`
-- official promotion only after `release-report` emission and deterministic release-state normalization land
+- official promotion only after the evaluator path is stable and the workflow is documented against the published npm surface
 - maturity at first implementation: `mvp`
 
 ### Entry Model
