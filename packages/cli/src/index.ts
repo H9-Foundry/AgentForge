@@ -14,6 +14,7 @@ import {
   designArtifactSchema,
   designRequestSchema,
   implementationRequestSchema,
+  incidentRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
   qaRequestSchema,
@@ -30,6 +31,7 @@ import type {
   GithubReference,
   GithubWorkflowStatusMapping,
   ImplementationRequest,
+  IncidentRequest,
   PlanningArtifact,
   PlanningRequest,
   QaRequest,
@@ -308,6 +310,25 @@ nodes:
     outputs_to: reports.final
 `;
 
+const incidentWorkflowTemplate = `version: 1
+name: incident-handoff
+description: Validate staged incident evidence while keeping the default path local, read-only, and explicit.
+trigger: manual
+catalog:
+  domain: operate
+  supportLevel: partial
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: incident-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -528,12 +549,30 @@ function validatePlanningRequestCompleteness(request: PlanningRequest): Planning
   return request;
 }
 
+function validateIncidentRequestCompleteness(request: IncidentRequest): IncidentRequest {
+  const evidenceSignalCount = request.evidenceSources.length + request.releaseReportRefs.length;
+  if (evidenceSignalCount === 0) {
+    throw new Error(
+      "Incident request is underspecified. Add at least one of evidenceSources or releaseReportRefs."
+    );
+  }
+
+  return request;
+}
+
 function validateWorkflowLifecyclePosture(
   workflow: WorkflowDefinition,
   policyEngine: ReturnType<typeof createPolicyEngine>
 ): void {
   const domain = workflow.catalog?.domain;
-  if (domain !== "plan" && domain !== "design" && domain !== "build" && domain !== "security" && domain !== "release") {
+  if (
+    domain !== "plan" &&
+    domain !== "design" &&
+    domain !== "build" &&
+    domain !== "security" &&
+    domain !== "release" &&
+    domain !== "operate"
+  ) {
     return;
   }
 
@@ -802,6 +841,47 @@ function prepareWorkflowInputs(
     };
   }
 
+  if (workflow.name === "incident-handoff") {
+    const requestPath = ".agentops/requests/incident.yaml";
+    ensureReadablePath(policyEngine, requestPath, "incident request");
+    const incidentRequest = validateIncidentRequestCompleteness(
+      readYamlFile(join(root, requestPath), incidentRequestSchema, "incident request")
+    );
+
+    const repoContext = inferGitHubRepoContext(root);
+    const incidentIssueRefs = new Set<string>(incidentRequest.issueRefs);
+    const incidentGithubRefMap = new Map<string, GithubReference>();
+    for (const githubRef of normalizeGitHubReferences(incidentRequest.issueRefs, repoContext)) {
+      incidentGithubRefMap.set(githubRef.canonical, githubRef);
+    }
+
+    for (const releaseReportRef of incidentRequest.releaseReportRefs) {
+      ensureReadablePath(policyEngine, releaseReportRef, "release report reference");
+      ensureBundleContainsArtifactKind(root, releaseReportRef, "release-report", "release report reference");
+      const refs = loadLifecycleArtifactSourceReferences(root, releaseReportRef);
+      for (const issueRef of refs.issueRefs) {
+        incidentIssueRefs.add(issueRef);
+      }
+      for (const githubRef of refs.githubRefs) {
+        incidentGithubRefMap.set(githubRef.canonical, githubRef);
+      }
+    }
+
+    for (const evidenceSource of incidentRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "incident evidence source");
+      if (!existsSync(join(root, evidenceSource))) {
+        throw new Error(`Incident evidence source not found: ${evidenceSource}`);
+      }
+    }
+
+    return {
+      incidentRequest: incidentRequest satisfies IncidentRequest,
+      incidentIssueRefs: [...incidentIssueRefs],
+      incidentGithubRefs: [...incidentGithubRefMap.values()],
+      requestFile: requestPath
+    };
+  }
+
   return {};
 }
 
@@ -1014,6 +1094,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "release-readiness.yaml"),
       contents: releaseWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "incident-handoff.yaml"),
+      contents: incidentWorkflowTemplate
     }
   ];
 

@@ -8,6 +8,7 @@ import {
   githubActionsEvidenceSchema,
   implementationArtifactSchema,
   implementationInventorySchema,
+  incidentRequestSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
@@ -30,6 +31,7 @@ import type {
   ImplementationArtifact,
   ImplementationInventory,
   ImplementationRequest,
+  IncidentRequest,
   NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
@@ -1004,6 +1006,67 @@ const securityIntakeAgent: RuntimeAgent = {
         }),
         targetType,
         referencedArtifactKinds
+      }
+    });
+  }
+};
+
+const incidentIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "incident-intake",
+    displayName: "Incident Intake",
+    category: "operate",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.log", "**/*.md"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "operate",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const incidentRequest = getWorkflowInput<IncidentRequest>(stateSlice, "incidentRequest");
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!incidentRequest) {
+      throw new Error("incident-handoff requires a validated incident request before runtime execution.");
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded incident request from ${requestFile ?? ".agentops/requests/incident.yaml"} for ${incidentRequest.incidentSummary}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...incidentRequestSchema.parse({
+          ...incidentRequest,
+          evidenceSources: [...new Set(incidentRequest.evidenceSources)]
+        }),
+        evidenceSourceCount: incidentRequest.evidenceSources.length + incidentRequest.releaseReportRefs.length
       }
     });
   }
@@ -2648,6 +2711,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["implementation-intake", implementationIntakeAgent],
     ["qa-intake", qaIntakeAgent],
     ["security-intake", securityIntakeAgent],
+    ["incident-intake", incidentIntakeAgent],
     ["release-intake", releaseIntakeAgent],
     ["release-evidence-normalizer", releaseEvidenceNormalizationAgent],
     ["release-analyst", releaseAnalystAgent],

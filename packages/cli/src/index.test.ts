@@ -1327,6 +1327,164 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("fails incident-handoff before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    await expect(runLocalWorkflow("incident-handoff", root)).rejects.toThrow("Missing incident request");
+  });
+
+  it("rejects underspecified incident-handoff requests before reasoning", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "incident.yaml"), {
+      incidentSummary: "Customers saw elevated 500s after the latest release candidate."
+    });
+
+    await expect(runLocalWorkflow("incident-handoff", root)).rejects.toThrow(
+      /Incident request is underspecified/i
+    );
+  });
+
+  it("rejects incident-handoff when the referenced release bundle lacks a release-report artifact", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    const bundleDir = join(root, ".agentops", "runs", "run-review");
+    mkdirSync(bundleDir, { recursive: true });
+    writeFileSync(
+      join(bundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-review",
+          workflow: "pr-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.reviewArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-review/bundle.json",
+            markdown: ".agentops/runs/run-review/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(bundleDir, "summary.md"), "# review summary\n");
+    writeYamlFile(join(root, ".agentops", "requests", "incident.yaml"), {
+      incidentSummary: "Customers saw elevated 500s after the latest release candidate.",
+      releaseReportRefs: [".agentops/runs/run-review/bundle.json"]
+    });
+
+    await expect(runLocalWorkflow("incident-handoff", root)).rejects.toThrow(
+      /does not contain a release-report artifact/i
+    );
+  });
+
+  it("runs incident-handoff after valid staged incident evidence and release-report references", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+
+    const releaseBundleDir = join(root, ".agentops", "runs", "run-release");
+    mkdirSync(releaseBundleDir, { recursive: true });
+    writeFileSync(
+      join(releaseBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-release",
+          workflow: "release-readiness",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.releaseArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-release/bundle.json",
+            markdown: ".agentops/runs/run-release/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(releaseBundleDir, "summary.md"), "# release summary\n");
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(join(root, ".agentops", "evidence", "incident-summary.md"), "# incident summary\n");
+    writeFileSync(join(root, ".agentops", "evidence", "alerts.json"), JSON.stringify({ alert: "elevated-500s" }, null, 2));
+    writeYamlFile(join(root, ".agentops", "requests", "incident.yaml"), {
+      incidentSummary: "Customers saw elevated 500s after the latest release candidate.",
+      severityHint: "high",
+      evidenceSources: [".agentops/evidence/incident-summary.md", ".agentops/evidence/alerts.json"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      issueRefs: ["#144"],
+      constraints: ["Keep staged incident evidence read-only"]
+    });
+
+    const incidentRun = await runLocalWorkflow("incident-handoff", root);
+
+    expect(incidentRun.status).toBe("success");
+    expect(incidentRun.findings).toBe(0);
+    expect(incidentRun.artifactCount).toBe(0);
+
+    const bundle = readJson<{ workflow: string; lifecycleArtifacts: Array<{ artifactKind: string }> }>(incidentRun.jsonPath);
+    expect(bundle.workflow).toBe("incident-handoff");
+    expect(bundle.lifecycleArtifacts).toHaveLength(0);
+  });
+
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {
     const root = createGitFixture("agentops-github-refs-");
     initProject(root);
