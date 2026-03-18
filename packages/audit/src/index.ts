@@ -6,13 +6,14 @@ import type {
   GithubHandoffSummary,
   GithubReference,
   GithubWorkflowStatusMapping,
+  IncidentArtifact,
   PlanningArtifact,
   QaArtifact,
   ReleaseArtifact,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
 
-type GitHubRenderableArtifact = PlanningArtifact | DesignArtifact | QaArtifact | ReleaseArtifact;
+type GitHubRenderableArtifact = PlanningArtifact | DesignArtifact | IncidentArtifact | QaArtifact | ReleaseArtifact;
 
 export function createAuditEntry(entry: AuditEntry): AuditEntry {
   return entry;
@@ -89,6 +90,16 @@ function renderQaSections(artifact: QaArtifact): GithubHandoffSection[] {
   ].filter((section) => section.lines.length > 0);
 }
 
+function renderIncidentSections(artifact: IncidentArtifact): GithubHandoffSection[] {
+  return [
+    { heading: "Summary", lines: [artifact.summary] },
+    { heading: "Timeline Summary", lines: artifact.payload.timelineSummary ?? [] },
+    { heading: "Likely Impacted Areas", lines: artifact.payload.likelyImpactedAreas ?? [] },
+    { heading: "Follow-Up Workflows", lines: artifact.payload.followUpWorkflowRefs ?? [] },
+    { heading: "Open Questions", lines: artifact.payload.openQuestions ?? [] }
+  ].filter((section) => section.lines.length > 0);
+}
+
 function renderReleaseSections(artifact: ReleaseArtifact): GithubHandoffSection[] {
   return [
     { heading: "Summary", lines: [artifact.summary] },
@@ -108,6 +119,8 @@ function buildGitHubHandoffSections(artifact: GitHubRenderableArtifact): GithubH
       return renderPlanningSections(artifact);
     case "design-record":
       return renderDesignSections(artifact);
+    case "incident-brief":
+      return renderIncidentSections(artifact);
     case "qa-report":
       return renderQaSections(artifact);
     case "release-report":

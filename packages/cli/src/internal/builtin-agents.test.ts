@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 
 import { createBuiltinAgentRegistry } from "./builtin-agents.js";
 
@@ -376,6 +377,92 @@ describe("builtin incident intake agent", () => {
     expect(output.metadata?.incidentSummary).toContain("elevated 500s");
     expect(output.metadata?.releaseReportRefs).toEqual([".agentops/runs/run-release/bundle.json"]);
     expect(output.metadata?.evidenceSourceCount).toBe(3);
+  });
+});
+
+describe("builtin incident analyst agent", () => {
+  it("emits an incident-brief artifact from bounded incident inputs", async () => {
+    const agent = createBuiltinAgentRegistry().get("incident-analyst");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {
+        version: "1.0.0",
+        runId: "run-incident",
+        workflow: "incident-handoff",
+        mode: "inspect",
+        repo: {
+          root: "/repo",
+          name: "repo",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        changes: {
+          changedFiles: [],
+          stagedFiles: [],
+          untrackedFiles: [],
+          impactedPaths: ["packages"],
+          diffStats: { filesChanged: 0, insertions: 0, deletions: 0 },
+          fileDetails: []
+        },
+        context: {
+          localExecution: true,
+          ciExecution: false,
+          trigger: "manual",
+          timestamp: new Date().toISOString()
+        },
+        policy: {} as never,
+        approvals: [],
+        findings: [],
+        proposedActions: [],
+        lifecycleArtifacts: [],
+        blockedPlugins: [],
+        workflowInputs: {},
+        agentResults: {},
+        auditTrail: []
+      },
+      stateSlice: {
+        workflowInputs: {
+          incidentRequest: {
+            incidentSummary: "Customers saw elevated 500s after the latest release candidate.",
+            severityHint: "high",
+            evidenceSources: [".agentops/evidence/incident-summary.md", ".agentops/evidence/alerts.json"],
+            releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+            issueRefs: ["#151"],
+            constraints: ["Keep staged incident evidence read-only"]
+          },
+          incidentIssueRefs: ["#151"],
+          incidentGithubRefs: [schemaFixtures.githubReference],
+          requestFile: ".agentops/requests/incident.yaml"
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              evidenceSources: [".agentops/evidence/incident-summary.md", ".agentops/evidence/alerts.json"],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+              severityHint: "high",
+              constraints: ["Keep staged incident evidence read-only"]
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    const artifact = output.lifecycleArtifacts[0];
+    expect(artifact?.artifactKind).toBe("incident-brief");
+    if (!artifact || artifact.artifactKind !== "incident-brief") {
+      throw new Error("Expected incident-brief artifact.");
+    }
+
+    expect(artifact.payload.incidentSummary).toContain("elevated 500s");
+    expect(artifact.payload.followUpWorkflowRefs).toContain("security-review");
+    expect((output.metadata as { synthesizedAssessment?: { likelyImpactedAreas?: string[] } } | undefined)?.synthesizedAssessment?.likelyImpactedAreas)
+      .toContain("release-readiness");
   });
 });
 

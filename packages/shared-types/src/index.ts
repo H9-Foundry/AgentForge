@@ -37,6 +37,8 @@ import {
   implementationArtifactSchema,
   implementationInventorySchema,
   implementationRequestSchema,
+  incidentArtifactPayloadSchema,
+  incidentArtifactSchema,
   incidentRequestSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
@@ -108,6 +110,8 @@ export type ImplementationArtifactPayload = Infer<typeof implementationArtifactP
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
 export type ImplementationInventory = Infer<typeof implementationInventorySchema>;
 export type ImplementationRequest = Infer<typeof implementationRequestSchema>;
+export type IncidentArtifactPayload = Infer<typeof incidentArtifactPayloadSchema>;
+export type IncidentArtifact = Infer<typeof incidentArtifactSchema>;
 export type IncidentRequest = Infer<typeof incidentRequestSchema>;
 export type QaArtifactPayload = Infer<typeof qaArtifactPayloadSchema>;
 export type QaArtifact = Infer<typeof qaArtifactSchema>;

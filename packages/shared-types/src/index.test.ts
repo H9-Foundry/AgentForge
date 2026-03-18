@@ -7,6 +7,7 @@ import type {
   ImplementationArtifact,
   ImplementationInventory,
   ImplementationRequest,
+  IncidentArtifact,
   IncidentRequest,
   MaintenanceArtifact,
   NormalizedValidationCommand,
@@ -36,6 +37,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<DesignArtifact["lifecycleDomain"]>().toEqualTypeOf<"design">();
     expectTypeOf<ImplementationArtifact["artifactKind"]>().toEqualTypeOf<"implementation-proposal">();
     expectTypeOf<ImplementationArtifact["lifecycleDomain"]>().toEqualTypeOf<"build">();
+    expectTypeOf<IncidentArtifact["artifactKind"]>().toEqualTypeOf<"incident-brief">();
+    expectTypeOf<IncidentArtifact["lifecycleDomain"]>().toEqualTypeOf<"operate">();
     expectTypeOf<QaArtifact["artifactKind"]>().toEqualTypeOf<"qa-report">();
     expectTypeOf<QaArtifact["lifecycleDomain"]>().toEqualTypeOf<"test">();
     expectTypeOf<SecurityArtifact["artifactKind"]>().toEqualTypeOf<"security-report">();

@@ -17,13 +17,14 @@ export const lifecycleArtifactKindSchema = z.enum([
   "planning-brief",
   "design-record",
   "implementation-proposal",
+  "incident-brief",
   "qa-report",
   "security-report",
   "review-report",
   "release-report",
   "maintenance-report"
 ]);
-export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "review", "release", "maintain"]);
+export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "review", "release", "operate", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 export const githubReferenceKindSchema = z.enum(["issue", "pull_request"]);
@@ -534,7 +535,7 @@ export const githubWorkflowStatusMappingSchema = z.object({
   reason: z.string().min(1)
 });
 
-export const githubHandoffArtifactKindSchema = z.enum(["planning-brief", "design-record", "qa-report", "release-report"]);
+export const githubHandoffArtifactKindSchema = z.enum(["planning-brief", "design-record", "incident-brief", "qa-report", "release-report"]);
 
 export const githubHandoffSectionSchema = z.object({
   heading: z.string().min(1),
@@ -670,6 +671,15 @@ export const implementationArtifactPayloadSchema = z.object({
   openQuestions: z.array(z.string().min(1)).default([])
 });
 
+export const incidentArtifactPayloadSchema = z.object({
+  incidentSummary: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  timelineSummary: z.array(z.string().min(1)).default([]),
+  likelyImpactedAreas: z.array(z.string().min(1)).default([]),
+  followUpWorkflowRefs: z.array(z.string().min(1)).default([]),
+  openQuestions: z.array(z.string().min(1)).default([])
+});
+
 export const releaseVerificationCheckSchema = z.object({
   name: z.string().min(1),
   status: z.enum(["passed", "failed", "skipped"]),
@@ -769,6 +779,12 @@ export const implementationArtifactSchema = lifecycleArtifactEnvelopeSchema.exte
   payload: implementationArtifactPayloadSchema
 });
 
+export const incidentArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("incident-brief"),
+  lifecycleDomain: z.literal("operate"),
+  payload: incidentArtifactPayloadSchema
+});
+
 export const qaArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("qa-report"),
   lifecycleDomain: z.literal("test"),
@@ -803,6 +819,7 @@ export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   planningArtifactSchema,
   designArtifactSchema,
   implementationArtifactSchema,
+  incidentArtifactSchema,
   qaArtifactSchema,
   securityArtifactSchema,
   reviewArtifactSchema,
@@ -861,6 +878,7 @@ export const schemaRegistry = {
   designArtifactOption: designArtifactOptionSchema,
   designArtifactPayload: designArtifactPayloadSchema,
   implementationArtifactPayload: implementationArtifactPayloadSchema,
+  incidentArtifactPayload: incidentArtifactPayloadSchema,
   qaArtifactPayload: qaArtifactPayloadSchema,
   securityArtifactPayload: securityArtifactPayloadSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
@@ -874,6 +892,7 @@ export const schemaRegistry = {
   planningArtifact: planningArtifactSchema,
   designArtifact: designArtifactSchema,
   implementationArtifact: implementationArtifactSchema,
+  incidentArtifact: incidentArtifactSchema,
   qaArtifact: qaArtifactSchema,
   securityArtifact: securityArtifactSchema,
   reviewArtifact: reviewArtifactSchema,
@@ -1021,6 +1040,28 @@ const implementationArtifactFixture = {
     ],
     risks: ["Affected repository surfaces may widen once deterministic inventory lands."],
     openQuestions: ["Which validation commands should become allowlisted in the next slice?"]
+  }
+} as const;
+
+const incidentArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "incident-brief",
+  lifecycleDomain: "operate",
+  summary: "Incident brief prepared for elevated 500s after the latest release candidate.",
+  payload: {
+    incidentSummary: "Customers saw elevated 500s after the latest release candidate.",
+    evidenceSources: [
+      ".agentops/evidence/incident-summary.md",
+      ".agentops/evidence/alerts.json",
+      ".agentops/runs/run-release/bundle.json"
+    ],
+    timelineSummary: [
+      "Severity hint: high.",
+      "Two staged evidence sources and one release-report reference were validated before reasoning."
+    ],
+    likelyImpactedAreas: ["release-readiness", "maintenance-triage", "packages/cli"],
+    followUpWorkflowRefs: ["maintenance-triage", "security-review"],
+    openQuestions: ["Which release candidate introduced the first reproducible 500 response?"]
   }
 } as const;
 
@@ -1535,6 +1576,7 @@ export const schemaFixtures = {
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,
   implementationArtifact: implementationArtifactFixture,
+  incidentArtifact: incidentArtifactFixture,
   qaArtifact: qaArtifactFixture,
   securityArtifact: securityArtifactFixture,
   reviewArtifact: reviewArtifactFixture,

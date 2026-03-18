@@ -14,6 +14,7 @@ import {
   implementationArtifactSchema,
   implementationInventorySchema,
   implementationRequestSchema,
+  incidentArtifactSchema,
   incidentRequestSchema,
   lifecycleArtifactEnvelopeSchema,
   maintenanceArtifactSchema,
@@ -56,6 +57,7 @@ describe("schema fixtures", () => {
     expect(() => githubWorkflowStatusMappingSchema.parse(schemaFixtures.githubWorkflowStatusMapping)).not.toThrow();
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
+    expect(() => incidentArtifactSchema.parse(schemaFixtures.incidentArtifact)).not.toThrow();
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
     expect(() => securityEvidenceNormalizationSchema.parse(schemaFixtures.securityEvidenceNormalization)).not.toThrow();
     expect(() => releaseEvidenceNormalizationSchema.parse(schemaFixtures.releaseEvidenceNormalization)).not.toThrow();
@@ -96,6 +98,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.planningArtifact).toBeDefined();
     expect(jsonSchemas.designArtifact).toBeDefined();
     expect(jsonSchemas.implementationArtifact).toBeDefined();
+    expect(jsonSchemas.incidentArtifact).toBeDefined();
     expect(jsonSchemas.qaArtifact).toBeDefined();
     expect(jsonSchemas.securityArtifact).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();

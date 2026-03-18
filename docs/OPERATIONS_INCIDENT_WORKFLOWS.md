@@ -32,12 +32,12 @@ Available now:
 - context, policy, artifact, and audit infrastructure
 - official `incident-handoff` workflow asset with bounded staged-evidence intake
 - deterministic incident request validation and release-report reference checks
+- bounded `incident-analyst`
+- `incident-brief` lifecycle artifact emission
 - explicit local staged-evidence posture with read-only default behavior
 
 Not yet available:
 
-- `incident-analyst`
-- `incident-brief` lifecycle artifact emission
 - deterministic staged incident-evidence normalization and routing
 - broader operations or observability adapter support
 
@@ -161,9 +161,9 @@ Implemented on current `main`:
 
 1. incident request schema and official `incident-handoff` workflow asset
 2. deterministic validation of staged incident evidence and referenced `release-report` artifacts before reasoning
+3. `incident-analyst` starter agent and `incident-brief` artifact emission
 
 Next incident family follow-ons:
 
-1. `incident-analyst` starter agent and `incident-brief` artifact emission
-2. deterministic staged incident-evidence normalization and source provenance capture
-3. redaction/policy wiring for sensitive operational evidence and follow-up routing
+1. deterministic staged incident-evidence normalization and source provenance capture
+2. redaction/policy wiring for sensitive operational evidence and follow-up routing
