@@ -34,10 +34,10 @@ Available now:
 - release validation and publish automation
 - package/version verification
 - audit and lifecycle artifact infrastructure
+- bounded `release-readiness` request validation and workflow asset scaffolding
 
 Not yet available:
 
-- an official release workflow asset
 - a release-candidate lifecycle artifact emitted by the runtime
 - explicit CI evidence ingestion into a release workflow
 - support for broader host-agnostic pipeline orchestration
@@ -81,7 +81,8 @@ This expansion should not:
 - workflow name: `release-readiness`
 - trigger: `manual`
 - primary lifecycle domain: `release`
-- support level at first implementation: `official`
+- support level at the intake-only implementation slice: `partial`
+- official promotion only after `release-report` emission and deterministic release-state normalization land
 - maturity at first implementation: `mvp`
 
 ### Entry Model
@@ -164,4 +165,3 @@ This epic should be decomposed into at least:
 2. `release-analyst` starter agent and `release-report` artifact emission
 3. deterministic CI evidence ingestion and release-state normalization
 4. approval-gated publish/promotion orchestration aligned to release-trust controls
-

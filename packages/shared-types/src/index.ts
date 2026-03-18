@@ -55,6 +55,7 @@ import {
   proposedActionSchema,
   releaseArtifactPayloadSchema,
   releaseArtifactSchema,
+  releaseRequestSchema,
   releaseVerificationCheckSchema,
   releaseVersionTargetSchema,
   reviewArtifactPayloadSchema,
@@ -116,6 +117,7 @@ export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;
 export type NormalizedValidationCommand = Infer<typeof normalizedValidationCommandSchema>;
 export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSchema>;
 export type ReleaseVersionTarget = Infer<typeof releaseVersionTargetSchema>;
+export type ReleaseRequest = Infer<typeof releaseRequestSchema>;
 export type ReleaseArtifactPayload = Infer<typeof releaseArtifactPayloadSchema>;
 export type ReleaseArtifact = Infer<typeof releaseArtifactSchema>;
 export type MaintenanceArtifactPayload = Infer<typeof maintenanceArtifactPayloadSchema>;

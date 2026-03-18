@@ -17,6 +17,7 @@ import {
   planningArtifactSchema,
   planningRequestSchema,
   qaRequestSchema,
+  releaseRequestSchema,
   securityRequestSchema,
   workflowDefinitionSchema
 } from "@h9-foundry/agentforge-schemas";
@@ -32,6 +33,7 @@ import type {
   PlanningArtifact,
   PlanningRequest,
   QaRequest,
+  ReleaseRequest,
   SecurityRequest,
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
@@ -279,6 +281,25 @@ nodes:
     outputs_to: reports.final
 `;
 
+const releaseWorkflowTemplate = `version: 1
+name: release-readiness
+description: Validate a bounded release-readiness request while keeping trusted publish automation separate.
+trigger: manual
+catalog:
+  domain: release
+  supportLevel: partial
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: release-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
 function loadYaml(filePath: string): unknown {
   return yaml.load(readFileSync(filePath, "utf8"));
 }
@@ -504,7 +525,7 @@ function validateWorkflowLifecyclePosture(
   policyEngine: ReturnType<typeof createPolicyEngine>
 ): void {
   const domain = workflow.catalog?.domain;
-  if (domain !== "plan" && domain !== "design" && domain !== "build" && domain !== "security") {
+  if (domain !== "plan" && domain !== "design" && domain !== "build" && domain !== "security" && domain !== "release") {
     return;
   }
 
@@ -551,6 +572,24 @@ function loadDesignBundleArtifact(root: string, designRecordRef: string): Design
   }
 
   return designArtifactSchema.parse(designArtifact);
+}
+
+function ensureBundleContainsArtifactKind(root: string, bundleRef: string, artifactKind: string, purpose: string): void {
+  const artifactKinds = loadLifecycleArtifactKinds(root, bundleRef);
+  if (!artifactKinds.includes(artifactKind)) {
+    throw new Error(`Referenced ${purpose} does not contain a ${artifactKind} artifact: ${bundleRef}`);
+  }
+}
+
+function validateReleaseRequestCompleteness(request: ReleaseRequest): ReleaseRequest {
+  const evidenceSignalCount = request.qaReportRefs.length + request.securityReportRefs.length + request.evidenceSources.length;
+  if (evidenceSignalCount === 0) {
+    throw new Error(
+      "Release request is underspecified. Add at least one of qaReportRefs, securityReportRefs, or evidenceSources."
+    );
+  }
+
+  return request;
 }
 
 function loadLifecycleArtifactKinds(root: string, bundleRef: string): string[] {
@@ -703,6 +742,54 @@ function prepareWorkflowInputs(
       securityTargetArtifactKinds: referencedArtifactKinds,
       securityIssueRefs: referencedSourceRefs.issueRefs,
       securityGithubRefs: referencedSourceRefs.githubRefs,
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "release-readiness") {
+    const requestPath = ".agentops/requests/release.yaml";
+    ensureReadablePath(policyEngine, requestPath, "release request");
+    const releaseRequest = validateReleaseRequestCompleteness(
+      readYamlFile(join(root, requestPath), releaseRequestSchema, "release request")
+    );
+
+    const releaseIssueRefs = new Set<string>();
+    const releaseGithubRefMap = new Map<string, GithubReference>();
+    for (const qaReportRef of releaseRequest.qaReportRefs) {
+      ensureReadablePath(policyEngine, qaReportRef, "QA report reference");
+      ensureBundleContainsArtifactKind(root, qaReportRef, "qa-report", "QA report reference");
+      const refs = loadLifecycleArtifactSourceReferences(root, qaReportRef);
+      for (const issueRef of refs.issueRefs) {
+        releaseIssueRefs.add(issueRef);
+      }
+      for (const githubRef of refs.githubRefs) {
+        releaseGithubRefMap.set(githubRef.canonical, githubRef);
+      }
+    }
+
+    for (const securityReportRef of releaseRequest.securityReportRefs) {
+      ensureReadablePath(policyEngine, securityReportRef, "security report reference");
+      ensureBundleContainsArtifactKind(root, securityReportRef, "security-report", "security report reference");
+      const refs = loadLifecycleArtifactSourceReferences(root, securityReportRef);
+      for (const issueRef of refs.issueRefs) {
+        releaseIssueRefs.add(issueRef);
+      }
+      for (const githubRef of refs.githubRefs) {
+        releaseGithubRefMap.set(githubRef.canonical, githubRef);
+      }
+    }
+
+    for (const evidenceSource of releaseRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "release evidence source");
+      if (!existsSync(join(root, evidenceSource))) {
+        throw new Error(`Release evidence source not found: ${evidenceSource}`);
+      }
+    }
+
+    return {
+      releaseRequest: releaseRequest satisfies ReleaseRequest,
+      releaseIssueRefs: [...releaseIssueRefs],
+      releaseGithubRefs: [...releaseGithubRefMap.values()],
       requestFile: requestPath
     };
   }
@@ -915,6 +1002,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "security-review.yaml"),
       contents: securityWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "release-readiness.yaml"),
+      contents: releaseWorkflowTemplate
     }
   ];
 

@@ -1,0 +1,17 @@
+version: 1
+name: release-readiness
+description: Validate a bounded release-readiness request while keeping trusted publish automation separate.
+trigger: manual
+catalog:
+  domain: release
+  supportLevel: partial
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: release-intake
+    outputs_to: agentResults.intake
+  - id: report
+    kind: report
+    outputs_to: reports.final
