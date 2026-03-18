@@ -14,7 +14,7 @@ This document describes lifecycle coverage across AgentForge using three honest 
 | Architecture / design | Available now | `architecture-design-review` is an official local workflow that validates `.agentops/requests/design.yaml`, requires a `planningBriefRef`, and emits a `design-record` artifact. | Expand deterministic impact inventory and downstream implementation/design review handoff. |
 | Build / implementation | Available now | `implementation-proposal` is an official local workflow that validates `.agentops/requests/implementation.yaml`, requires a `designRecordRef`, and emits an `implementation-proposal` artifact without widening the default side-effect posture. | Expand from proposal-only implementation planning into downstream QA, security review, and gated apply-capable follow-ons. |
 | Review / test / QA | Available now | `pr-review` remains available, and `qa-review` is now an official local workflow that validates `.agentops/requests/qa.yaml`, consumes an implementation proposal bundle, and emits a `qa-report` artifact with deterministic evidence normalization. | Broaden into additional QA variants such as regression triage and release-readiness QA. |
-| Security / compliance / DevSecOps | In progress | Policy, redaction, trust metadata, release trust, and audit exist. | Add richer security workflow coverage and security-specific adapters/evals. |
+| Security / compliance / DevSecOps | Available now | `security-review` is an official local workflow that validates `.agentops/requests/security.yaml`, consumes bounded local evidence, and emits a `security-report` artifact without widening the default side-effect posture. | Expand beyond `security-review` into additional security/DevSecOps variants, adapters, and evals. |
 | Release / CI/CD | In progress | Release verification, trusted publishing, package validation, and GitHub workflows exist. | Add broader release/CI workflow coverage beyond package publishing. |
 | Operate / incident response / observability handoff | Planned | No official workflow yet. | Add incident-handoff and operational context workflows. |
 | Maintain / upgrade / docs / dependency hygiene | In progress | Dependency and release hygiene exist through GitHub workflows and repo maintenance practices. | Add explicit maintenance workflows and docs hygiene automation. |
@@ -38,10 +38,12 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `qa-review`
   - location: `.agentops/workflows/qa-review.yaml`
   - purpose: validate a QA request, consume an implementation proposal bundle, normalize bounded local evidence, and emit a `qa-report` lifecycle artifact
+- `security-review`
+  - location: `.agentops/workflows/security-review.yaml`
+  - purpose: validate a security request, consume bounded local evidence, and emit a `security-report` lifecycle artifact with deterministic evidence normalization and tighter policy handling
 
 ### In progress
 
-- security / DevSecOps
 - release / CI-CD
 - maintenance / dependency / docs hygiene
 
@@ -65,6 +67,7 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `design-analyst`
 - `implementation-planner`
 - `qa-analyst`
+- `security-analyst`
 
 ### Planned expansion areas
 

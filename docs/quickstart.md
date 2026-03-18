@@ -146,6 +146,34 @@ node packages/cli/dist/bin.js explain last-run --json
 
 The QA bundle should include one `qa-report` lifecycle artifact with normalized evidence sources, normalized executed checks, coverage gaps, findings, and recommended next checks. The default path remains read-only and bounded to local evidence.
 
+## Run The Official Security Workflow
+
+`security-review` is official on current `main`, but until the next npm release includes the latest security slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
+
+Create a security request that points at the prior QA or implementation bundle:
+
+```bash
+cat > .agentops/requests/security.yaml <<'EOF'
+targetRef: .agentops/runs/<qa-or-implementation-run-id>/bundle.json
+evidenceSources:
+  - .agentops/runs/<qa-or-implementation-run-id>/summary.md
+focusAreas:
+  - dependency-risk
+  - release-candidate-review
+severityThreshold: medium
+releaseContext: candidate
+EOF
+```
+
+Run the official security wedge from the current repo build:
+
+```bash
+node packages/cli/dist/bin.js run security-review --json
+node packages/cli/dist/bin.js explain last-run --json
+```
+
+The security bundle should include one `security-report` lifecycle artifact with normalized security evidence provenance, findings, severity summary, mitigations, release impact, and follow-up work. The default path remains read-only and more restrictive than the generic review wedges.
+
 ## Contributor And Source-Build Path
 
 If you want to work on AgentForge itself, build the monorepo locally:
@@ -178,6 +206,7 @@ node packages/cli/dist/bin.js run planning-discovery
 node packages/cli/dist/bin.js run architecture-design-review
 node packages/cli/dist/bin.js run implementation-proposal
 node packages/cli/dist/bin.js run qa-review
+node packages/cli/dist/bin.js run security-review
 ```
 
 ## Inspect The Latest Run
