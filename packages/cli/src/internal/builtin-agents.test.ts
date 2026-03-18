@@ -383,3 +383,72 @@ describe("builtin security analyst agent", () => {
     expect(artifact.payload.releaseImpact).toContain("candidate release");
   });
 });
+
+describe("builtin security evidence normalizer", () => {
+  it("normalizes bounded security evidence with provenance and affected package hints", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agentforge-security-evidence-"));
+    mkdirSync(join(root, ".agentops", "runs", "run-impl"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "runs", "run-impl", "bundle.json"),
+      JSON.stringify(
+        {
+          lifecycleArtifacts: [
+            {
+              artifactKind: "implementation-proposal",
+              payload: {
+                affectedPaths: ["packages/app/src/index.ts", "packages/runtime/src/index.ts"]
+              }
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(root, ".agentops", "runs", "run-impl", "summary.md"), "# summary\n");
+
+    const agent = createBuiltinAgentRegistry().get("security-evidence-normalizer");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        repo: {
+          root,
+          name: "fixture-root",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        workflowInputs: {
+          securityRequest: {
+            targetRef: ".agentops/runs/run-impl/bundle.json",
+            evidenceSources: [".agentops/runs/run-impl/summary.md"],
+            focusAreas: ["dependency-risk", "release-readiness"],
+            constraints: ["Keep the workflow read-only"],
+            releaseContext: "candidate"
+          }
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              targetType: "artifact-bundle"
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.metadata?.normalizedEvidenceSources).toEqual([
+      ".agentops/runs/run-impl/bundle.json",
+      ".agentops/runs/run-impl/summary.md"
+    ]);
+    expect(output.metadata?.referencedArtifactKinds).toEqual(["implementation-proposal"]);
+    expect(output.metadata?.affectedPackages).toEqual(["packages/app", "packages/runtime"]);
+    expect(output.metadata?.provenanceRefs).toContain(".agentops/runs/run-impl/bundle.json#implementation-proposal");
+  });
+});

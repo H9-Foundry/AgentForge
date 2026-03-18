@@ -15,6 +15,7 @@ import type {
   QaEvidenceNormalization,
   QaRequest,
   SecurityArtifact,
+  SecurityEvidenceNormalization,
   SecurityRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
@@ -58,6 +59,7 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<QaEvidenceNormalization["targetType"]>().toEqualTypeOf<
       "artifact-bundle" | "validation-output" | "local-reference"
     >();
+    expectTypeOf<SecurityEvidenceNormalization["targetType"]>().toEqualTypeOf<"artifact-bundle" | "local-reference">();
     expectTypeOf<ImplementationInventory["resolvedAffectedPaths"]>().toEqualTypeOf<string[]>();
     expectTypeOf<NormalizedValidationCommand["classification"]>().toEqualTypeOf<
       "allow" | "approval_required" | "deny"

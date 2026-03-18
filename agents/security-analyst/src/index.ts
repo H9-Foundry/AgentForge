@@ -104,12 +104,19 @@ export const securityAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const referencedArtifactKinds = asStringArray(intakeMetadata.referencedArtifactKinds);
-    const normalizedFocusAreas = asStringArray(intakeMetadata.focusAreas);
+    const evidenceMetadata = isRecord(stateSlice.agentResults?.evidence?.metadata) ? stateSlice.agentResults.evidence.metadata : {};
+    const referencedArtifactKinds = asStringArray(evidenceMetadata.referencedArtifactKinds).length > 0
+      ? asStringArray(evidenceMetadata.referencedArtifactKinds)
+      : asStringArray(intakeMetadata.referencedArtifactKinds);
+    const normalizedFocusAreas = asStringArray(evidenceMetadata.normalizedFocusAreas).length > 0
+      ? asStringArray(evidenceMetadata.normalizedFocusAreas)
+      : asStringArray(intakeMetadata.focusAreas);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
     const evidenceSources =
-      asStringArray(intakeMetadata.evidenceSources).length > 0
-        ? asStringArray(intakeMetadata.evidenceSources)
+      asStringArray(evidenceMetadata.normalizedEvidenceSources).length > 0
+        ? asStringArray(evidenceMetadata.normalizedEvidenceSources)
+        : asStringArray(intakeMetadata.evidenceSources).length > 0
+          ? asStringArray(intakeMetadata.evidenceSources)
         : [...new Set([securityRequest.targetRef, ...securityRequest.evidenceSources])];
     const focusAreas = normalizedFocusAreas.length > 0 ? normalizedFocusAreas : securityRequest.focusAreas;
     const inferredSeverity = securityRequest.releaseContext === "blocking" ? "high" : securityRequest.releaseContext === "candidate" ? "medium" : "low";
@@ -144,16 +151,33 @@ export const securityAnalystAgent: RuntimeAgent = {
       ...(normalizedConstraints.length > 0 ? [`Keep security follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
     ];
     const followUpWork = [
+      ...asStringArray(evidenceMetadata.securitySignals),
       ...(referencedArtifactKinds.length > 0
         ? [`Confirm the security posture for referenced artifacts: ${referencedArtifactKinds.join(", ")}.`]
         : []),
-      "Add deterministic security evidence normalization before broadening the workflow surface."
+      "Use deterministic security evidence normalization outputs before broadening the workflow surface."
     ];
     const summary = `Security report prepared for ${securityRequest.targetRef}.`;
     const securityReport = securityArtifactSchema.parse({
-      ...buildArtifactEnvelopeBase(state, summary, [requestFile ?? ".agentops/requests/security.yaml", securityRequest.targetRef, ...securityRequest.evidenceSources]),
+      ...buildArtifactEnvelopeBase(
+        state,
+        summary,
+        [
+          requestFile ?? ".agentops/requests/security.yaml",
+          ...(
+            asStringArray(evidenceMetadata.provenanceRefs).length > 0
+              ? asStringArray(evidenceMetadata.provenanceRefs)
+              : [securityRequest.targetRef, ...securityRequest.evidenceSources]
+          )
+        ]
+      ),
       artifactKind: "security-report",
       lifecycleDomain: "security",
+      redaction: {
+        applied: true,
+        strategyVersion: "1.0.0",
+        categories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key", "security-sensitive"]
+      },
       payload: {
         targetRef: securityRequest.targetRef,
         evidenceSources,
