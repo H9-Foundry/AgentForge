@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 import yaml from "js-yaml";
 
@@ -25,6 +26,8 @@ import type {
   BlockedPlugin,
   DesignArtifact,
   DesignRequest,
+  GithubReference,
+  GithubWorkflowStatusMapping,
   ImplementationRequest,
   PlanningArtifact,
   PlanningRequest,
@@ -288,6 +291,178 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+interface GitHubRepoContext {
+  host: string;
+  owner: string;
+  repo: string;
+}
+
+function runGit(root: string, args: string[]): string {
+  try {
+    return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function parseGitHubRepositoryUrl(value: string): GitHubRepoContext | undefined {
+  const trimmed = value.trim();
+  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    return {
+      host: sshMatch[1].toLowerCase(),
+      owner: sshMatch[2],
+      repo: sshMatch[3]
+    };
+  }
+
+  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/)?$/i);
+  if (!httpsMatch) {
+    return undefined;
+  }
+
+  return {
+    host: httpsMatch[1].toLowerCase(),
+    owner: httpsMatch[2],
+    repo: httpsMatch[3]
+  };
+}
+
+function inferGitHubRepoContext(root: string): GitHubRepoContext | undefined {
+  const packageJsonPath = join(root, "package.json");
+  if (existsSync(packageJsonPath)) {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+    if (isRecord(parsed)) {
+      const repository = parsed.repository;
+      if (typeof repository === "string") {
+        const context = parseGitHubRepositoryUrl(repository);
+        if (context) {
+          return context;
+        }
+      }
+
+      if (isRecord(repository) && typeof repository.url === "string") {
+        const context = parseGitHubRepositoryUrl(repository.url);
+        if (context) {
+          return context;
+        }
+      }
+    }
+  }
+
+  const remoteUrl = runGit(root, ["config", "--get", "remote.origin.url"]);
+  return remoteUrl ? parseGitHubRepositoryUrl(remoteUrl) : undefined;
+}
+
+function normalizeGitHubReference(rawValue: string, repoContext?: GitHubRepoContext): GithubReference | undefined {
+  const raw = rawValue.trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  const fromParts = (context: GitHubRepoContext, kind: "issue" | "pull_request", number: number): GithubReference => ({
+    platform: "github",
+    host: context.host,
+    owner: context.owner,
+    repo: context.repo,
+    kind,
+    number,
+    canonical: kind === "issue"
+      ? `${context.owner}/${context.repo}#${number}`
+      : `${context.owner}/${context.repo}/pull/${number}`,
+    url: kind === "issue"
+      ? `https://${context.host}/${context.owner}/${context.repo}/issues/${number}`
+      : `https://${context.host}/${context.owner}/${context.repo}/pull/${number}`,
+    source: raw
+  });
+
+  const urlMatch = raw.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/)?$/i);
+  if (urlMatch) {
+    return fromParts(
+      { host: urlMatch[1].toLowerCase(), owner: urlMatch[2], repo: urlMatch[3] },
+      urlMatch[4].toLowerCase() === "pull" ? "pull_request" : "issue",
+      Number.parseInt(urlMatch[5], 10)
+    );
+  }
+
+  const repoIssueMatch = raw.match(/^([^/\s]+)\/([^#\s]+)#(\d+)$/);
+  if (repoIssueMatch) {
+    return fromParts(
+      { host: repoContext?.host ?? "github.com", owner: repoIssueMatch[1], repo: repoIssueMatch[2] },
+      "issue",
+      Number.parseInt(repoIssueMatch[3], 10)
+    );
+  }
+
+  const repoPullMatch = raw.match(/^([^/\s]+)\/([^/\s]+)\/pull\/(\d+)$/i);
+  if (repoPullMatch) {
+    return fromParts(
+      { host: repoContext?.host ?? "github.com", owner: repoPullMatch[1], repo: repoPullMatch[2] },
+      "pull_request",
+      Number.parseInt(repoPullMatch[3], 10)
+    );
+  }
+
+  const shortIssueMatch = raw.match(/^#(\d+)$/);
+  if (shortIssueMatch && repoContext) {
+    return fromParts(repoContext, "issue", Number.parseInt(shortIssueMatch[1], 10));
+  }
+
+  const shortPullMatch = raw.match(/^(?:PR|pr)\s*#(\d+)$/);
+  if (shortPullMatch && repoContext) {
+    return fromParts(repoContext, "pull_request", Number.parseInt(shortPullMatch[1], 10));
+  }
+
+  return undefined;
+}
+
+function normalizeGitHubReferences(rawValues: readonly string[], repoContext?: GitHubRepoContext): GithubReference[] {
+  const seen = new Set<string>();
+  const normalized: GithubReference[] = [];
+
+  for (const rawValue of rawValues) {
+    const githubRef = normalizeGitHubReference(rawValue, repoContext);
+    if (!githubRef || seen.has(githubRef.canonical)) {
+      continue;
+    }
+
+    seen.add(githubRef.canonical);
+    normalized.push(githubRef);
+  }
+
+  return normalized;
+}
+
+export function mapWorkflowRunStatusToGitHubStatus(
+  workflow: string,
+  localRunStatus: "success" | "partial" | "failed"
+): GithubWorkflowStatusMapping {
+  if (localRunStatus === "success") {
+    return {
+      workflow,
+      localRunStatus,
+      githubStatus: "completed",
+      reason: "Successful local workflow runs map to completed GitHub handoff status."
+    };
+  }
+
+  if (localRunStatus === "partial") {
+    return {
+      workflow,
+      localRunStatus,
+      githubStatus: "blocked",
+      reason: "Partial local workflow runs map to blocked GitHub handoff status until follow-up work resolves them."
+    };
+  }
+
+  return {
+    workflow,
+    localRunStatus,
+    githubStatus: "failed",
+    reason: "Failed local workflow runs map to failed GitHub handoff status."
+  };
+}
+
 function ensureReadablePath(
   policyEngine: ReturnType<typeof createPolicyEngine>,
   pathValue: string,
@@ -388,6 +563,40 @@ function loadLifecycleArtifactKinds(root: string, bundleRef: string): string[] {
   return bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind);
 }
 
+function loadLifecycleArtifactSourceReferences(
+  root: string,
+  bundleRef: string
+): { issueRefs: string[]; githubRefs: GithubReference[] } {
+  const bundlePath = join(root, bundleRef);
+  if (!existsSync(bundlePath)) {
+    throw new Error(`Referenced bundle not found: ${bundleRef}`);
+  }
+
+  const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
+  const repoContext = inferGitHubRepoContext(root);
+  const issueRefs = new Set<string>();
+  const githubRefs = new Map<string, GithubReference>();
+
+  for (const artifact of bundle.lifecycleArtifacts) {
+    for (const issueRef of artifact.source.issueRefs) {
+      issueRefs.add(issueRef);
+    }
+
+    for (const githubRef of artifact.source.githubRefs ?? []) {
+      githubRefs.set(githubRef.canonical, githubRef);
+    }
+
+    for (const githubRef of normalizeGitHubReferences(artifact.source.issueRefs, repoContext)) {
+      githubRefs.set(githubRef.canonical, githubRef);
+    }
+  }
+
+  return {
+    issueRefs: [...issueRefs],
+    githubRefs: [...githubRefs.values()]
+  };
+}
+
 function prepareWorkflowInputs(
   workflow: WorkflowDefinition,
   root: string,
@@ -402,9 +611,11 @@ function prepareWorkflowInputs(
     const planningRequest = validatePlanningRequestCompleteness(
       readYamlFile(join(root, requestPath), planningRequestSchema, "planning request")
     );
+    const planningGithubRefs = normalizeGitHubReferences(planningRequest.issueRefs, inferGitHubRepoContext(root));
 
     return {
       planningRequest,
+      planningGithubRefs,
       requestFile: requestPath
     };
   }
@@ -442,12 +653,21 @@ function prepareWorkflowInputs(
     ensureReadablePath(policyEngine, requestPath, "QA request");
     const qaRequest = readYamlFile(join(root, requestPath), qaRequestSchema, "QA request");
     ensureReadablePath(policyEngine, qaRequest.targetRef, "QA target reference");
+    if (!existsSync(join(root, qaRequest.targetRef))) {
+      throw new Error(`QA target reference not found: ${qaRequest.targetRef}`);
+    }
     for (const evidenceSource of qaRequest.evidenceSources) {
       ensureReadablePath(policyEngine, evidenceSource, "QA evidence source");
     }
 
+    const referencedSourceRefs = qaRequest.targetRef.endsWith("bundle.json")
+      ? loadLifecycleArtifactSourceReferences(root, qaRequest.targetRef)
+      : { issueRefs: [], githubRefs: [] };
+
     return {
       qaRequest: qaRequest satisfies QaRequest,
+      qaIssueRefs: referencedSourceRefs.issueRefs,
+      qaGithubRefs: referencedSourceRefs.githubRefs,
       requestFile: requestPath
     };
   }
@@ -474,9 +694,15 @@ function prepareWorkflowInputs(
       );
     }
 
+    const referencedSourceRefs = securityRequest.targetRef.endsWith("bundle.json")
+      ? loadLifecycleArtifactSourceReferences(root, securityRequest.targetRef)
+      : { issueRefs: [], githubRefs: [] };
+
     return {
       securityRequest: securityRequest satisfies SecurityRequest,
       securityTargetArtifactKinds: referencedArtifactKinds,
+      securityIssueRefs: referencedSourceRefs.issueRefs,
+      securityGithubRefs: referencedSourceRefs.githubRefs,
       requestFile: requestPath
     };
   }

@@ -19,6 +19,7 @@ import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
   DesignArtifact,
   DesignRequest,
+  GithubReference,
   ImplementationArtifact,
   ImplementationInventory,
   ImplementationRequest,
@@ -243,7 +244,8 @@ function buildLifecycleArtifactEnvelopeBase(
   displayName: string,
   summary: string,
   inputRefs: readonly string[],
-  issueRefs: readonly string[] = []
+  issueRefs: readonly string[] = [],
+  githubRefs: readonly GithubReference[] = []
 ) {
   return {
     schemaVersion: state.version,
@@ -255,7 +257,8 @@ function buildLifecycleArtifactEnvelopeBase(
       sourceType: "workflow-run" as const,
       runId: state.runId,
       inputRefs: [...inputRefs],
-      issueRefs: [...issueRefs]
+      issueRefs: [...issueRefs],
+      githubRefs: [...githubRefs]
     },
     status: "complete" as const,
     generatedAt: new Date().toISOString(),
@@ -288,7 +291,8 @@ function buildArtifactEnvelopeBase(
   state: WorkflowStateEnvelope,
   summary: string,
   inputRefs: readonly string[],
-  issueRefs: readonly string[]
+  issueRefs: readonly string[],
+  githubRefs: readonly GithubReference[] = []
 ) {
   return {
     schemaVersion: state.version,
@@ -299,7 +303,8 @@ function buildArtifactEnvelopeBase(
       sourceType: "workflow-run" as const,
       runId: state.runId,
       inputRefs: [...inputRefs],
-      issueRefs: [...issueRefs]
+      issueRefs: [...issueRefs],
+      githubRefs: [...githubRefs]
     },
     status: "complete" as const,
     generatedAt: new Date().toISOString(),
@@ -428,6 +433,7 @@ const planningAnalystAgent: RuntimeAgent = {
   outputSchema: agentOutputSchema,
   async execute({ state, stateSlice }) {
     const planningRequest = getWorkflowInput<PlanningRequest>(stateSlice, "planningRequest");
+    const planningGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "planningGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!planningRequest) {
       throw new Error("planning-discovery requires a validated planning request before planning analysis.");
@@ -453,7 +459,13 @@ const planningAnalystAgent: RuntimeAgent = {
     ];
     const summary = `Planning brief scoped ${objectives.length} objective(s) for ${state.repo.name}.`;
     const planningBrief = planningArtifactSchema.parse({
-      ...buildArtifactEnvelopeBase(state, summary, [requestFile ?? ".agentops/requests/planning.yaml"], planningRequest.issueRefs),
+      ...buildArtifactEnvelopeBase(
+        state,
+        summary,
+        [requestFile ?? ".agentops/requests/planning.yaml"],
+        planningRequest.issueRefs,
+        planningGithubRefs
+      ),
       artifactKind: "planning-brief",
       lifecycleDomain: "plan",
       workflow: {
@@ -1021,6 +1033,8 @@ const securityAnalystAgent: RuntimeAgent = {
   outputSchema: agentOutputSchema,
   async execute({ state, stateSlice }) {
     const securityRequest = getWorkflowInput<SecurityRequest>(stateSlice, "securityRequest");
+    const securityIssueRefs = getWorkflowInput<string[]>(stateSlice, "securityIssueRefs") ?? [];
+    const securityGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "securityGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!securityRequest) {
       throw new Error("security-review requires validated security inputs before security analysis.");
@@ -1088,7 +1102,9 @@ const securityAnalystAgent: RuntimeAgent = {
         [
           requestFile ?? ".agentops/requests/security.yaml",
           ...(normalizedEvidence?.provenanceRefs ?? [securityRequest.targetRef, ...securityRequest.evidenceSources])
-        ]
+        ],
+        securityIssueRefs,
+        securityGithubRefs
       ),
       artifactKind: "security-report",
       lifecycleDomain: "security",
@@ -1290,6 +1306,8 @@ const qaAnalystAgent: RuntimeAgent = {
   outputSchema: agentOutputSchema,
   async execute({ state, stateSlice }) {
     const qaRequest = getWorkflowInput<QaRequest>(stateSlice, "qaRequest");
+    const qaIssueRefs = getWorkflowInput<string[]>(stateSlice, "qaIssueRefs") ?? [];
+    const qaGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "qaGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!qaRequest) {
       throw new Error("qa-review requires validated QA inputs before QA analysis.");
@@ -1357,7 +1375,8 @@ const qaAnalystAgent: RuntimeAgent = {
         state,
         summary,
         [requestFile ?? ".agentops/requests/qa.yaml", qaRequest.targetRef, ...qaRequest.evidenceSources],
-        []
+        qaIssueRefs,
+        qaGithubRefs
       ),
       artifactKind: "qa-report",
       lifecycleDomain: "test",
@@ -1640,7 +1659,8 @@ const implementationPlannerAgent: RuntimeAgent = {
         state,
         summary,
         [requestFile ?? ".agentops/requests/implementation.yaml", implementationRequest.designRecordRef],
-        designRecord.source.issueRefs
+        designRecord.source.issueRefs,
+        designRecord.source.githubRefs
       ),
       artifactKind: "implementation-proposal",
       lifecycleDomain: "build",
@@ -1762,7 +1782,8 @@ const designAnalystAgent: RuntimeAgent = {
         state,
         summary,
         [requestFile ?? ".agentops/requests/design.yaml", designRequest.planningBriefRef],
-        planningBrief.source.issueRefs
+        planningBrief.source.issueRefs,
+        planningBrief.source.githubRefs
       ),
       artifactKind: "design-record",
       lifecycleDomain: "design",

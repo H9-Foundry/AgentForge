@@ -5,6 +5,8 @@ import {
   auditBundleSchema,
   designArtifactSchema,
   designRequestSchema,
+  githubReferenceSchema,
+  githubWorkflowStatusMappingSchema,
   getJsonSchemas,
   implementationArtifactSchema,
   implementationInventorySchema,
@@ -37,6 +39,8 @@ describe("schema fixtures", () => {
     expect(() => implementationRequestSchema.parse(schemaFixtures.implementationRequest)).not.toThrow();
     expect(() => qaRequestSchema.parse(schemaFixtures.qaRequest)).not.toThrow();
     expect(() => securityRequestSchema.parse(schemaFixtures.securityRequest)).not.toThrow();
+    expect(() => githubReferenceSchema.parse(schemaFixtures.githubReference)).not.toThrow();
+    expect(() => githubWorkflowStatusMappingSchema.parse(schemaFixtures.githubWorkflowStatusMapping)).not.toThrow();
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
@@ -62,6 +66,8 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.implementationRequest).toBeDefined();
     expect(jsonSchemas.qaRequest).toBeDefined();
     expect(jsonSchemas.securityRequest).toBeDefined();
+    expect(jsonSchemas.githubReference).toBeDefined();
+    expect(jsonSchemas.githubWorkflowStatusMapping).toBeDefined();
     expect(jsonSchemas.normalizedValidationCommand).toBeDefined();
     expect(jsonSchemas.implementationInventory).toBeDefined();
     expect(jsonSchemas.qaEvidenceNormalization).toBeDefined();

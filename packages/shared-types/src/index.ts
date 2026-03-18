@@ -25,6 +25,8 @@ import {
   designRequestSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
+  githubReferenceSchema,
+  githubWorkflowStatusMappingSchema,
   implementationArtifactPayloadSchema,
   implementationArtifactSchema,
   implementationInventorySchema,
@@ -70,6 +72,8 @@ export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
+export type GithubReference = Infer<typeof githubReferenceSchema>;
+export type GithubWorkflowStatusMapping = Infer<typeof githubWorkflowStatusMappingSchema>;
 export type LifecycleArtifactWorkflowReference = Infer<typeof lifecycleArtifactWorkflowReferenceSchema>;
 export type LifecycleArtifactSourceReference = Infer<typeof lifecycleArtifactSourceReferenceSchema>;
 export type LifecycleArtifactRepoReference = Infer<typeof lifecycleArtifactRepoReferenceSchema>;
