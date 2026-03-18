@@ -26,6 +26,8 @@ export const lifecycleArtifactKindSchema = z.enum([
 export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "review", "release", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
+export const githubReferenceKindSchema = z.enum(["issue", "pull_request"]);
+export const githubWorkflowStatusSchema = z.enum(["planned", "in_progress", "blocked", "completed", "failed"]);
 export const catalogDomainSchema = z.enum([
   "foundation",
   "plan",
@@ -457,11 +459,31 @@ export const lifecycleArtifactWorkflowReferenceSchema = z.object({
   displayName: z.string().min(1).optional()
 });
 
+export const githubReferenceSchema = z.object({
+  platform: z.literal("github"),
+  host: z.string().min(1).default("github.com"),
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  kind: githubReferenceKindSchema,
+  number: z.number().int().positive(),
+  canonical: z.string().min(1),
+  url: z.string().url(),
+  source: z.string().min(1)
+});
+
+export const githubWorkflowStatusMappingSchema = z.object({
+  workflow: z.string().min(1),
+  localRunStatus: runStatusSchema,
+  githubStatus: githubWorkflowStatusSchema,
+  reason: z.string().min(1)
+});
+
 export const lifecycleArtifactSourceReferenceSchema = z.object({
   sourceType: lifecycleArtifactSourceTypeSchema,
   runId: z.string().min(1).optional(),
   inputRefs: z.array(z.string()).default([]),
-  issueRefs: z.array(z.string()).default([])
+  issueRefs: z.array(z.string()).default([]),
+  githubRefs: z.array(githubReferenceSchema).default([])
 });
 
 export const lifecycleArtifactRepoReferenceSchema = z.object({
@@ -700,6 +722,8 @@ export const schemaRegistry = {
   auditComponent: auditComponentSchema,
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,
+  githubReference: githubReferenceSchema,
+  githubWorkflowStatusMapping: githubWorkflowStatusMappingSchema,
   lifecycleArtifactWorkflowReference: lifecycleArtifactWorkflowReferenceSchema,
   lifecycleArtifactSourceReference: lifecycleArtifactSourceReferenceSchema,
   lifecycleArtifactRepoReference: lifecycleArtifactRepoReferenceSchema,
@@ -766,7 +790,20 @@ const lifecycleArtifactFixtureBase = {
     sourceType: "workflow-run",
     runId: "run-123",
     inputRefs: ["docs/ROADMAP.md"],
-    issueRefs: ["#78"]
+    issueRefs: ["#78"],
+    githubRefs: [
+      {
+        platform: "github",
+        host: "github.com",
+        owner: "H9-Foundry",
+        repo: "AgentForge",
+        kind: "issue",
+        number: 78,
+        canonical: "H9-Foundry/AgentForge#78",
+        url: "https://github.com/H9-Foundry/AgentForge/issues/78",
+        source: "#78"
+      }
+    ]
   },
   status: "complete",
   generatedAt: "2026-03-17T12:00:00.000Z",
@@ -1017,6 +1054,25 @@ const normalizedValidationCommandFixture = {
   reason: "Requested command matches a discovered allowlisted validation script."
 } as const;
 
+const githubReferenceFixture = {
+  platform: "github",
+  host: "github.com",
+  owner: "H9-Foundry",
+  repo: "AgentForge",
+  kind: "issue",
+  number: 142,
+  canonical: "H9-Foundry/AgentForge#142",
+  url: "https://github.com/H9-Foundry/AgentForge/issues/142",
+  source: "#142"
+} as const;
+
+const githubWorkflowStatusMappingFixture = {
+  workflow: "planning-discovery",
+  localRunStatus: "success",
+  githubStatus: "completed",
+  reason: "Successful local workflow runs map to completed GitHub handoff status."
+} as const;
+
 const implementationInventoryFixture = {
   requestedTargetPaths: ["packages/cli", "packages/runtime"],
   resolvedAffectedPaths: ["packages/cli/src/index.ts", "packages/runtime/src/index.ts"],
@@ -1180,6 +1236,8 @@ export const schemaFixtures = {
   implementationRequest: implementationRequestFixture,
   qaRequest: qaRequestFixture,
   securityRequest: securityRequestFixture,
+  githubReference: githubReferenceFixture,
+  githubWorkflowStatusMapping: githubWorkflowStatusMappingFixture,
   normalizedValidationCommand: normalizedValidationCommandFixture,
   implementationInventory: implementationInventoryFixture,
   qaEvidenceNormalization: qaEvidenceNormalizationFixture,

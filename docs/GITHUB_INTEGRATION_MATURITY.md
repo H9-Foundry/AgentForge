@@ -34,11 +34,17 @@ Available now:
 - GitHub-centric release hardening
 - narrow PR-review integration and release/version PR handling
 
+Partially implemented now:
+
+- deterministic GitHub issue and PR reference normalization shared across lifecycle workflow inputs and artifacts
+- bounded local-to-GitHub status mapping primitives for later handoff and reporting work
+
 Not yet available:
 
 - official GitHub-backed workflow adapters beyond the current narrow paths
 - explicit project/status-sync workflow surfaces
-- formalized issue/PR handoff artifacts for the broader SDLC lifecycle
+- bounded GitHub handoff rendering or comment/report publication
+- GitHub Actions evidence ingestion for lifecycle workflows
 
 ## Near-Term Maturity Wedge
 
@@ -98,10 +104,9 @@ It should remain:
 
 ## Follow-On Implementation Slices
 
-This epic should be decomposed into at least:
+This epic is now decomposed into:
 
-1. GitHub issue/PR reference and status normalization shared across lifecycle workflows
-2. bounded GitHub handoff/comment/report surfaces for planning, design, QA, and release artifacts
-3. GitHub Actions evidence ingestion for QA and release workflows
-4. support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior
-
+1. implemented: GitHub issue/PR reference and status normalization shared across lifecycle workflows
+2. next: bounded GitHub handoff/comment/report surfaces for planning, design, QA, and release artifacts
+3. next: GitHub Actions evidence ingestion for QA and release workflows
+4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior

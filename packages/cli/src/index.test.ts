@@ -7,7 +7,7 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 
-import { explainLastRun, initProject, runLocalWorkflow, scanProject } from "./index.js";
+import { explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalWorkflow, scanProject } from "./index.js";
 
 function createGitFixture(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -19,6 +19,10 @@ function createGitFixture(prefix: string): string {
     JSON.stringify(
       {
         name: "fixture",
+        repository: {
+          type: "git",
+          url: "https://github.com/H9-Foundry/fixture.git"
+        },
         scripts: {
           test: "echo test",
           lint: "echo lint",
@@ -369,6 +373,17 @@ describe("cli smoke flows", () => {
     expect(explanation.runId).toBe(secondRun.runId);
     expect(explanation.runId).not.toBe(firstRun.runId);
     expect(explanation.jsonPath).toBe(secondRun.jsonPath);
+  });
+
+  it("maps bounded local workflow outcomes to GitHub handoff statuses", () => {
+    expect(mapWorkflowRunStatusToGitHubStatus("planning-discovery", "success")).toEqual({
+      workflow: "planning-discovery",
+      localRunStatus: "success",
+      githubStatus: "completed",
+      reason: "Successful local workflow runs map to completed GitHub handoff status."
+    });
+    expect(mapWorkflowRunStatusToGitHubStatus("qa-review", "partial").githubStatus).toBe("blocked");
+    expect(mapWorkflowRunStatusToGitHubStatus("security-review", "failed").githubStatus).toBe("failed");
   });
 
   it("prints first-run guidance for the current wedge in plain-text mode", () => {
@@ -956,5 +971,81 @@ describe("cli smoke flows", () => {
     const bundle = readJson<{ workflow: string; lifecycleArtifacts: Array<{ artifactKind: string }> }>(securityRun.jsonPath);
     expect(bundle.workflow).toBe("security-review");
     expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "security-report")).toBe(true);
+  });
+
+  it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {
+    const root = createGitFixture("agentops-github-refs-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the GitHub normalization slice",
+        "goals:",
+        "  - Produce one planning brief",
+        "issueRefs:",
+        "  - '#142'",
+        "pathHints:",
+        "  - packages/cli",
+        "  - packages/schemas"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Design GitHub reference normalization",
+        "pathHints:",
+        "  - packages/cli"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Implement GitHub reference normalization",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - packages/cli",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        `targetRef: .agentops/runs/${implementationRun.runId}/bundle.json`,
+        "evidenceSources:",
+        `  - .agentops/runs/${implementationRun.runId}/summary.md`,
+        "focusAreas:",
+        "  - regression-risk"
+      ].join("\n")
+    );
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "security.yaml"),
+      [
+        `targetRef: .agentops/runs/${qaRun.runId}/bundle.json`,
+        "evidenceSources:",
+        `  - .agentops/runs/${qaRun.runId}/summary.md`,
+        "focusAreas:",
+        "  - dependency-risk",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+    const securityRun = await runLocalWorkflow("security-review", root);
+
+    const planningBundle = readJson<{ lifecycleArtifacts: Array<{ source: { githubRefs?: Array<{ canonical: string }> } }> }>(planningRun.jsonPath);
+    const designBundle = readJson<{ lifecycleArtifacts: Array<{ source: { githubRefs?: Array<{ canonical: string }> } }> }>(designRun.jsonPath);
+    const implementationBundle = readJson<{ lifecycleArtifacts: Array<{ source: { githubRefs?: Array<{ canonical: string }> } }> }>(implementationRun.jsonPath);
+    const qaBundle = readJson<{ lifecycleArtifacts: Array<{ source: { githubRefs?: Array<{ canonical: string }> } }> }>(qaRun.jsonPath);
+    const securityBundle = readJson<{ lifecycleArtifacts: Array<{ source: { githubRefs?: Array<{ canonical: string }> } }> }>(securityRun.jsonPath);
+
+    for (const bundle of [planningBundle, designBundle, implementationBundle, qaBundle, securityBundle]) {
+      expect(bundle.lifecycleArtifacts[0]?.source.githubRefs?.map((entry) => entry.canonical)).toContain("H9-Foundry/fixture#142");
+    }
   });
 });
