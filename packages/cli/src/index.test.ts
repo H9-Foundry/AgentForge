@@ -257,6 +257,38 @@ describe("cli smoke flows", () => {
     expect(explanation.blockedPlugins).toBe(0);
   });
 
+  it("skips incomplete latest run directories when explaining the last run", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentops-cli-explain-incomplete-"));
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+    initProject(root);
+
+    const completeRunRoot = join(root, ".agentops", "runs", "2026-03-17-complete");
+    mkdirSync(completeRunRoot, { recursive: true });
+    writeFileSync(
+      join(completeRunRoot, "bundle.json"),
+      JSON.stringify(
+        {
+          runId: "2026-03-17-complete",
+          status: "success",
+          findings: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [],
+          entries: []
+        },
+        null,
+        2
+      )
+    );
+
+    const incompleteRunRoot = join(root, ".agentops", "runs", "2026-03-18-incomplete");
+    mkdirSync(incompleteRunRoot, { recursive: true });
+
+    const explanation = explainLastRun(root);
+    expect(explanation.runId).toBe("2026-03-17-complete");
+    expect(explanation.status).toBe("success");
+    expect(explanation.jsonPath).toBe(join(completeRunRoot, "bundle.json"));
+  });
+
   it("prints first-run guidance for the current wedge in plain-text mode", () => {
     const root = createGitFixture("agentops-cli-guidance-");
     ensureBuiltCli();
