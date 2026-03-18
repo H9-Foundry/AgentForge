@@ -312,6 +312,65 @@ describe("cli smoke flows", () => {
     expect(explanation.jsonPath).toBe(join(completeRunRoot, "bundle.json"));
   });
 
+  it("prefers the newest completed bundle over lexicographically later manual run directories", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentops-cli-explain-order-"));
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}');
+    initProject(root);
+
+    const olderManualRunRoot = join(root, ".agentops", "runs", "run-review");
+    mkdirSync(olderManualRunRoot, { recursive: true });
+    writeFileSync(
+      join(olderManualRunRoot, "bundle.json"),
+      JSON.stringify(
+        {
+          runId: "run-review",
+          status: "success",
+          findings: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [],
+          entries: []
+        },
+        null,
+        2
+      )
+    );
+
+    const newerTimestampRunRoot = join(root, ".agentops", "runs", "2026-03-18-000001");
+    mkdirSync(newerTimestampRunRoot, { recursive: true });
+    writeFileSync(
+      join(newerTimestampRunRoot, "bundle.json"),
+      JSON.stringify(
+        {
+          runId: "2026-03-18-000001",
+          status: "success",
+          findings: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [],
+          entries: []
+        },
+        null,
+        2
+      )
+    );
+
+    const explanation = explainLastRun(root);
+    expect(explanation.runId).toBe("2026-03-18-000001");
+    expect(explanation.jsonPath).toBe(join(newerTimestampRunRoot, "bundle.json"));
+  });
+
+  it("selects the newest completed run after back-to-back workflow executions", async () => {
+    const root = createGitFixture("agentops-cli-explain-back-to-back-");
+    initProject(root);
+
+    const firstRun = await runLocalWorkflow("pr-review", root);
+    const secondRun = await runLocalWorkflow("pr-review", root);
+
+    const explanation = explainLastRun(root);
+    expect(explanation.runId).toBe(secondRun.runId);
+    expect(explanation.runId).not.toBe(firstRun.runId);
+    expect(explanation.jsonPath).toBe(secondRun.jsonPath);
+  });
+
   it("prints first-run guidance for the current wedge in plain-text mode", () => {
     const root = createGitFixture("agentops-cli-guidance-");
     ensureBuiltCli();

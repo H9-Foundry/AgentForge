@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import yaml from "js-yaml";
@@ -581,6 +581,43 @@ export interface LastRunExplanation {
   artifactKinds: string[];
 }
 
+function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle: Record<string, unknown> } | undefined {
+  if (!existsSync(runsRoot)) {
+    return undefined;
+  }
+
+  const candidates = readdirSync(runsRoot)
+    .map((entry) => {
+      const bundlePath = join(runsRoot, entry, "bundle.json");
+      if (!existsSync(bundlePath)) {
+        return undefined;
+      }
+
+      const stats = statSync(bundlePath);
+      const bundle = JSON.parse(readFileSync(bundlePath, "utf8")) as Record<string, unknown>;
+      const bundleRunId = typeof bundle.runId === "string" ? bundle.runId : entry;
+
+      return {
+        runDir: entry,
+        bundle,
+        bundleRunId,
+        completedAtMs: stats.mtimeMs
+      };
+    })
+    .filter((candidate): candidate is { runDir: string; bundle: Record<string, unknown>; bundleRunId: string; completedAtMs: number } =>
+      Boolean(candidate)
+    )
+    .sort((left, right) => {
+      if (left.completedAtMs !== right.completedAtMs) {
+        return right.completedAtMs - left.completedAtMs;
+      }
+
+      return right.bundleRunId.localeCompare(left.bundleRunId);
+    });
+
+  return candidates[0] ? { runDir: candidates[0].runDir, bundle: candidates[0].bundle } : undefined;
+}
+
 function loadAgentForgeConfig(root: string): AgentForgeConfig {
   const configPath = join(root, ".agentops", "agentops.yaml");
   if (!existsSync(configPath)) {
@@ -858,21 +895,20 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
   const root = findWorkspaceRoot(cwd);
   const config = loadAgentForgeConfig(root);
   const runsRoot = join(root, config.runtime.runsPath);
-  const entries = existsSync(runsRoot) ? readdirSync(runsRoot).sort() : [];
-  const latest = [...entries].reverse().find((entry) => existsSync(join(runsRoot, entry, "bundle.json")));
+  const latest = readLatestCompleteRunBundle(runsRoot);
 
   if (!latest) {
     throw new Error("No complete recorded runs found.");
   }
 
-  const bundle = JSON.parse(readFileSync(join(runsRoot, latest, "bundle.json"), "utf8")) as Record<string, unknown>;
+  const bundle = latest.bundle;
   const findings = asArray(bundle.findings);
   const blockedPlugins = asArray(bundle.blockedPlugins);
   const lifecycleArtifacts = asArray(bundle.lifecycleArtifacts);
   const runEntries = asArray(bundle.entries);
 
   return {
-    runId: typeof bundle.runId === "string" ? bundle.runId : latest,
+    runId: typeof bundle.runId === "string" ? bundle.runId : latest.runDir,
     status: typeof bundle.status === "string" ? bundle.status : "unknown",
     findings: findings.length,
     blockedActions: runEntries.reduce<number>((total, entry) => {
@@ -883,8 +919,8 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
       return total + asArray(entry.blockedActions).length;
     }, 0),
     blockedPlugins: blockedPlugins.length,
-    jsonPath: join(runsRoot, latest, "bundle.json"),
-    markdownPath: join(runsRoot, latest, "summary.md"),
+    jsonPath: join(runsRoot, latest.runDir, "bundle.json"),
+    markdownPath: join(runsRoot, latest.runDir, "summary.md"),
     artifactCount: lifecycleArtifacts.length,
     artifactKinds: lifecycleArtifacts
       .map((artifact) => (isRecord(artifact) && typeof artifact.artifactKind === "string" ? artifact.artifactKind : undefined))
