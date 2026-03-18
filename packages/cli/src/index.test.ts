@@ -1484,8 +1484,12 @@ describe("cli smoke flows", () => {
       workflow: string;
       lifecycleArtifacts: Array<{
         artifactKind: string;
+        redaction?: {
+          categories?: string[];
+        };
         payload?: {
           incidentSummary?: string;
+          timelineSummary?: string[];
           followUpWorkflowRefs?: string[];
           likelyImpactedAreas?: string[];
         };
@@ -1495,10 +1499,12 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts).toHaveLength(1);
     expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("incident-brief");
     expect(bundle.lifecycleArtifacts[0]?.payload?.incidentSummary).toContain("elevated 500s");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.timelineSummary?.[1]).toContain("Normalized staged incident evidence");
     expect(bundle.lifecycleArtifacts[0]?.payload?.followUpWorkflowRefs).toEqual(
       expect.arrayContaining(["maintenance-triage", "security-review", "release-readiness"])
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.likelyImpactedAreas).toContain("release-readiness");
+    expect(bundle.lifecycleArtifacts[0]?.redaction?.categories).toContain("operational-sensitive");
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

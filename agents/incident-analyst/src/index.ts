@@ -1,5 +1,5 @@
-import { agentManifestSchema, agentOutputSchema, incidentArtifactSchema } from "@h9-foundry/agentforge-schemas";
-import type { GithubReference, IncidentArtifact, IncidentRequest, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import { agentManifestSchema, agentOutputSchema, incidentArtifactSchema, incidentEvidenceNormalizationSchema } from "@h9-foundry/agentforge-schemas";
+import type { GithubReference, IncidentArtifact, IncidentEvidenceNormalization, IncidentRequest, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -122,27 +122,39 @@ export const incidentAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const evidenceMetadata = incidentEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
     const severityHint =
-      typeof intakeMetadata.severityHint === "string" ? intakeMetadata.severityHint : incidentRequest.severityHint;
-    const evidenceSources = [
-      ...new Set([
-        ...asStringArray(intakeMetadata.evidenceSources),
-        ...asStringArray(intakeMetadata.releaseReportRefs),
-        ...incidentRequest.evidenceSources,
-        ...incidentRequest.releaseReportRefs
-      ])
-    ];
+      normalizedEvidence?.severityHint ??
+      (typeof intakeMetadata.severityHint === "string" ? intakeMetadata.severityHint : incidentRequest.severityHint);
+    const evidenceSources =
+      normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+        ? normalizedEvidence.normalizedEvidenceSources
+        : [
+            ...new Set([
+              ...asStringArray(intakeMetadata.evidenceSources),
+              ...asStringArray(intakeMetadata.releaseReportRefs),
+              ...incidentRequest.evidenceSources,
+              ...incidentRequest.releaseReportRefs
+            ])
+          ];
     const constraints = asStringArray(intakeMetadata.constraints);
-    const followUpWorkflowRefs = [
-      "maintenance-triage",
-      ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
-      ...(severityHint === "high" || severityHint === "critical" ? ["security-review"] : [])
-    ];
-    const likelyImpactedAreas = [
-      ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
-      ...(incidentRequest.evidenceSources.length > 0 ? ["staged-operational-evidence"] : []),
-      ...(severityHint === "high" || severityHint === "critical" ? ["security-follow-up"] : [])
-    ];
+    const followUpWorkflowRefs =
+      normalizedEvidence?.followUpWorkflowRefs && normalizedEvidence.followUpWorkflowRefs.length > 0
+        ? normalizedEvidence.followUpWorkflowRefs
+        : [
+            "maintenance-triage",
+            ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+            ...(severityHint === "high" || severityHint === "critical" ? ["security-review"] : [])
+          ];
+    const likelyImpactedAreas =
+      normalizedEvidence?.likelyImpactedAreas && normalizedEvidence.likelyImpactedAreas.length > 0
+        ? normalizedEvidence.likelyImpactedAreas
+        : [
+            ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+            ...(incidentRequest.evidenceSources.length > 0 ? ["staged-operational-evidence"] : []),
+            ...(severityHint === "high" || severityHint === "critical" ? ["security-follow-up"] : [])
+          ];
     const openQuestions = [
       ...(incidentRequest.issueRefs.length === 0 ? ["Should this incident be linked to a tracked issue before escalation?"] : []),
       ...(incidentRequest.releaseReportRefs.length === 0 ? ["Is there a release-report bundle that should be attached for additional provenance?"] : [])
@@ -152,7 +164,7 @@ export const incidentAnalystAgent: RuntimeAgent = {
       ...buildArtifactEnvelopeBase(
         state,
         summary,
-        [requestFile ?? ".agentops/requests/incident.yaml", ...incidentRequest.evidenceSources, ...incidentRequest.releaseReportRefs],
+        [requestFile ?? ".agentops/requests/incident.yaml", ...evidenceSources],
         incidentIssueRefs,
         incidentGithubRefs
       ),
@@ -161,10 +173,12 @@ export const incidentAnalystAgent: RuntimeAgent = {
       payload: {
         incidentSummary: incidentRequest.incidentSummary,
         evidenceSources,
-        timelineSummary: [
-          `Severity hint: ${severityHint}.`,
-          `Validated ${incidentRequest.evidenceSources.length} staged evidence source(s) and ${incidentRequest.releaseReportRefs.length} release-report reference(s) before reasoning.`
-        ],
+        timelineSummary:
+          normalizedEvidence?.timelineSummary ??
+          [
+            `Severity hint: ${severityHint}.`,
+            `Validated ${incidentRequest.evidenceSources.length} staged evidence source(s) and ${incidentRequest.releaseReportRefs.length} release-report reference(s) before reasoning.`
+          ],
         likelyImpactedAreas:
           likelyImpactedAreas.length > 0
             ? likelyImpactedAreas
@@ -187,7 +201,8 @@ export const incidentAnalystAgent: RuntimeAgent = {
           severityHint,
           evidenceSources,
           issueRefs: incidentIssueRefs,
-          constraints
+          constraints,
+          normalizedEvidence: (normalizedEvidence ?? null) satisfies IncidentEvidenceNormalization | null
         },
         synthesizedAssessment: {
           likelyImpactedAreas: incidentBrief.payload.likelyImpactedAreas,

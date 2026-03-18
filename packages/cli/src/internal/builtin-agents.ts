@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -9,6 +9,7 @@ import {
   implementationArtifactSchema,
   implementationInventorySchema,
   incidentArtifactSchema,
+  incidentEvidenceNormalizationSchema,
   incidentRequestSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
@@ -33,6 +34,7 @@ import type {
   ImplementationInventory,
   ImplementationRequest,
   IncidentArtifact,
+  IncidentEvidenceNormalization,
   IncidentRequest,
   NormalizedValidationCommand,
   PlanningArtifact,
@@ -266,6 +268,33 @@ function loadBundleArtifactPayloadPaths(bundlePath: string): string[] {
 
     return [];
   });
+}
+
+function loadBundleFinishedAt(bundlePath: string): string | undefined {
+  if (!existsSync(bundlePath)) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  return isRecord(parsed) && typeof parsed.finishedAt === "string" ? parsed.finishedAt : undefined;
+}
+
+function describeEvidenceObservation(repoRoot: string | undefined, pathValue: string): string {
+  if (!repoRoot) {
+    return `Observed source ${pathValue} during deterministic intake.`;
+  }
+
+  const absolutePath = join(repoRoot, pathValue);
+  if (!existsSync(absolutePath)) {
+    return `Observed source ${pathValue} during deterministic intake.`;
+  }
+
+  const observedAt =
+    pathValue.endsWith(".json") && pathValue.includes(".agentops/runs/")
+      ? loadBundleFinishedAt(absolutePath)
+      : undefined;
+  const fallbackObservedAt = observedAt ?? statSync(absolutePath).mtime.toISOString();
+  return `Observed source ${pathValue} at ${fallbackObservedAt}.`;
 }
 
 function loadGitHubActionsEvidence(bundlePath: string): GithubActionsEvidence | undefined {
@@ -1074,6 +1103,115 @@ const incidentIntakeAgent: RuntimeAgent = {
   }
 };
 
+const incidentEvidenceNormalizationAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "incident-evidence-normalizer",
+    displayName: "Incident Evidence Normalizer",
+    category: "operate",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.log", "**/*.md", "**/*.txt"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "operate",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const incidentRequest = getWorkflowInput<IncidentRequest>(stateSlice, "incidentRequest");
+    if (!incidentRequest) {
+      throw new Error("incident-handoff requires validated incident request inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const releaseReportRefs =
+      asStringArray(intakeMetadata.releaseReportRefs).length > 0
+        ? asStringArray(intakeMetadata.releaseReportRefs)
+        : incidentRequest.releaseReportRefs;
+    const evidenceSources =
+      asStringArray(intakeMetadata.evidenceSources).length > 0
+        ? asStringArray(intakeMetadata.evidenceSources)
+        : incidentRequest.evidenceSources;
+    const severityHint =
+      typeof intakeMetadata.severityHint === "string" ? intakeMetadata.severityHint : incidentRequest.severityHint;
+    const normalizedEvidenceSources = [...new Set([...evidenceSources, ...releaseReportRefs])];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`Incident evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const referencedArtifactKinds = [...new Set(
+      releaseReportRefs.flatMap((pathValue) => (repoRoot ? loadBundleArtifactKinds(join(repoRoot, pathValue)) : []))
+    )];
+    const timelineSummary = [
+      `Severity hint: ${severityHint}.`,
+      "Normalized staged incident evidence and release-report references before reasoning.",
+      ...normalizedEvidenceSources.map((pathValue) => describeEvidenceObservation(repoRoot, pathValue))
+    ];
+    const likelyImpactedAreas = [
+      ...(releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+      ...(evidenceSources.length > 0 ? ["staged-operational-evidence"] : []),
+      ...(severityHint === "high" || severityHint === "critical" ? ["security-follow-up"] : [])
+    ];
+    const followUpWorkflowRefs = [
+      "maintenance-triage",
+      ...(releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+      ...(severityHint === "high" || severityHint === "critical" ? ["security-review"] : [])
+    ];
+    const normalization = incidentEvidenceNormalizationSchema.parse({
+      incidentSummary: incidentRequest.incidentSummary,
+      severityHint,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      releaseReportRefs,
+      timelineSummary,
+      likelyImpactedAreas: [...new Set(likelyImpactedAreas)],
+      followUpWorkflowRefs: [...new Set(followUpWorkflowRefs)],
+      provenanceRefs: [
+        ...new Set([
+          ...evidenceSources,
+          ...releaseReportRefs.map((pathValue) => `${pathValue}#release-report`)
+        ])
+      ],
+      redactionCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key", "operational-sensitive"],
+      referencedArtifactKinds
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized incident evidence across ${normalization.normalizedEvidenceSources.length} staged source(s).`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies IncidentEvidenceNormalization
+    });
+  }
+};
+
 const incidentAnalystAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -1120,8 +1258,11 @@ const incidentAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const evidenceSources =
-      asStringArray(intakeMetadata.evidenceSources).length > 0
+    const evidenceMetadata = incidentEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const evidenceSources = normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+      ? normalizedEvidence.normalizedEvidenceSources
+      : asStringArray(intakeMetadata.evidenceSources).length > 0
         ? [
             ...new Set([
               ...asStringArray(intakeMetadata.evidenceSources),
@@ -1129,19 +1270,23 @@ const incidentAnalystAgent: RuntimeAgent = {
             ])
           ]
         : [...new Set([...incidentRequest.evidenceSources, ...incidentRequest.releaseReportRefs])];
-    const severityHint =
-      typeof intakeMetadata.severityHint === "string" ? intakeMetadata.severityHint : incidentRequest.severityHint;
+    const severityHint = normalizedEvidence?.severityHint ??
+      (typeof intakeMetadata.severityHint === "string" ? intakeMetadata.severityHint : incidentRequest.severityHint);
     const constraints = asStringArray(intakeMetadata.constraints);
-    const followUpWorkflowRefs = [
-      "maintenance-triage",
-      ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
-      ...(severityHint === "high" || severityHint === "critical" ? ["security-review"] : [])
-    ];
-    const likelyImpactedAreas = [
-      ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
-      ...(incidentRequest.evidenceSources.length > 0 ? ["staged-operational-evidence"] : []),
-      ...(severityHint === "high" || severityHint === "critical" ? ["security-follow-up"] : [])
-    ];
+    const followUpWorkflowRefs = normalizedEvidence?.followUpWorkflowRefs && normalizedEvidence.followUpWorkflowRefs.length > 0
+      ? normalizedEvidence.followUpWorkflowRefs
+      : [
+          "maintenance-triage",
+          ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+          ...(severityHint === "high" || severityHint === "critical" ? ["security-review"] : [])
+        ];
+    const likelyImpactedAreas = normalizedEvidence?.likelyImpactedAreas && normalizedEvidence.likelyImpactedAreas.length > 0
+      ? normalizedEvidence.likelyImpactedAreas
+      : [
+          ...(incidentRequest.releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+          ...(incidentRequest.evidenceSources.length > 0 ? ["staged-operational-evidence"] : []),
+          ...(severityHint === "high" || severityHint === "critical" ? ["security-follow-up"] : [])
+        ];
     const openQuestions = [
       ...(incidentRequest.issueRefs.length === 0 ? ["Should this incident be linked to a tracked issue before escalation?"] : []),
       ...(incidentRequest.releaseReportRefs.length === 0
@@ -1154,7 +1299,7 @@ const incidentAnalystAgent: RuntimeAgent = {
         state,
         "Incident Handoff",
         summary,
-        [requestFile ?? ".agentops/requests/incident.yaml", ...incidentRequest.evidenceSources, ...incidentRequest.releaseReportRefs],
+        [requestFile ?? ".agentops/requests/incident.yaml", ...evidenceSources],
         incidentIssueRefs,
         incidentGithubRefs
       ),
@@ -1163,12 +1308,20 @@ const incidentAnalystAgent: RuntimeAgent = {
       redaction: {
         applied: true,
         strategyVersion: "1.0.0",
-        categories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key", "operational-sensitive"]
+        categories: normalizedEvidence?.redactionCategories ?? [
+          "github-token",
+          "api-key",
+          "aws-key",
+          "bearer-token",
+          "password",
+          "private-key",
+          "operational-sensitive"
+        ]
       },
       payload: {
         incidentSummary: incidentRequest.incidentSummary,
         evidenceSources,
-        timelineSummary: [
+        timelineSummary: normalizedEvidence?.timelineSummary ?? [
           `Severity hint: ${severityHint}.`,
           `Validated ${incidentRequest.evidenceSources.length} staged evidence source(s) and ${incidentRequest.releaseReportRefs.length} release-report reference(s) before reasoning.`
         ],
@@ -1194,7 +1347,8 @@ const incidentAnalystAgent: RuntimeAgent = {
           severityHint,
           evidenceSources,
           issueRefs: incidentIssueRefs,
-          constraints
+          constraints,
+          normalizedEvidence: normalizedEvidence ?? null
         },
         synthesizedAssessment: {
           likelyImpactedAreas: incidentBrief.payload.likelyImpactedAreas,
@@ -2846,6 +3000,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["qa-intake", qaIntakeAgent],
     ["security-intake", securityIntakeAgent],
     ["incident-intake", incidentIntakeAgent],
+    ["incident-evidence-normalizer", incidentEvidenceNormalizationAgent],
     ["incident-analyst", incidentAnalystAgent],
     ["release-intake", releaseIntakeAgent],
     ["release-evidence-normalizer", releaseEvidenceNormalizationAgent],

@@ -288,6 +288,84 @@ describe("builtin qa evidence normalizer", () => {
   });
 });
 
+describe("builtin incident evidence normalizer", () => {
+  it("normalizes staged incident evidence, provenance, and follow-up routing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agentforge-incident-evidence-"));
+    mkdirSync(join(root, ".agentops", "runs", "run-release"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(join(root, ".agentops", "evidence", "incident-summary.md"), "# incident summary\n");
+    writeFileSync(join(root, ".agentops", "evidence", "alerts.json"), JSON.stringify({ alert: "elevated-500s" }, null, 2));
+    writeFileSync(
+      join(root, ".agentops", "runs", "run-release", "bundle.json"),
+      JSON.stringify(
+        {
+          finishedAt: new Date().toISOString(),
+          lifecycleArtifacts: [schemaFixtures.releaseArtifact]
+        },
+        null,
+        2
+      )
+    );
+
+    const agent = createBuiltinAgentRegistry().get("incident-evidence-normalizer");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        repo: {
+          root,
+          name: "fixture-root",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        workflowInputs: {
+          incidentRequest: {
+            incidentSummary: "Customers saw elevated 500s after the last release candidate.",
+            severityHint: "high",
+            evidenceSources: [".agentops/evidence/incident-summary.md", ".agentops/evidence/alerts.json"],
+            releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+            issueRefs: ["#159"],
+            constraints: ["Keep staged incident evidence read-only"]
+          }
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              evidenceSources: [".agentops/evidence/incident-summary.md", ".agentops/evidence/alerts.json"],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+              severityHint: "high"
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.metadata).toMatchObject({
+      incidentSummary: "Customers saw elevated 500s after the last release candidate.",
+      severityHint: "high"
+    });
+    expect(output.metadata?.normalizedEvidenceSources).toEqual(
+      expect.arrayContaining([
+        ".agentops/evidence/incident-summary.md",
+        ".agentops/evidence/alerts.json",
+        ".agentops/runs/run-release/bundle.json"
+      ])
+    );
+    expect(output.metadata?.referencedArtifactKinds).toContain("release-report");
+    expect(output.metadata?.followUpWorkflowRefs).toEqual(
+      expect.arrayContaining(["maintenance-triage", "release-readiness", "security-review"])
+    );
+    expect(output.metadata?.redactionCategories).toContain("operational-sensitive");
+    expect(output.metadata?.provenanceRefs).toContain(".agentops/runs/run-release/bundle.json#release-report");
+  });
+});
+
 describe("builtin security intake agent", () => {
   it("records bounded security request metadata and referenced artifact kinds", async () => {
     const root = mkdtempSync(join(tmpdir(), "agentforge-security-intake-"));

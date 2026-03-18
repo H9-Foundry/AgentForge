@@ -32,14 +32,16 @@ Available now:
 - context, policy, artifact, and audit infrastructure
 - official `incident-handoff` workflow asset with bounded staged-evidence intake
 - deterministic incident request validation and release-report reference checks
+- deterministic staged incident-evidence normalization, provenance capture, and follow-up routing
 - bounded `incident-analyst`
 - `incident-brief` lifecycle artifact emission
 - explicit local staged-evidence posture with read-only default behavior
+- redaction-aware handling for sensitive operational evidence in routing and artifact output
 
 Not yet available:
 
-- deterministic staged incident-evidence normalization and routing
 - broader operations or observability adapter support
+- official promotion of `incident-handoff` while the evaluator-path bug remains open
 
 ## Recommended Initial Workflow Family
 
@@ -53,7 +55,7 @@ Later planned variants can include:
 - `alert-triage`
 - `operational-readiness-review`
 
-`incident-handoff` is now implemented as an intake-only wedge. The later incident and operations variants remain planned.
+`incident-handoff` is now implemented as a bounded staged-evidence handoff wedge. The later incident and operations variants remain planned.
 
 ## User Jobs
 
@@ -94,7 +96,7 @@ Recommended input model:
 ### Workflow Stages
 
 1. intake normalization
-2. deterministic evidence staging and release-report reference validation
+2. deterministic staged evidence normalization, provenance capture, and release-report reference validation
 3. incident analysis
 4. report and artifact emission
 
@@ -162,8 +164,9 @@ Implemented on current `main`:
 1. incident request schema and official `incident-handoff` workflow asset
 2. deterministic validation of staged incident evidence and referenced `release-report` artifacts before reasoning
 3. `incident-analyst` starter agent and `incident-brief` artifact emission
+4. deterministic staged incident-evidence normalization, provenance capture, and follow-up routing
 
 Next incident family follow-ons:
 
-1. deterministic staged incident-evidence normalization and source provenance capture
-2. redaction/policy wiring for sensitive operational evidence and follow-up routing
+1. resolve the evaluator-path bug before official promotion of `incident-handoff`
+2. add broader operations and observability integrations only through explicit, approval-aware adapters

@@ -433,6 +433,20 @@ export const securityEvidenceNormalizationSchema = z.object({
   affectedPackages: z.array(z.string().min(1)).default([])
 });
 
+export const incidentEvidenceNormalizationSchema = z.object({
+  incidentSummary: z.string().min(1),
+  severityHint: z.enum(["unknown", "low", "medium", "high", "critical"]),
+  normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
+  missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  releaseReportRefs: z.array(z.string().min(1)).default([]),
+  timelineSummary: z.array(z.string().min(1)).default([]),
+  likelyImpactedAreas: z.array(z.string().min(1)).default([]),
+  followUpWorkflowRefs: z.array(z.string().min(1)).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([]),
+  redactionCategories: z.array(z.string().min(1)).default([]),
+  referencedArtifactKinds: z.array(z.string().min(1)).default([])
+});
+
 export const repoMetadataSchema = z.object({
   root: z.string().min(1),
   name: z.string().min(1),
@@ -914,6 +928,7 @@ export const schemaRegistry = {
   implementationInventory: implementationInventorySchema,
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
   securityEvidenceNormalization: securityEvidenceNormalizationSchema,
+  incidentEvidenceNormalization: incidentEvidenceNormalizationSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -1411,6 +1426,34 @@ const securityEvidenceNormalizationFixture = {
   affectedPackages: ["packages/cli", "packages/runtime"]
 } as const;
 
+const incidentEvidenceNormalizationFixture = {
+  incidentSummary: "Customers saw elevated 500s after the last release candidate.",
+  severityHint: "high",
+  normalizedEvidenceSources: [
+    ".agentops/evidence/incident-summary.md",
+    ".agentops/evidence/alerts.json",
+    ".agentops/runs/run-release/bundle.json"
+  ],
+  missingEvidenceSources: [],
+  releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+  timelineSummary: [
+    "Severity hint: high.",
+    "Normalized staged incident evidence and release-report references before reasoning.",
+    "Observed source .agentops/evidence/incident-summary.md during deterministic intake.",
+    "Observed source .agentops/evidence/alerts.json during deterministic intake.",
+    "Observed source .agentops/runs/run-release/bundle.json during deterministic intake."
+  ],
+  likelyImpactedAreas: ["release-readiness", "staged-operational-evidence", "security-follow-up"],
+  followUpWorkflowRefs: ["maintenance-triage", "release-readiness", "security-review"],
+  provenanceRefs: [
+    ".agentops/evidence/incident-summary.md",
+    ".agentops/evidence/alerts.json",
+    ".agentops/runs/run-release/bundle.json#release-report"
+  ],
+  redactionCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key", "operational-sensitive"],
+  referencedArtifactKinds: ["release-report"]
+} as const;
+
 const releaseEvidenceNormalizationFixture = {
   qaReportRefs: [".agentops/runs/run-789/bundle.json"],
   securityReportRefs: [".agentops/runs/run-790/bundle.json"],
@@ -1571,6 +1614,7 @@ export const schemaFixtures = {
   implementationInventory: implementationInventoryFixture,
   qaEvidenceNormalization: qaEvidenceNormalizationFixture,
   securityEvidenceNormalization: securityEvidenceNormalizationFixture,
+  incidentEvidenceNormalization: incidentEvidenceNormalizationFixture,
   releaseEvidenceNormalization: releaseEvidenceNormalizationFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
