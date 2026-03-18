@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-schemas",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Shared schema contracts for AgentForge workflows, policy, context, and audit data.",
   "license": "MIT",
   "author": "H9 Foundry",
