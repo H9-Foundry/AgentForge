@@ -681,6 +681,19 @@ export const releaseVersionTargetSchema = z.object({
   version: z.string().min(1)
 });
 
+export const releaseVersionResolutionSchema = z.object({
+  name: z.string().min(1),
+  targetVersion: z.string().min(1),
+  currentVersion: z.string().min(1).optional(),
+  status: z.enum(["matches-target", "pending-version-bump", "package-missing"])
+});
+
+export const releaseApprovalRecommendationSchema = z.object({
+  action: z.string().min(1),
+  classification: z.enum(["allow", "approval_required", "deny"]),
+  reason: z.string().min(1)
+});
+
 export const releaseRequestSchema = z.object({
   releaseScope: z.string().min(1),
   versionTargets: z.array(releaseVersionTargetSchema).min(1),
@@ -690,11 +703,25 @@ export const releaseRequestSchema = z.object({
   constraints: z.array(z.string().min(1)).default([])
 });
 
+export const releaseEvidenceNormalizationSchema = z.object({
+  qaReportRefs: z.array(z.string().min(1)).default([]),
+  securityReportRefs: z.array(z.string().min(1)).default([]),
+  normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
+  missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
+  localReadinessChecks: z.array(releaseVerificationCheckSchema).default([]),
+  readinessStatus: z.enum(["ready", "blocked", "partial"]),
+  approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
 export const releaseArtifactPayloadSchema = z.object({
   releaseScope: z.string().min(1),
   versionTargets: z.array(releaseVersionTargetSchema).min(1),
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
   verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
+  versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
+  approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
   publishingPlan: z.array(z.string().min(1)).default([]),
   trustStatus: z.string().min(1),
   publishedPackages: z.array(z.string().min(1)).default([]),
@@ -830,6 +857,9 @@ export const schemaRegistry = {
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
+  releaseVersionResolution: releaseVersionResolutionSchema,
+  releaseApprovalRecommendation: releaseApprovalRecommendationSchema,
+  releaseEvidenceNormalization: releaseEvidenceNormalizationSchema,
   releaseArtifactPayload: releaseArtifactPayloadSchema,
   maintenanceArtifactPayload: maintenanceArtifactPayloadSchema,
   planningArtifact: planningArtifactSchema,
@@ -1073,8 +1103,28 @@ const releaseArtifactFixture = {
     versionTargets: [{ name: "@h9-foundry/agentforge-schemas", version: "0.4.1" }],
     readinessStatus: "ready",
     verificationChecks: [{ name: "release-verify", status: "passed" }],
+    versionResolutions: [
+      {
+        name: "@h9-foundry/agentforge-schemas",
+        targetVersion: "0.4.1",
+        currentVersion: "0.4.0",
+        status: "pending-version-bump"
+      }
+    ],
+    approvalRecommendations: [
+      {
+        action: "publish-packages",
+        classification: "approval_required",
+        reason: "Package publication remains outside the default read-only workflow path."
+      }
+    ],
     publishingPlan: ["Merge version PR", "Let GitHub Actions publish"],
-    trustStatus: "trusted-publishing-configured"
+    trustStatus: "trusted-publishing-configured",
+    publishedPackages: [],
+    tagRefs: [],
+    provenanceRefs: [".agentops/runs/run-321/bundle.json"],
+    rollbackNotes: ["Pause the release if the verification set changes before publish."],
+    externalDependencies: ["Trusted publishing remains configured in GitHub Actions."]
   }
 } as const;
 
@@ -1301,6 +1351,49 @@ const securityEvidenceNormalizationFixture = {
   affectedPackages: ["packages/cli", "packages/runtime"]
 } as const;
 
+const releaseEvidenceNormalizationFixture = {
+  qaReportRefs: [".agentops/runs/run-789/bundle.json"],
+  securityReportRefs: [".agentops/runs/run-790/bundle.json"],
+  normalizedEvidenceSources: [
+    ".agentops/runs/run-789/bundle.json",
+    ".agentops/runs/run-790/bundle.json",
+    ".agentops/runs/run-790/summary.md"
+  ],
+  missingEvidenceSources: [],
+  versionResolutions: [
+    {
+      name: "@h9-foundry/agentforge-cli",
+      targetVersion: "0.7.0",
+      currentVersion: "0.6.0",
+      status: "pending-version-bump"
+    }
+  ],
+  localReadinessChecks: [
+    { name: "qa-report-refs", status: "passed", detail: "Using one validated QA report reference." },
+    { name: "security-report-refs", status: "passed", detail: "Using one validated security report reference." },
+    { name: "workspace-version-targets", status: "passed", detail: "Resolved one workspace version target." }
+  ],
+  readinessStatus: "ready",
+  approvalRecommendations: [
+    {
+      action: "publish-packages",
+      classification: "approval_required",
+      reason: "Package publication remains outside the default read-only workflow path."
+    },
+    {
+      action: "promote-release",
+      classification: "approval_required",
+      reason: "Promotion remains a release-significant side effect and requires explicit maintainer approval."
+    }
+  ],
+  provenanceRefs: [
+    ".agentops/runs/run-789/bundle.json",
+    ".agentops/runs/run-790/bundle.json",
+    ".agentops/runs/run-790/summary.md",
+    "packages/cli/package.json"
+  ]
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -1417,6 +1510,7 @@ export const schemaFixtures = {
   implementationInventory: implementationInventoryFixture,
   qaEvidenceNormalization: qaEvidenceNormalizationFixture,
   securityEvidenceNormalization: securityEvidenceNormalizationFixture,
+  releaseEvidenceNormalization: releaseEvidenceNormalizationFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,

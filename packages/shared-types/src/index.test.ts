@@ -14,12 +14,15 @@ import type {
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
+  ReleaseApprovalRecommendation,
   ReleaseRequest,
+  ReleaseEvidenceNormalization,
   SecurityArtifact,
   SecurityEvidenceNormalization,
   SecurityRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
+  ReleaseVersionResolution,
   ReleaseVersionTarget,
   ReviewArtifact
 } from "./index.js";
@@ -48,6 +51,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<DesignArtifact["payload"]["optionsConsidered"]>().toEqualTypeOf<DesignArtifactOption[]>();
     expectTypeOf<ReleaseArtifact["payload"]["verificationChecks"]>().toEqualTypeOf<ReleaseVerificationCheck[]>();
     expectTypeOf<ReleaseArtifact["payload"]["versionTargets"]>().toEqualTypeOf<ReleaseVersionTarget[]>();
+    expectTypeOf<ReleaseArtifact["payload"]["versionResolutions"]>().toEqualTypeOf<ReleaseVersionResolution[]>();
+    expectTypeOf<ReleaseArtifact["payload"]["approvalRecommendations"]>().toEqualTypeOf<ReleaseApprovalRecommendation[]>();
   });
 
   it("exports workflow request helper types", () => {
@@ -59,6 +64,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<SecurityRequest["targetRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ReleaseRequest["releaseScope"]>().toEqualTypeOf<string>();
     expectTypeOf<ReleaseRequest["versionTargets"]>().toEqualTypeOf<ReleaseVersionTarget[]>();
+    expectTypeOf<ReleaseEvidenceNormalization["approvalRecommendations"]>().toEqualTypeOf<ReleaseApprovalRecommendation[]>();
+    expectTypeOf<ReleaseEvidenceNormalization["versionResolutions"]>().toEqualTypeOf<ReleaseVersionResolution[]>();
     expectTypeOf<QaEvidenceNormalization["targetType"]>().toEqualTypeOf<
       "artifact-bundle" | "validation-output" | "local-reference"
     >();

@@ -295,6 +295,10 @@ nodes:
     kind: deterministic
     agent: release-intake
     outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: release-evidence-normalizer
+    outputs_to: agentResults.evidence
   - id: release
     kind: reasoning
     agent: release-analyst

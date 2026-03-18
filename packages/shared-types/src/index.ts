@@ -45,6 +45,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  releaseApprovalRecommendationSchema,
   securityEvidenceNormalizationSchema,
   securityArtifactPayloadSchema,
   securityArtifactSchema,
@@ -55,8 +56,10 @@ import {
   proposedActionSchema,
   releaseArtifactPayloadSchema,
   releaseArtifactSchema,
+  releaseEvidenceNormalizationSchema,
   releaseRequestSchema,
   releaseVerificationCheckSchema,
+  releaseVersionResolutionSchema,
   releaseVersionTargetSchema,
   reviewArtifactPayloadSchema,
   reviewArtifactSchema,
@@ -117,7 +120,10 @@ export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;
 export type NormalizedValidationCommand = Infer<typeof normalizedValidationCommandSchema>;
 export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSchema>;
 export type ReleaseVersionTarget = Infer<typeof releaseVersionTargetSchema>;
+export type ReleaseVersionResolution = Infer<typeof releaseVersionResolutionSchema>;
+export type ReleaseApprovalRecommendation = Infer<typeof releaseApprovalRecommendationSchema>;
 export type ReleaseRequest = Infer<typeof releaseRequestSchema>;
+export type ReleaseEvidenceNormalization = Infer<typeof releaseEvidenceNormalizationSchema>;
 export type ReleaseArtifactPayload = Infer<typeof releaseArtifactPayloadSchema>;
 export type ReleaseArtifact = Infer<typeof releaseArtifactSchema>;
 export type MaintenanceArtifactPayload = Infer<typeof maintenanceArtifactPayloadSchema>;

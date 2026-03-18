@@ -1172,6 +1172,19 @@ describe("cli smoke flows", () => {
     const root = createFixtureRepo();
     initializeWorkspace(root);
     ensureRequestsDir(root);
+    mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    writeFileSync(
+      join(root, "packages", "cli", "package.json"),
+      JSON.stringify(
+        {
+          name: "@h9-foundry/agentforge-cli",
+          version: "0.6.0",
+          type: "module"
+        },
+        null,
+        2
+      )
+    );
 
     const qaBundleDir = join(root, ".agentops", "runs", "run-qa");
     mkdirSync(qaBundleDir, { recursive: true });
@@ -1292,6 +1305,8 @@ describe("cli smoke flows", () => {
         payload?: {
           releaseScope?: string;
           readinessStatus?: string;
+          versionResolutions?: Array<{ name: string; status: string }>;
+          approvalRecommendations?: Array<{ action: string; classification: string }>;
           verificationChecks?: Array<{ name: string; status: string }>;
         };
       }>;
@@ -1301,8 +1316,14 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("release-report");
     expect(bundle.lifecycleArtifacts[0]?.payload?.releaseScope).toBe("Prepare the 0.7.0 candidate for maintainer review");
     expect(bundle.lifecycleArtifacts[0]?.payload?.readinessStatus).toBe("ready");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.versionResolutions).toEqual([
+      expect.objectContaining({ name: "@h9-foundry/agentforge-cli", status: "pending-version-bump" })
+    ]);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.approvalRecommendations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "publish-packages", classification: "approval_required" })])
+    );
     expect(bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.map((check) => check.name)).toEqual(
-      expect.arrayContaining(["qa-report-refs", "security-report-refs", "local-release-evidence"])
+      expect.arrayContaining(["qa-report-refs", "security-report-refs", "local-release-evidence", "workspace-version-targets"])
     );
   });
 

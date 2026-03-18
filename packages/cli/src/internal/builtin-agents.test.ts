@@ -500,3 +500,112 @@ describe("builtin security evidence normalizer", () => {
     expect(output.metadata?.provenanceRefs).toContain(".agentops/runs/run-impl/bundle.json#implementation-proposal");
   });
 });
+
+describe("builtin release evidence normalizer", () => {
+  it("normalizes bounded release evidence, workspace version targets, and approval-gated follow-on actions", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agentforge-release-evidence-"));
+    mkdirSync(join(root, ".agentops", "runs", "run-qa"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "runs", "run-security"), { recursive: true });
+    mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    writeFileSync(
+      join(root, "packages", "cli", "package.json"),
+      JSON.stringify(
+        {
+          name: "@h9-foundry/agentforge-cli",
+          version: "0.6.0"
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      join(root, ".agentops", "runs", "run-qa", "bundle.json"),
+      JSON.stringify(
+        {
+          lifecycleArtifacts: [
+            {
+              artifactKind: "qa-report"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(root, ".agentops", "runs", "run-qa", "summary.md"), "# qa summary\n");
+    writeFileSync(
+      join(root, ".agentops", "runs", "run-security", "bundle.json"),
+      JSON.stringify(
+        {
+          lifecycleArtifacts: [
+            {
+              artifactKind: "security-report"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(root, ".agentops", "runs", "run-security", "summary.md"), "# security summary\n");
+
+    const agent = createBuiltinAgentRegistry().get("release-evidence-normalizer");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        repo: {
+          root,
+          name: "fixture-root",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        workflowInputs: {
+          releaseRequest: {
+            releaseScope: "Prepare the next release candidate",
+            versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+            qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+            securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+            evidenceSources: [".agentops/runs/run-security/summary.md"],
+            constraints: ["Keep the workflow read-only"]
+          }
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+              securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+              evidenceSources: [".agentops/runs/run-security/summary.md"]
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.metadata?.normalizedEvidenceSources).toEqual([
+      ".agentops/runs/run-qa/bundle.json",
+      ".agentops/runs/run-security/bundle.json",
+      ".agentops/runs/run-security/summary.md"
+    ]);
+    expect(output.metadata?.versionResolutions).toEqual([
+      expect.objectContaining({
+        name: "@h9-foundry/agentforge-cli",
+        currentVersion: "0.6.0",
+        targetVersion: "0.7.0",
+        status: "pending-version-bump"
+      })
+    ]);
+    expect(output.metadata?.approvalRecommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "publish-packages", classification: "approval_required" }),
+        expect.objectContaining({ action: "promote-release", classification: "approval_required" })
+      ])
+    );
+  });
+});
