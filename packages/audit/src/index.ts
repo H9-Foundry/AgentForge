@@ -1,7 +1,163 @@
-import type { AuditBundle, AuditEntry, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import type {
+  AuditBundle,
+  AuditEntry,
+  DesignArtifact,
+  GithubHandoffSection,
+  GithubHandoffSummary,
+  GithubReference,
+  GithubWorkflowStatusMapping,
+  PlanningArtifact,
+  QaArtifact,
+  ReleaseArtifact,
+  WorkflowStateEnvelope
+} from "@h9-foundry/agentforge-shared-types";
+
+type GitHubRenderableArtifact = PlanningArtifact | DesignArtifact | QaArtifact | ReleaseArtifact;
 
 export function createAuditEntry(entry: AuditEntry): AuditEntry {
   return entry;
+}
+
+function splitGitHubRefs(githubRefs: readonly GithubReference[]): { issueRefs: GithubReference[]; pullRequestRefs: GithubReference[] } {
+  return githubRefs.reduce(
+    (accumulator, githubRef) => {
+      if (githubRef.kind === "pull_request") {
+        accumulator.pullRequestRefs.push(githubRef);
+      } else {
+        accumulator.issueRefs.push(githubRef);
+      }
+
+      return accumulator;
+    },
+    { issueRefs: [] as GithubReference[], pullRequestRefs: [] as GithubReference[] }
+  );
+}
+
+function mapArtifactStatusToGitHubStatus(
+  artifactStatus: GitHubRenderableArtifact["status"],
+  statusMapping?: GithubWorkflowStatusMapping
+): GithubHandoffSummary["githubStatus"] {
+  if (statusMapping) {
+    return statusMapping.githubStatus;
+  }
+
+  if (artifactStatus === "complete") {
+    return "completed";
+  }
+
+  if (artifactStatus === "draft") {
+    return "in_progress";
+  }
+
+  return "blocked";
+}
+
+function renderPlanningSections(artifact: PlanningArtifact): GithubHandoffSection[] {
+  return [
+    { heading: "Summary", lines: [artifact.summary] },
+    { heading: "Objectives", lines: artifact.payload.objectives },
+    { heading: "Recommended Next Steps", lines: artifact.payload.recommendedNextSteps },
+    { heading: "Risks", lines: artifact.payload.risks ?? [] },
+    { heading: "Open Questions", lines: artifact.payload.openQuestions ?? [] }
+  ].filter((section) => section.lines.length > 0);
+}
+
+function renderDesignSections(artifact: DesignArtifact): GithubHandoffSection[] {
+  return [
+    { heading: "Summary", lines: [artifact.summary] },
+    { heading: "Chosen Approach", lines: [artifact.payload.chosenApproach] },
+    {
+      heading: "Options Considered",
+      lines: artifact.payload.optionsConsidered.map((option) => `${option.option}: ${option.summary}`)
+    },
+    { heading: "Trade-Offs", lines: artifact.payload.tradeOffs ?? [] },
+    { heading: "Risks", lines: artifact.payload.risks ?? [] },
+    { heading: "Follow-Up Work", lines: artifact.payload.followUpWork ?? [] }
+  ].filter((section) => section.lines.length > 0);
+}
+
+function renderQaSections(artifact: QaArtifact): GithubHandoffSection[] {
+  return [
+    { heading: "Summary", lines: [artifact.summary] },
+    {
+      heading: "Findings",
+      lines: artifact.payload.findings.map((finding) => `[${finding.severity}] ${finding.title}: ${finding.summary}`)
+    },
+    { heading: "Coverage Gaps", lines: artifact.payload.coverageGaps ?? [] },
+    { heading: "Recommended Next Checks", lines: artifact.payload.recommendedNextChecks ?? [] },
+    { heading: "Release Impact", lines: [artifact.payload.releaseImpact] }
+  ].filter((section) => section.lines.length > 0);
+}
+
+function renderReleaseSections(artifact: ReleaseArtifact): GithubHandoffSection[] {
+  return [
+    { heading: "Summary", lines: [artifact.summary] },
+    { heading: "Readiness Status", lines: [artifact.payload.readinessStatus] },
+    {
+      heading: "Verification Checks",
+      lines: artifact.payload.verificationChecks.map((check) => `${check.name}: ${check.status}${check.detail ? ` (${check.detail})` : ""}`)
+    },
+    { heading: "Publishing Plan", lines: artifact.payload.publishingPlan ?? [] },
+    { heading: "Rollback Notes", lines: artifact.payload.rollbackNotes ?? [] }
+  ].filter((section) => section.lines.length > 0);
+}
+
+function buildGitHubHandoffSections(artifact: GitHubRenderableArtifact): GithubHandoffSection[] {
+  switch (artifact.artifactKind) {
+    case "planning-brief":
+      return renderPlanningSections(artifact);
+    case "design-record":
+      return renderDesignSections(artifact);
+    case "qa-report":
+      return renderQaSections(artifact);
+    case "release-report":
+      return renderReleaseSections(artifact);
+  }
+}
+
+function buildHandoffTitle(artifact: GitHubRenderableArtifact, issueRefs: readonly GithubReference[], pullRequestRefs: readonly GithubReference[]): string {
+  const primaryRef = issueRefs[0] ?? pullRequestRefs[0];
+  if (!primaryRef) {
+    return `${artifact.workflow.displayName ?? artifact.workflow.name} handoff`;
+  }
+
+  return `${artifact.workflow.displayName ?? artifact.workflow.name} handoff for ${primaryRef.canonical}`;
+}
+
+function renderHandoffBody(artifact: GitHubRenderableArtifact, sections: readonly GithubHandoffSection[]): string {
+  const lines = [`${artifact.workflow.displayName ?? artifact.workflow.name} handoff for \`${artifact.workflow.name}\`.`, ""];
+
+  for (const section of sections) {
+    lines.push(`${section.heading}:`);
+    for (const line of section.lines) {
+      lines.push(`- ${line}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
+export function renderGitHubHandoffSummary(
+  artifact: GitHubRenderableArtifact,
+  options?: { statusMapping?: GithubWorkflowStatusMapping }
+): GithubHandoffSummary {
+  const { issueRefs, pullRequestRefs } = splitGitHubRefs(artifact.source.githubRefs);
+  const sections = buildGitHubHandoffSections(artifact);
+  const summary = sections[0]?.lines[0] ?? artifact.summary;
+
+  return {
+    artifactKind: artifact.artifactKind,
+    workflow: artifact.workflow.name,
+    githubStatus: mapArtifactStatusToGitHubStatus(artifact.status, options?.statusMapping),
+    title: buildHandoffTitle(artifact, issueRefs, pullRequestRefs),
+    summary,
+    body: renderHandoffBody(artifact, sections),
+    issueRefs,
+    pullRequestRefs,
+    provenanceRefs: [...new Set([artifact.auditLink.bundlePath, ...artifact.source.inputRefs].filter((entry): entry is string => Boolean(entry)))],
+    sections
+  };
 }
 
 export function buildAuditBundle(
