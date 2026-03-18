@@ -33,6 +33,8 @@ import {
   maintenanceArtifactSchema,
   normalizedValidationCommandSchema,
   policyDocumentSchema,
+  qaArtifactPayloadSchema,
+  qaArtifactSchema,
   qaRequestSchema,
   planningRequestSchema,
   planningArtifactPayloadSchema,
@@ -80,6 +82,8 @@ export type ImplementationArtifactPayload = Infer<typeof implementationArtifactP
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
 export type ImplementationInventory = Infer<typeof implementationInventorySchema>;
 export type ImplementationRequest = Infer<typeof implementationRequestSchema>;
+export type QaArtifactPayload = Infer<typeof qaArtifactPayloadSchema>;
+export type QaArtifact = Infer<typeof qaArtifactSchema>;
 export type QaRequest = Infer<typeof qaRequestSchema>;
 export type ReviewArtifactPayload = Infer<typeof reviewArtifactPayloadSchema>;
 export type ReviewArtifact = Infer<typeof reviewArtifactSchema>;

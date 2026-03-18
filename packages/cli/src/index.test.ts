@@ -672,10 +672,15 @@ describe("cli smoke flows", () => {
 
     const bundle = JSON.parse(readFileSync(qaRun.jsonPath, "utf8")) as {
       workflow: string;
-      lifecycleArtifacts: unknown[];
+      lifecycleArtifacts: Array<{ artifactKind: string; payload?: Record<string, unknown> }>;
     };
     expect(bundle.workflow).toBe("qa-review");
-    expect(bundle.lifecycleArtifacts).toHaveLength(0);
+    expect(bundle.lifecycleArtifacts).toHaveLength(1);
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("qa-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.targetRef).toBe(`.agentops/runs/${implementationRun.runId}/bundle.json`);
+
+    const explanation = explainLastRun(root);
+    expect(explanation.artifactKinds).toContain("qa-report");
   });
 
   it("rejects underspecified qa-review requests before reasoning", async () => {

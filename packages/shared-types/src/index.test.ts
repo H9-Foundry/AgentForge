@@ -11,6 +11,7 @@ import type {
   NormalizedValidationCommand,
   PlanningArtifact,
   PlanningRequest,
+  QaArtifact,
   QaRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
@@ -26,6 +27,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<DesignArtifact["lifecycleDomain"]>().toEqualTypeOf<"design">();
     expectTypeOf<ImplementationArtifact["artifactKind"]>().toEqualTypeOf<"implementation-proposal">();
     expectTypeOf<ImplementationArtifact["lifecycleDomain"]>().toEqualTypeOf<"build">();
+    expectTypeOf<QaArtifact["artifactKind"]>().toEqualTypeOf<"qa-report">();
+    expectTypeOf<QaArtifact["lifecycleDomain"]>().toEqualTypeOf<"test">();
     expectTypeOf<ReviewArtifact["artifactKind"]>().toEqualTypeOf<"review-report">();
     expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
     expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();

@@ -222,7 +222,7 @@ nodes:
 
 const qaWorkflowTemplate = `version: 1
 name: qa-review
-description: Validate a bounded QA request and prepare it for later QA analysis stages.
+description: Validate a bounded QA request and synthesize a read-only QA report.
 trigger: manual
 catalog:
   domain: test
@@ -234,6 +234,10 @@ nodes:
     kind: deterministic
     agent: qa-intake
     outputs_to: agentResults.intake
+  - id: qa
+    kind: reasoning
+    agent: qa-analyst
+    outputs_to: agentResults.qa
   - id: report
     kind: report
     outputs_to: reports.final

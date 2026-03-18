@@ -17,11 +17,12 @@ export const lifecycleArtifactKindSchema = z.enum([
   "planning-brief",
   "design-record",
   "implementation-proposal",
+  "qa-report",
   "review-report",
   "release-report",
   "maintenance-report"
 ]);
-export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "review", "release", "maintain"]);
+export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "review", "release", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 export const catalogDomainSchema = z.enum([
@@ -507,6 +508,16 @@ export const reviewArtifactPayloadSchema = z.object({
   approvalRecommendations: z.array(z.string().min(1)).default([])
 });
 
+export const qaArtifactPayloadSchema = z.object({
+  targetRef: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  executedChecks: z.array(z.string().min(1)).default([]),
+  findings: z.array(findingSchema).default([]),
+  coverageGaps: z.array(z.string().min(1)).default([]),
+  recommendedNextChecks: z.array(z.string().min(1)).default([]),
+  releaseImpact: z.string().min(1)
+});
+
 export const implementationArtifactPayloadSchema = z.object({
   designRecordRef: z.string().min(1),
   implementationGoal: z.string().min(1),
@@ -572,6 +583,12 @@ export const implementationArtifactSchema = lifecycleArtifactEnvelopeSchema.exte
   payload: implementationArtifactPayloadSchema
 });
 
+export const qaArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("qa-report"),
+  lifecycleDomain: z.literal("test"),
+  payload: qaArtifactPayloadSchema
+});
+
 export const reviewArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("review-report"),
   lifecycleDomain: z.literal("review"),
@@ -594,6 +611,7 @@ export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   planningArtifactSchema,
   designArtifactSchema,
   implementationArtifactSchema,
+  qaArtifactSchema,
   reviewArtifactSchema,
   releaseArtifactSchema,
   maintenanceArtifactSchema
@@ -642,6 +660,7 @@ export const schemaRegistry = {
   designArtifactOption: designArtifactOptionSchema,
   designArtifactPayload: designArtifactPayloadSchema,
   implementationArtifactPayload: implementationArtifactPayloadSchema,
+  qaArtifactPayload: qaArtifactPayloadSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
@@ -650,6 +669,7 @@ export const schemaRegistry = {
   planningArtifact: planningArtifactSchema,
   designArtifact: designArtifactSchema,
   implementationArtifact: implementationArtifactSchema,
+  qaArtifact: qaArtifactSchema,
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
@@ -777,6 +797,33 @@ const implementationArtifactFixture = {
     ],
     risks: ["Affected repository surfaces may widen once deterministic inventory lands."],
     openQuestions: ["Which validation commands should become allowlisted in the next slice?"]
+  }
+} as const;
+
+const qaArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "qa-report",
+  lifecycleDomain: "test",
+  summary: "QA report for the bounded implementation proposal handoff.",
+  payload: {
+    targetRef: ".agentops/runs/run-789/bundle.json",
+    evidenceSources: [".agentops/runs/run-789/summary.md"],
+    executedChecks: ["pnpm test"],
+    findings: [
+      {
+        id: "qa-finding-1",
+        title: "Coverage evidence still needs review",
+        summary: "The bounded QA handoff references validation output, but coverage evidence still needs interpretation.",
+        severity: "medium",
+        rationale: "The MVP QA workflow is read-only and request-driven, so it cannot infer full coverage status without normalized evidence.",
+        confidence: 0.82,
+        location: ".agentops/requests/qa.yaml",
+        tags: ["qa", "coverage"]
+      }
+    ],
+    coverageGaps: ["Coverage evidence was referenced but not normalized into a deterministic summary."],
+    recommendedNextChecks: ["Review the referenced validation output before promotion.", "Confirm release-risk expectations with the owning maintainer."],
+    releaseImpact: "candidate release requires QA follow-up before promotion."
   }
 } as const;
 
@@ -1009,6 +1056,7 @@ export const schemaFixtures = {
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,
   implementationArtifact: implementationArtifactFixture,
+  qaArtifact: qaArtifactFixture,
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   maintenanceArtifact: maintenanceArtifactFixture,
