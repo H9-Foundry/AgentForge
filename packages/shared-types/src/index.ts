@@ -25,6 +25,10 @@ import {
   designRequestSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
+  githubActionsCheckRunEvidenceSchema,
+  githubActionsEvidenceNormalizationSchema,
+  githubActionsEvidenceSchema,
+  githubActionsJobEvidenceSchema,
   githubHandoffSectionSchema,
   githubHandoffSummarySchema,
   githubReferenceSchema,
@@ -74,6 +78,10 @@ export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
+export type GithubActionsJobEvidence = Infer<typeof githubActionsJobEvidenceSchema>;
+export type GithubActionsCheckRunEvidence = Infer<typeof githubActionsCheckRunEvidenceSchema>;
+export type GithubActionsEvidence = Infer<typeof githubActionsEvidenceSchema>;
+export type GithubActionsEvidenceNormalization = Infer<typeof githubActionsEvidenceNormalizationSchema>;
 export type GithubHandoffSection = Infer<typeof githubHandoffSectionSchema>;
 export type GithubHandoffSummary = Infer<typeof githubHandoffSummarySchema>;
 export type GithubReference = Infer<typeof githubReferenceSchema>;

@@ -39,6 +39,7 @@ Partially implemented now:
 - deterministic GitHub issue and PR reference normalization shared across lifecycle workflow inputs and artifacts
 - bounded local-to-GitHub status mapping primitives for later handoff and reporting work
 - deterministic GitHub handoff rendering for planning, design, QA, and release artifacts
+- deterministic ingestion of explicit local GitHub Actions/check-run evidence exports for QA workflows, using a shared normalization contract that later release workflows can reuse
 
 Not yet available:
 
@@ -53,8 +54,7 @@ Phase 2 should focus on these GitHub surfaces:
 
 1. issue and PR reference normalization across workflows
 2. bounded issue/PR comment/report handoff for planning, design, QA, and release outputs
-3. GitHub Actions evidence ingestion for QA and release workflows
-4. queue/status synchronization that remains subordinate to local workflow truth
+3. queue/status synchronization that remains subordinate to local workflow truth
 
 ## Non-Goals
 
@@ -109,5 +109,5 @@ This epic is now decomposed into:
 
 1. implemented: GitHub issue/PR reference and status normalization shared across lifecycle workflows
 2. implemented in part: bounded GitHub handoff rendering for planning, design, QA, and release artifacts
-3. next: GitHub Actions evidence ingestion for QA and release workflows
+3. implemented in part: deterministic GitHub Actions evidence ingestion for QA plus a shared normalization contract for later release workflows
 4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior

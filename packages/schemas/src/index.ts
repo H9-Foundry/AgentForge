@@ -28,6 +28,17 @@ export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 export const githubReferenceKindSchema = z.enum(["issue", "pull_request"]);
 export const githubWorkflowStatusSchema = z.enum(["planned", "in_progress", "blocked", "completed", "failed"]);
+export const githubActionsRunStatusSchema = z.enum(["queued", "in_progress", "completed"]);
+export const githubActionsConclusionSchema = z.enum([
+  "success",
+  "failure",
+  "neutral",
+  "cancelled",
+  "skipped",
+  "timed_out",
+  "action_required",
+  "stale"
+]);
 export const catalogDomainSchema = z.enum([
   "foundation",
   "plan",
@@ -352,6 +363,45 @@ export const implementationInventorySchema = z.object({
   discoveredValidationCommands: z.array(normalizedValidationCommandSchema).default([])
 });
 
+export const githubActionsJobEvidenceSchema = z.object({
+  name: z.string().min(1),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  htmlUrl: z.string().url().optional(),
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional()
+});
+
+export const githubActionsCheckRunEvidenceSchema = z.object({
+  name: z.string().min(1),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  detailsUrl: z.string().url().optional()
+});
+
+export const githubActionsEvidenceSchema = z.object({
+  sourcePath: z.string().min(1).optional(),
+  repository: z.string().min(1),
+  workflowName: z.string().min(1),
+  workflowRunId: z.number().int().positive(),
+  runAttempt: z.number().int().positive().default(1),
+  event: z.string().min(1).optional(),
+  headBranch: z.string().min(1).optional(),
+  headSha: z.string().min(1).optional(),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  htmlUrl: z.string().url(),
+  jobs: z.array(githubActionsJobEvidenceSchema).default([]),
+  checkRuns: z.array(githubActionsCheckRunEvidenceSchema).default([])
+});
+
+export const githubActionsEvidenceNormalizationSchema = z.object({
+  evidence: z.array(githubActionsEvidenceSchema).default([]),
+  workflowNames: z.array(z.string().min(1)).default([]),
+  failingChecks: z.array(z.string().min(1)).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
 export const qaEvidenceNormalizationSchema = z.object({
   targetRef: z.string().min(1),
   targetType: z.enum(["artifact-bundle", "validation-output", "local-reference"]),
@@ -361,7 +411,13 @@ export const qaEvidenceNormalizationSchema = z.object({
   normalizedExecutedChecks: z.array(z.string().min(1)).default([]),
   unrecognizedExecutedChecks: z.array(z.string().min(1)).default([]),
   affectedPackages: z.array(z.string().min(1)).default([]),
-  allowedValidationCommands: z.array(normalizedValidationCommandSchema).default([])
+  allowedValidationCommands: z.array(normalizedValidationCommandSchema).default([]),
+  githubActions: githubActionsEvidenceNormalizationSchema.default({
+    evidence: [],
+    workflowNames: [],
+    failingChecks: [],
+    provenanceRefs: []
+  })
 });
 
 export const securityEvidenceNormalizationSchema = z.object({
@@ -743,6 +799,10 @@ export const schemaRegistry = {
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,
   githubReference: githubReferenceSchema,
+  githubActionsJobEvidence: githubActionsJobEvidenceSchema,
+  githubActionsCheckRunEvidence: githubActionsCheckRunEvidenceSchema,
+  githubActionsEvidence: githubActionsEvidenceSchema,
+  githubActionsEvidenceNormalization: githubActionsEvidenceNormalizationSchema,
   githubHandoffSection: githubHandoffSectionSchema,
   githubHandoffSummary: githubHandoffSummarySchema,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingSchema,
@@ -1095,6 +1155,42 @@ const githubWorkflowStatusMappingFixture = {
   reason: "Successful local workflow runs map to completed GitHub handoff status."
 } as const;
 
+const githubActionsEvidenceFixture = {
+  sourcePath: ".agentops/evidence/github-actions-ci.json",
+  repository: "H9-Foundry/AgentForge",
+  workflowName: "CI",
+  workflowRunId: 123456789,
+  runAttempt: 1,
+  event: "pull_request",
+  headBranch: "main",
+  headSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "failure",
+  htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/1"
+    },
+    {
+      name: "lint",
+      status: "completed",
+      conclusion: "failure",
+      htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/2"
+    }
+  ],
+  checkRuns: [
+    {
+      name: "validate-public-packages",
+      status: "completed",
+      conclusion: "success",
+      detailsUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/3"
+    }
+  ]
+} as const;
+
 const githubHandoffSummaryFixture = {
   artifactKind: "planning-brief",
   workflow: "planning-discovery",
@@ -1153,7 +1249,19 @@ const qaEvidenceNormalizationFixture = {
       classification: "approval_required",
       reason: "Discovered from a bounded repository script; execution would still require approval."
     }
-  ]
+  ],
+  githubActions: {
+    evidence: [githubActionsEvidenceFixture],
+    workflowNames: ["CI"],
+    failingChecks: ["CI / lint"],
+    provenanceRefs: [
+      ".agentops/evidence/github-actions-ci.json",
+      "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789",
+      "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/1",
+      "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/2",
+      "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/3"
+    ]
+  }
 } as const;
 
 const securityEvidenceNormalizationFixture = {
@@ -1282,6 +1390,7 @@ export const schemaFixtures = {
   qaRequest: qaRequestFixture,
   securityRequest: securityRequestFixture,
   githubReference: githubReferenceFixture,
+  githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingFixture,
   normalizedValidationCommand: normalizedValidationCommandFixture,

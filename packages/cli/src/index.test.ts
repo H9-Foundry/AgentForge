@@ -780,6 +780,117 @@ describe("cli smoke flows", () => {
     expect(explanation.artifactKinds).toContain("qa-report");
   });
 
+  it("ingests local GitHub Actions evidence exports during qa-review", async () => {
+    const root = createGitFixture("agentops-qa-actions-");
+
+    initProject(root);
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Validate QA linkage to exported GitHub Actions evidence",
+        "goals:",
+        "  - Produce one planning brief for the QA workflow",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "  - Keep the workflow read-only by default"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Add bounded GitHub Actions evidence linkage",
+        "pathHints:",
+        "  - packages/cli",
+        "  - packages/schemas"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare deterministic GitHub Actions evidence ingestion",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - packages/cli",
+        "validationCommands:",
+        "  - pnpm test",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "evidence", "github-actions-ci.json"),
+      JSON.stringify(
+        {
+          repository: "H9-Foundry/fixture",
+          workflowName: "CI",
+          workflowRunId: 12345,
+          runAttempt: 1,
+          event: "pull_request",
+          headBranch: "main",
+          headSha: "abc123",
+          status: "completed",
+          conclusion: "failure",
+          htmlUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345",
+          jobs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345/job/1"
+            },
+            {
+              name: "lint",
+              status: "completed",
+              conclusion: "failure",
+              htmlUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345/job/2"
+            }
+          ],
+          checkRuns: []
+        },
+        null,
+        2
+      )
+    );
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        `targetRef: .agentops/runs/${implementationRun.runId}/bundle.json`,
+        "evidenceSources:",
+        "  - .agentops/runs/" + implementationRun.runId + "/summary.md",
+        "  - .agentops/evidence/github-actions-ci.json",
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - release-readiness",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: { coverageGaps?: string[]; releaseImpact?: string };
+      }>;
+    }>(qaRun.jsonPath);
+
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("qa-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.coverageGaps).toContain(
+      "GitHub Actions evidence still reports a failing check that needs manual review: CI / lint"
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.releaseImpact).toContain(
+      "GitHub Actions evidence still shows failing checks: CI / lint."
+    );
+  });
+
   it("rejects underspecified qa-review requests before reasoning", async () => {
     const root = createGitFixture("agentops-qa-invalid-");
 

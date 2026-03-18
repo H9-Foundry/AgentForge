@@ -5,6 +5,7 @@ import {
   agentManifestSchema,
   agentOutputSchema,
   designArtifactSchema,
+  githubActionsEvidenceSchema,
   implementationArtifactSchema,
   implementationInventorySchema,
   qaArtifactSchema,
@@ -19,6 +20,8 @@ import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
   DesignArtifact,
   DesignRequest,
+  GithubActionsEvidence,
+  GithubActionsEvidenceNormalization,
   GithubReference,
   ImplementationArtifact,
   ImplementationInventory,
@@ -215,6 +218,72 @@ function loadBundleArtifactPayloadPaths(bundlePath: string): string[] {
 
     return [];
   });
+}
+
+function loadGitHubActionsEvidence(bundlePath: string): GithubActionsEvidence | undefined {
+  if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  const candidate = isRecord(parsed) ? { ...parsed, sourcePath: parsed.sourcePath ?? bundlePath } : parsed;
+  const result = githubActionsEvidenceSchema.safeParse(candidate);
+  return result.success ? result.data : undefined;
+}
+
+function isFailingGitHubActionsConclusion(conclusion: string | undefined): boolean {
+  return Boolean(conclusion && !["success", "neutral", "skipped"].includes(conclusion));
+}
+
+function summarizeGitHubActionsFailures(evidence: GithubActionsEvidence): string[] {
+  const failedJobs = evidence.jobs
+    .filter((job) => job.status === "completed" && isFailingGitHubActionsConclusion(job.conclusion))
+    .map((job) => `${evidence.workflowName} / ${job.name}`);
+  const failedCheckRuns = evidence.checkRuns
+    .filter((checkRun) => checkRun.status === "completed" && isFailingGitHubActionsConclusion(checkRun.conclusion))
+    .map((checkRun) => `${evidence.workflowName} / ${checkRun.name}`);
+  const runLevelFailure =
+    failedJobs.length === 0 &&
+      failedCheckRuns.length === 0 &&
+      evidence.status === "completed" &&
+      isFailingGitHubActionsConclusion(evidence.conclusion)
+      ? [`${evidence.workflowName} / workflow-run`]
+      : [];
+
+  return [...failedJobs, ...failedCheckRuns, ...runLevelFailure];
+}
+
+function normalizeGitHubActionsEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): GithubActionsEvidenceNormalization {
+  const evidence = evidenceSources.flatMap((pathValue) => {
+    if (!repoRoot) {
+      return [];
+    }
+
+    const normalized = loadGitHubActionsEvidence(join(repoRoot, pathValue));
+    return normalized ? [normalized] : [];
+  });
+  const workflowNames = [...new Set(evidence.map((entry) => entry.workflowName))];
+  const failingChecks = [...new Set(evidence.flatMap((entry) => summarizeGitHubActionsFailures(entry)))];
+  const provenanceRefs = [
+    ...new Set(
+      evidence.flatMap((entry) => [
+        entry.sourcePath,
+        entry.htmlUrl,
+        ...entry.jobs.map((job) => job.htmlUrl),
+        ...entry.checkRuns.map((checkRun) => checkRun.detailsUrl)
+      ].filter((value): value is string => Boolean(value)))
+    )
+  ];
+
+  return {
+    evidence,
+    workflowNames,
+    failingChecks,
+    provenanceRefs
+  };
 }
 
 function derivePackageScope(pathValue: string): string | undefined {
@@ -1244,6 +1313,7 @@ const qaEvidenceNormalizationAgent: RuntimeAgent = {
     const allowlistedCommands = new Set(allowedValidationCommands.map((entry) => entry.command));
     const normalizedExecutedChecks = qaRequest.executedChecks.map(normalizeRequestedCommand);
     const unrecognizedExecutedChecks = normalizedExecutedChecks.filter((command) => !allowlistedCommands.has(command));
+    const githubActions = normalizeGitHubActionsEvidence(repoRoot, normalizedEvidenceSources);
     const normalization = qaEvidenceNormalizationSchema.parse({
       targetRef: qaRequest.targetRef,
       targetType,
@@ -1253,11 +1323,12 @@ const qaEvidenceNormalizationAgent: RuntimeAgent = {
       normalizedExecutedChecks,
       unrecognizedExecutedChecks,
       affectedPackages,
-      allowedValidationCommands
+      allowedValidationCommands,
+      githubActions
     });
 
     return agentOutputSchema.parse({
-      summary: `Normalized QA evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.allowedValidationCommands.length} allowlisted validation command(s).`,
+      summary: `Normalized QA evidence across ${normalization.normalizedEvidenceSources.length} source(s), ${normalization.allowedValidationCommands.length} allowlisted validation command(s), and ${normalization.githubActions.evidence.length} GitHub Actions evidence export(s).`,
       findings: [],
       proposedActions: [],
       lifecycleArtifacts: [],
@@ -1314,16 +1385,25 @@ const qaAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const evidenceMetadata = isRecord(stateSlice.agentResults?.evidence?.metadata) ? stateSlice.agentResults.evidence.metadata : {};
-    const normalizedEvidenceSources = asStringArray(evidenceMetadata.normalizedEvidenceSources);
-    const normalizedExecutedChecks = asStringArray(evidenceMetadata.normalizedExecutedChecks);
+    const evidenceMetadata = qaEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const normalizedEvidenceSources = normalizedEvidence?.normalizedEvidenceSources ?? [];
+    const normalizedExecutedChecks = normalizedEvidence?.normalizedExecutedChecks ?? [];
     const normalizedFocusAreas = asStringArray(intakeMetadata.focusAreas);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
-    const missingEvidenceSources = asStringArray(evidenceMetadata.missingEvidenceSources);
-    const unrecognizedExecutedChecks = asStringArray(evidenceMetadata.unrecognizedExecutedChecks);
+    const missingEvidenceSources = normalizedEvidence?.missingEvidenceSources ?? [];
+    const unrecognizedExecutedChecks = normalizedEvidence?.unrecognizedExecutedChecks ?? [];
+    const normalizedGithubActions: GithubActionsEvidenceNormalization = normalizedEvidence
+      ? normalizedEvidence.githubActions
+      : {
+          evidence: [],
+          workflowNames: [],
+          failingChecks: [],
+          provenanceRefs: []
+        };
     const targetType =
-      typeof evidenceMetadata.targetType === "string"
-        ? evidenceMetadata.targetType
+      normalizedEvidence?.targetType
+        ? normalizedEvidence.targetType
         : typeof intakeMetadata.targetType === "string"
           ? intakeMetadata.targetType
           : "local-reference";
@@ -1362,14 +1442,26 @@ const qaAnalystAgent: RuntimeAgent = {
       ...missingEvidenceSources.map((pathValue) => `Referenced QA evidence is missing: ${pathValue}`),
       ...(focusAreas.includes("coverage") ? ["Coverage evidence still needs deterministic normalization before it can be promoted to an official QA signal."] : []),
       ...(executedChecks.length === 0 ? ["No executed validation checks were recorded in the request."] : []),
-      ...unrecognizedExecutedChecks.map((command) => `Executed check is outside the bounded allowlist and still needs manual interpretation: ${command}`)
+      ...unrecognizedExecutedChecks.map((command) => `Executed check is outside the bounded allowlist and still needs manual interpretation: ${command}`),
+      ...normalizedGithubActions.failingChecks.map(
+        (checkName) => `GitHub Actions evidence still reports a failing check that needs manual review: ${checkName}`
+      )
     ];
     const recommendedNextChecks = [
       ...executedChecks.map((command) => `Review the recorded output for \`${command}\` before promotion.`),
       ...focusAreas.map((focusArea) => `Confirm whether ${focusArea} needs additional deterministic QA evidence.`),
+      ...normalizedGithubActions.workflowNames.map(
+        (workflowName) => `Review the exported GitHub Actions evidence for workflow \`${workflowName}\` before promotion.`
+      ),
       ...(normalizedConstraints.length > 0 ? [`Keep QA follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
     ];
     const summary = `QA report prepared for ${qaRequest.targetRef}.`;
+    const releaseImpactBase =
+      qaRequest.releaseContext === "blocking"
+        ? "release-blocking QA findings require resolution before promotion."
+        : qaRequest.releaseContext === "candidate"
+          ? "candidate release still requires explicit QA review before promotion."
+          : "no release context was supplied; QA output remains advisory.";
     const qaReport = qaArtifactSchema.parse({
       ...buildArtifactEnvelopeBase(
         state,
@@ -1395,11 +1487,9 @@ const qaAnalystAgent: RuntimeAgent = {
             ? recommendedNextChecks
             : ["Capture additional bounded QA evidence before promotion."],
         releaseImpact:
-          qaRequest.releaseContext === "blocking"
-            ? "release-blocking QA findings require resolution before promotion."
-            : qaRequest.releaseContext === "candidate"
-              ? "candidate release still requires explicit QA review before promotion."
-              : "no release context was supplied; QA output remains advisory."
+          normalizedGithubActions.failingChecks.length > 0
+            ? `${releaseImpactBase} GitHub Actions evidence still shows failing checks: ${normalizedGithubActions.failingChecks.join(", ")}.`
+            : releaseImpactBase
       }
     });
 
@@ -1418,7 +1508,8 @@ const qaAnalystAgent: RuntimeAgent = {
           evidenceSources,
           executedChecks,
           focusAreas,
-          constraints: normalizedConstraints
+          constraints: normalizedConstraints,
+          githubActions: normalizedGithubActions
         },
         synthesizedAssessment: {
           releaseContext: qaRequest.releaseContext,
