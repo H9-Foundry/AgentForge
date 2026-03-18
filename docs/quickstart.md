@@ -1,10 +1,10 @@
 # Quickstart
 
-This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation lifecycle handoff, all with auditable outputs.
+This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation-to-QA lifecycle handoff, all with auditable outputs.
 
 ## Fastest Evaluator Path
 
-Use the published CLI if you want to try the current wedges without cloning the monorepo.
+Use the published CLI if you want to try the current published wedges without cloning the monorepo.
 
 ```bash
 mkdir agentforge-demo
@@ -92,8 +92,6 @@ The design bundle should include one `design-record` lifecycle artifact and rema
 
 ## Run The Official Implementation Workflow
 
-`implementation-proposal` is implemented on current `main`. Until the next npm release includes it, use the source-build path for this workflow even if you used the published CLI for the earlier evaluator steps.
-
 Create an implementation request that points at the prior design bundle:
 
 ```bash
@@ -111,14 +109,42 @@ constraints:
 EOF
 ```
 
-Run the official implementation wedge from the current repo build:
+Run the official implementation wedge:
 
 ```bash
-node packages/cli/dist/bin.js run implementation-proposal --json
-node packages/cli/dist/bin.js explain last-run --json
+npx @h9-foundry/agentforge-cli run implementation-proposal --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 The implementation bundle should include one `implementation-proposal` lifecycle artifact with deterministic affected-path inventory plus approval-required validation guidance. The default path remains read-only and proposal-only.
+
+## Run The Official QA Workflow
+
+`qa-review` is official on current `main`, but until the next npm release includes the latest QA slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
+
+Create a QA request that points at the prior implementation bundle:
+
+```bash
+cat > .agentops/requests/qa.yaml <<'EOF'
+targetRef: .agentops/runs/<implementation-run-id>/bundle.json
+evidenceSources:
+  - .agentops/runs/<implementation-run-id>/summary.md
+executedChecks:
+  - pnpm test
+focusAreas:
+  - regression-risk
+releaseContext: candidate
+EOF
+```
+
+Run the official QA wedge from the current repo build:
+
+```bash
+node packages/cli/dist/bin.js run qa-review --json
+node packages/cli/dist/bin.js explain last-run --json
+```
+
+The QA bundle should include one `qa-report` lifecycle artifact with normalized evidence sources, normalized executed checks, coverage gaps, findings, and recommended next checks. The default path remains read-only and bounded to local evidence.
 
 ## Contributor And Source-Build Path
 
@@ -151,6 +177,7 @@ node packages/cli/dist/bin.js run pr-review
 node packages/cli/dist/bin.js run planning-discovery
 node packages/cli/dist/bin.js run architecture-design-review
 node packages/cli/dist/bin.js run implementation-proposal
+node packages/cli/dist/bin.js run qa-review
 ```
 
 ## Inspect The Latest Run

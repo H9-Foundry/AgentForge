@@ -1,10 +1,8 @@
 # Test And QA Workflow Expansion
 
-This document defines the design target for issue [#54](https://github.com/H9-Foundry/AgentForge/issues/54).
+This document defines the QA workflow family for issue [#54](https://github.com/H9-Foundry/AgentForge/issues/54) and records the status of the first official wedge.
 
-It describes the first dedicated QA workflow family AgentForge should add beyond the current `pr-review` wedge.
-
-It does **not** claim that these workflows are implemented or officially shipped today.
+It now describes the implemented `qa-review` wedge plus the follow-on QA variants that remain planned.
 
 ## Why This Exists
 
@@ -30,16 +28,18 @@ The first QA expansion should define a workflow family that:
 
 Available now:
 
-- one official `pr-review` workflow
-- starter `test-generation` agent
+- official `pr-review` workflow
+- official `qa-review` workflow
+- starter `qa-analyst` agent
+- `qa-report` lifecycle artifact emission
+- deterministic QA evidence normalization and allowlisted validation collection
 - audit bundle and lifecycle artifact infrastructure
 - release verification and package checks
 
 Not yet available:
 
-- a dedicated QA workflow asset
-- a dedicated QA artifact family implementation beyond the design contract
-- deterministic normalization of test evidence into QA-specific outputs
+- additional QA workflow variants beyond `qa-review`
+- broader CI-hosted or external QA evidence ingestion
 
 ## Recommended Initial Workflow Family
 
@@ -53,11 +53,11 @@ Later planned variants can include:
 - `regression-triage`
 - `release-readiness-qa`
 
-Only `qa-review` should be targeted for first implementation planning.
+`qa-review` is the first official QA wedge. Later variants should build on the same evidence and artifact contracts.
 
 ## User Jobs
 
-The first QA wedge should solve these jobs:
+The current QA wedge solves these jobs:
 
 1. gather deterministic evidence about validation surfaces for a bounded change
 2. summarize test gaps, risks, and recommended next checks
@@ -163,11 +163,16 @@ Adapter expectations:
 - local filesystem and shell evidence remain policy-bounded
 - future CI/test-result adapters must normalize into one QA evidence contract
 
-## Follow-On Implementation Slices
+## Implementation Status
 
-This epic should be decomposed into at least:
+Implemented on current `main`:
 
 1. QA request schema and official `qa-review` workflow asset
 2. `qa-analyst` starter agent and `qa-report` artifact emission
 3. deterministic test-output normalization and QA evidence ingestion
-4. policy/runtime wiring for QA-specific validation commands and evidence visibility
+
+Next QA family follow-ons:
+
+1. regression-triage
+2. release-readiness QA
+3. richer CI and external evidence ingestion through bounded adapters
