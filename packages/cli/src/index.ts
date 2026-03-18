@@ -1087,6 +1087,20 @@ function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle
     return undefined;
   }
 
+  const parseRunTimestampMs = (value: unknown): number | undefined => {
+    if (typeof value !== "string" || value.length === 0) {
+      return undefined;
+    }
+
+    const parsedDate = Date.parse(value);
+    if (!Number.isNaN(parsedDate)) {
+      return parsedDate;
+    }
+
+    const timestampPrefix = Number.parseInt(value.split("-")[0] ?? "", 10);
+    return Number.isNaN(timestampPrefix) ? undefined : timestampPrefix;
+  };
+
   const candidates = readdirSync(runsRoot)
     .map((entry) => {
       const bundlePath = join(runsRoot, entry, "bundle.json");
@@ -1097,12 +1111,18 @@ function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle
       const stats = statSync(bundlePath);
       const bundle = JSON.parse(readFileSync(bundlePath, "utf8")) as Record<string, unknown>;
       const bundleRunId = typeof bundle.runId === "string" ? bundle.runId : entry;
+      const completedAtMs =
+        parseRunTimestampMs(bundle.finishedAt) ??
+        parseRunTimestampMs(bundle.startedAt) ??
+        parseRunTimestampMs(bundleRunId) ??
+        parseRunTimestampMs(entry) ??
+        stats.mtimeMs;
 
       return {
         runDir: entry,
         bundle,
         bundleRunId,
-        completedAtMs: stats.mtimeMs
+        completedAtMs
       };
     })
     .filter((candidate): candidate is { runDir: string; bundle: Record<string, unknown>; bundleRunId: string; completedAtMs: number } =>
