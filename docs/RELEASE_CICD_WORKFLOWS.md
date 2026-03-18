@@ -81,7 +81,8 @@ This expansion should not:
 - workflow name: `release-readiness`
 - trigger: `manual`
 - primary lifecycle domain: `release`
-- support level at first implementation: `official`
+- support level at the intake-only implementation slice: `partial`
+- official promotion only after `release-report` emission and deterministic release-state normalization land
 - maturity at first implementation: `mvp`
 
 ### Entry Model
