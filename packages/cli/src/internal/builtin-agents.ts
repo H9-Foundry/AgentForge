@@ -11,6 +11,7 @@ import {
   incidentArtifactSchema,
   incidentEvidenceNormalizationSchema,
   incidentRequestSchema,
+  maintenanceArtifactSchema,
   maintenanceRequestSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
@@ -37,6 +38,7 @@ import type {
   IncidentArtifact,
   IncidentEvidenceNormalization,
   IncidentRequest,
+  MaintenanceArtifact,
   MaintenanceRequest,
   NormalizedValidationCommand,
   PlanningArtifact,
@@ -1280,6 +1282,140 @@ const maintenanceIntakeAgent: RuntimeAgent = {
           maintenanceRequest.dependencyAlertRefs.length +
           maintenanceRequest.docsTaskRefs.length +
           maintenanceRequest.releaseReportRefs.length
+      }
+    });
+  }
+};
+
+const maintenanceAnalystAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "maintenance-analyst",
+    displayName: "Maintenance Analyst",
+    category: "maintain",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "reasoning"
+    },
+    permissions: {
+      model: true,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "changes", "agentResults"],
+    outputs: ["lifecycleArtifacts"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "changes", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "maintain",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ state, stateSlice }) {
+    const maintenanceRequest = getWorkflowInput<MaintenanceRequest>(stateSlice, "maintenanceRequest");
+    const maintenanceIssueRefs = getWorkflowInput<string[]>(stateSlice, "maintenanceIssueRefs") ?? [];
+    const maintenanceGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "maintenanceGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!maintenanceRequest) {
+      throw new Error("maintenance-triage requires validated maintenance inputs before maintenance analysis.");
+    }
+
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const dependencyAlertRefs = asStringArray(intakeMetadata.dependencyAlertRefs).length > 0
+      ? asStringArray(intakeMetadata.dependencyAlertRefs)
+      : maintenanceRequest.dependencyAlertRefs;
+    const docsTaskRefs = asStringArray(intakeMetadata.docsTaskRefs).length > 0
+      ? asStringArray(intakeMetadata.docsTaskRefs)
+      : maintenanceRequest.docsTaskRefs;
+    const releaseReportRefs = asStringArray(intakeMetadata.releaseReportRefs).length > 0
+      ? asStringArray(intakeMetadata.releaseReportRefs)
+      : maintenanceRequest.releaseReportRefs;
+    const normalizedConstraints = asStringArray(intakeMetadata.constraints);
+    const evidenceSources = [...new Set([...dependencyAlertRefs, ...docsTaskRefs, ...releaseReportRefs])];
+    const currentFindings = [
+      ...(dependencyAlertRefs.length > 0 ? [`${dependencyAlertRefs.length} dependency alert reference(s) require maintenance triage.`] : []),
+      ...(docsTaskRefs.length > 0 ? [`${docsTaskRefs.length} docs task reference(s) require maintenance triage.`] : []),
+      ...(releaseReportRefs.length > 0 ? [`${releaseReportRefs.length} release-report reference(s) contribute maintenance follow-up context.`] : [])
+    ];
+    const recommendedActions = [
+      ...dependencyAlertRefs.map((pathValue) => `Review dependency alert reference \`${pathValue}\` before choosing a follow-up workflow.`),
+      ...docsTaskRefs.map((pathValue) => `Review docs task reference \`${pathValue}\` before choosing a follow-up workflow.`),
+      ...releaseReportRefs.map((pathValue) => `Review release report reference \`${pathValue}\` for maintenance-linked follow-up work.`),
+      ...(normalizedConstraints.length > 0 ? [`Keep maintenance follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
+    ];
+    const priorityAssessment =
+      releaseReportRefs.length > 0 || dependencyAlertRefs.length > 1
+        ? "Elevated maintenance triage: release-linked or multi-alert follow-up should be prioritized before broader maintenance work."
+        : "Routine maintenance triage: review bounded references and route follow-up deliberately.";
+    const stalenessSignals = [
+      ...(dependencyAlertRefs.length > 0 ? ["Dependency alert follow-up remains pending review."] : []),
+      ...(docsTaskRefs.length > 0 ? ["Documentation maintenance follow-up remains pending review."] : []),
+      ...(releaseReportRefs.length > 0 ? ["Release-linked maintenance follow-up remains pending review."] : [])
+    ];
+    const summary = `Maintenance report prepared for ${maintenanceRequest.maintenanceGoal}.`;
+    const maintenanceReport = maintenanceArtifactSchema.parse({
+      ...buildLifecycleArtifactEnvelopeBase(
+        state,
+        "Maintenance Triage",
+        summary,
+        [requestFile ?? ".agentops/requests/maintenance.yaml", ...evidenceSources],
+        maintenanceIssueRefs,
+        maintenanceGithubRefs
+      ),
+      artifactKind: "maintenance-report",
+      lifecycleDomain: "maintain",
+      payload: {
+        maintenanceScope: maintenanceRequest.maintenanceGoal,
+        currentFindings:
+          currentFindings.length > 0
+            ? currentFindings
+            : ["Maintenance triage remained bounded to validated references; no additional findings were synthesized."],
+        recommendedActions:
+          recommendedActions.length > 0
+            ? recommendedActions
+            : ["Add at least one bounded maintenance reference before broadening the workflow surface."],
+        priorityAssessment,
+        dependencyUpdates: dependencyAlertRefs,
+        docsUpdates: docsTaskRefs,
+        stalenessSignals,
+        followUpIssues: maintenanceIssueRefs
+      }
+    });
+
+    return agentOutputSchema.parse({
+      summary,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [maintenanceReport satisfies MaintenanceArtifact],
+      requestedTools: [],
+      blockedActionFlags: [],
+      confidence: 0.73,
+      metadata: {
+        deterministicInputs: {
+          evidenceSources,
+          dependencyAlertRefs,
+          docsTaskRefs,
+          releaseReportRefs,
+          issueRefs: maintenanceIssueRefs,
+          constraints: normalizedConstraints
+        },
+        synthesizedAssessment: {
+          priorityAssessment: maintenanceReport.payload.priorityAssessment,
+          recommendedActions: maintenanceReport.payload.recommendedActions,
+          followUpIssues: maintenanceReport.payload.followUpIssues
+        }
       }
     });
   }
@@ -3075,6 +3211,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["incident-intake", incidentIntakeAgent],
     ["incident-evidence-normalizer", incidentEvidenceNormalizationAgent],
     ["maintenance-intake", maintenanceIntakeAgent],
+    ["maintenance-analyst", maintenanceAnalystAgent],
     ["incident-analyst", incidentAnalystAgent],
     ["release-intake", releaseIntakeAgent],
     ["release-evidence-normalizer", releaseEvidenceNormalizationAgent],

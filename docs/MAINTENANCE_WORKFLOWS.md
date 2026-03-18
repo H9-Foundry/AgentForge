@@ -40,10 +40,10 @@ Available now:
 - lifecycle artifact and audit infrastructure
 - official `maintenance-triage` workflow asset with bounded maintenance request intake
 - deterministic maintenance request validation and release-report reference checks
+- bounded `maintenance-analyst` starter agent and `maintenance-report` lifecycle artifact emission
 
 Not yet available:
 
-- `maintenance-analyst` and `maintenance-report` artifact emission
 - deterministic dependency/docs/release signal collection and routing classification
 - official promotion of `maintenance-triage` before the later maintenance slices land
 
@@ -59,7 +59,7 @@ Later planned variants can include:
 - `docs-hygiene-review`
 - `maintenance-backlog-refresh`
 
-`maintenance-triage` is now implemented as an intake-only wedge. The later maintenance variants remain planned.
+`maintenance-triage` is now implemented as an intake-plus-analysis wedge. The later maintenance variants remain planned.
 
 ## User Jobs
 
@@ -162,9 +162,9 @@ Implemented on current `main`:
 
 1. maintenance request schema and official `maintenance-triage` workflow asset
 2. deterministic validation of dependency alert refs, docs task refs, release-report refs, and backlog issue refs before reasoning
+3. `maintenance-analyst` starter agent and `maintenance-report` lifecycle artifact emission
 
 Next maintenance family follow-ons:
 
-1. `maintenance-analyst` starter agent and `maintenance-report` artifact emission
-2. deterministic dependency/docs/release signal collection and routing classification
-3. GitHub and release/readiness handoff wiring for maintenance follow-up work
+1. deterministic dependency/docs/release signal collection and routing classification
+2. GitHub and release/readiness handoff wiring for maintenance follow-up work
