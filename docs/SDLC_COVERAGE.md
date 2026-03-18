@@ -17,7 +17,7 @@ This document describes lifecycle coverage across AgentForge using three honest 
 | Security / compliance / DevSecOps | Available now | `security-review` is an official local workflow that validates `.agentops/requests/security.yaml`, consumes bounded local evidence, and emits a `security-report` artifact without widening the default side-effect posture. | Expand beyond `security-review` into additional security/DevSecOps variants, adapters, and evals. |
 | Release / CI/CD | In progress | Release verification, trusted publishing, package validation, and GitHub workflows exist. | Add broader release/CI workflow coverage beyond package publishing. |
 | Operate / incident response / observability handoff | Planned | No official workflow yet. | Add incident-handoff and operational context workflows. |
-| Maintain / upgrade / docs / dependency hygiene | In progress | Dependency and release hygiene exist through GitHub workflows and repo maintenance practices. | Add explicit maintenance workflows and docs hygiene automation. |
+| Maintain / upgrade / docs / dependency hygiene | Available now | `maintenance-triage` is an official local workflow that validates `.agentops/requests/maintenance.yaml`, consumes bounded maintenance evidence, and emits a `maintenance-report` artifact with deterministic routing support. | Expand into additional maintenance variants such as dependency-upgrade review, docs-hygiene review, and backlog refresh. |
 
 ## Official Workflows
 
@@ -41,19 +41,22 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `security-review`
   - location: `.agentops/workflows/security-review.yaml`
   - purpose: validate a security request, consume bounded local evidence, and emit a `security-report` lifecycle artifact with deterministic evidence normalization and tighter policy handling
+- `maintenance-triage`
+  - location: `.agentops/workflows/maintenance-triage.yaml`
+  - purpose: validate a maintenance request, consume bounded maintenance evidence, and emit a `maintenance-report` lifecycle artifact with deterministic routing support
 
 ### In progress
 
 - release / CI-CD
-- maintenance / dependency / docs hygiene
+- operations / incident response / observability handoff
 
 ### Planned
 
 - additional QA variants beyond `qa-review`
 - security/DevSecOps
 - release/CI-CD
-- operations/incident handoff
-- maintenance/dependency/docs hygiene
+- additional operations/incident variants
+- additional maintenance/dependency/docs hygiene variants
 
 ## Official Agents
 
@@ -68,12 +71,13 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - `implementation-planner`
 - `qa-analyst`
 - `security-analyst`
+- `maintenance-analyst`
 
 ### Planned expansion areas
 
 - release coordination
 - incident and operational handoff
-- maintenance and upgrade hygiene
+- additional maintenance and upgrade hygiene variants
 
 ## Official Adapters
 

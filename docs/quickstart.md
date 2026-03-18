@@ -1,6 +1,6 @@
 # Quickstart
 
-This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation-to-QA lifecycle handoff, all with auditable outputs.
+This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation-to-QA-to-security-to-maintenance lifecycle handoff, all with auditable outputs.
 
 ## Fastest Evaluator Path
 
@@ -174,6 +174,31 @@ node packages/cli/dist/bin.js explain last-run --json
 
 The security bundle should include one `security-report` lifecycle artifact with normalized security evidence provenance, findings, severity summary, mitigations, release impact, and follow-up work. The default path remains read-only and more restrictive than the generic review wedges.
 
+## Run The Official Maintenance Workflow
+
+`maintenance-triage` is official on current `main`, but until the next npm release includes the latest maintenance slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
+
+Create a maintenance request that points at the prior security or release bundle:
+
+```bash
+cat > .agentops/requests/maintenance.yaml <<'EOF'
+maintenanceGoal: Review dependency and docs hygiene after the latest workflow chain
+releaseReportRefs:
+  - .agentops/runs/<security-or-release-run-id>/bundle.json
+constraints:
+  - Keep the workflow read-only
+EOF
+```
+
+Run the official maintenance wedge from the current repo build:
+
+```bash
+node packages/cli/dist/bin.js run maintenance-triage --json
+node packages/cli/dist/bin.js explain last-run --json
+```
+
+The maintenance bundle should include one `maintenance-report` lifecycle artifact with deterministic evidence sources, affected packages or docs, routing recommendation, and bounded next-step guidance. The default path remains read-only and does not apply dependency updates or docs edits automatically.
+
 ## Contributor And Source-Build Path
 
 If you want to work on AgentForge itself, build the monorepo locally:
@@ -207,6 +232,7 @@ node packages/cli/dist/bin.js run architecture-design-review
 node packages/cli/dist/bin.js run implementation-proposal
 node packages/cli/dist/bin.js run qa-review
 node packages/cli/dist/bin.js run security-review
+node packages/cli/dist/bin.js run maintenance-triage
 ```
 
 ## Inspect The Latest Run
