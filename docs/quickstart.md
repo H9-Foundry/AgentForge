@@ -102,8 +102,6 @@ approvalMode: proposal-only
 targetPaths:
   - .agentops/agentops.yaml
   - .agentops/policy.yaml
-validationCommands:
-  - pnpm test
 constraints:
   - Keep the default path read-only
 EOF
@@ -118,6 +116,8 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 The implementation bundle should include one `implementation-proposal` lifecycle artifact with deterministic affected-path inventory plus approval-required validation guidance. The default path remains read-only and proposal-only.
 
+If the published CLI reports `packageManager: "unknown"` in a generic repo, omit `validationCommands` from the request and let the workflow emit proposal-only validation guidance from the referenced design record and target paths. Add explicit commands only after package-manager detection is available for that repo.
+
 ## Run The Official QA Workflow
 
 `qa-review` is official on current `main`, but until the next npm release includes the latest QA slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
@@ -129,8 +129,6 @@ cat > .agentops/requests/qa.yaml <<'EOF'
 targetRef: .agentops/runs/<implementation-run-id>/bundle.json
 evidenceSources:
   - .agentops/runs/<implementation-run-id>/summary.md
-executedChecks:
-  - pnpm test
 focusAreas:
   - regression-risk
 releaseContext: candidate
@@ -145,6 +143,8 @@ node packages/cli/dist/bin.js explain last-run --json
 ```
 
 The QA bundle should include one `qa-report` lifecycle artifact with normalized evidence sources, normalized executed checks, coverage gaps, findings, and recommended next checks. The default path remains read-only and bounded to local evidence.
+
+If package-manager detection is unavailable in the published generic-repo path, omit `executedChecks` and rely on bounded evidence references such as the implementation bundle and summary. Add explicit executed checks only when the repo’s package manager is known and the commands are allowlisted for that repo.
 
 ## Run The Official Security Workflow
 
