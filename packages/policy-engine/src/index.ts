@@ -285,7 +285,14 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
 
   function sanitizeLifecycleArtifact(artifact: LifecycleArtifact): LifecycleArtifact {
     const sanitized = lifecycleArtifactSchema.parse(sanitizeUnknown(artifact, redactSecrets));
-    if (sanitized.artifactKind !== "security-report") {
+    const additionalCategories =
+      sanitized.artifactKind === "security-report"
+        ? ["security-sensitive"]
+        : sanitized.artifactKind === "incident-brief"
+          ? ["operational-sensitive"]
+          : [];
+
+    if (additionalCategories.length === 0) {
       return sanitized;
     }
 
@@ -293,7 +300,7 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
       ...sanitized,
       redaction: {
         ...sanitized.redaction,
-        categories: Array.from(new Set([...sanitized.redaction.categories, "security-sensitive"]))
+        categories: Array.from(new Set([...sanitized.redaction.categories, ...additionalCategories]))
       }
     });
   }

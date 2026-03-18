@@ -77,6 +77,40 @@ describe("incident analyst agent", () => {
               severityHint: "high",
               constraints: ["Keep staged incident evidence read-only"]
             }
+          },
+          evidence: {
+            metadata: {
+              incidentSummary: "Customers saw elevated 500s after the latest release candidate.",
+              severityHint: "high",
+              normalizedEvidenceSources: [
+                ".agentops/evidence/incident-summary.md",
+                ".agentops/evidence/alerts.json",
+                ".agentops/runs/run-release/bundle.json"
+              ],
+              missingEvidenceSources: [],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+              timelineSummary: [
+                "Severity hint: high.",
+                "Normalized staged incident evidence and release-report references before reasoning."
+              ],
+              likelyImpactedAreas: ["release-readiness", "staged-operational-evidence", "security-follow-up"],
+              followUpWorkflowRefs: ["maintenance-triage", "release-readiness", "security-review"],
+              provenanceRefs: [
+                ".agentops/evidence/incident-summary.md",
+                ".agentops/evidence/alerts.json",
+                ".agentops/runs/run-release/bundle.json#release-report"
+              ],
+              redactionCategories: [
+                "github-token",
+                "api-key",
+                "aws-key",
+                "bearer-token",
+                "password",
+                "private-key",
+                "operational-sensitive"
+              ],
+              referencedArtifactKinds: ["release-report"]
+            }
           }
         }
       } as never,
@@ -94,5 +128,7 @@ describe("incident analyst agent", () => {
     expect(artifact.payload.incidentSummary).toContain("elevated 500s");
     expect(artifact.payload.followUpWorkflowRefs).toContain("security-review");
     expect(artifact.payload.followUpWorkflowRefs).toContain("maintenance-triage");
+    expect(artifact.payload.timelineSummary[1]).toContain("Normalized staged incident evidence");
+    expect(artifact.payload.likelyImpactedAreas).toContain("security-follow-up");
   });
 });

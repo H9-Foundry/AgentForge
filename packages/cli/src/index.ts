@@ -324,6 +324,10 @@ nodes:
     kind: deterministic
     agent: incident-intake
     outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: incident-evidence-normalizer
+    outputs_to: agentResults.evidence
   - id: incident
     kind: reasoning
     agent: incident-analyst

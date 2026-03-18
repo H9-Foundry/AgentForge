@@ -256,4 +256,56 @@ describe("policy engine", () => {
     }
     expect(sanitized.redaction.categories).toContain("security-sensitive");
   });
+
+  it("marks incident-brief artifacts as operational-sensitive during sanitization", () => {
+    const engine = createPolicyEngine(
+      {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "approval_required"
+        },
+        paths: {
+          allowedRead: ["**/*"],
+          allowedWrite: [".agentops/runs/**", "tests/**"],
+          blocked: [".env*", "secrets/**"]
+        },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
+        tools: {
+          "filesystem.read-file": { effect: "allow" }
+        }
+      },
+      "/repo"
+    );
+
+    const incidentArtifact = lifecycleArtifactSchema.parse(JSON.parse(JSON.stringify(schemaFixtures.incidentArtifact)));
+    expect(incidentArtifact.artifactKind).toBe("incident-brief");
+    if (incidentArtifact.artifactKind !== "incident-brief") {
+      throw new Error("Expected incident artifact fixture");
+    }
+
+    const sanitized = engine.sanitizeLifecycleArtifact({
+      ...incidentArtifact,
+      redaction: {
+        ...incidentArtifact.redaction,
+        categories: ["github-token"]
+      },
+      summary: "summary token=ghp_1234567890ABCDE"
+    });
+
+    expect(sanitized.summary).toContain("[REDACTED_TOKEN]");
+    expect(sanitized.artifactKind).toBe("incident-brief");
+    if (sanitized.artifactKind !== "incident-brief") {
+      throw new Error("Expected sanitized incident artifact");
+    }
+    expect(sanitized.redaction.categories).toContain("operational-sensitive");
+  });
 });
