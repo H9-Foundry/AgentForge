@@ -14,6 +14,7 @@ import {
   normalizedValidationCommandSchema,
   policyDocumentSchema,
   qaArtifactSchema,
+  qaEvidenceNormalizationSchema,
   qaRequestSchema,
   planningRequestSchema,
   planningArtifactSchema,
@@ -34,6 +35,7 @@ describe("schema fixtures", () => {
     expect(() => qaRequestSchema.parse(schemaFixtures.qaRequest)).not.toThrow();
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
+    expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
   });
 
   it("rejects invalid manifests", () => {
@@ -56,6 +58,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.qaRequest).toBeDefined();
     expect(jsonSchemas.normalizedValidationCommand).toBeDefined();
     expect(jsonSchemas.implementationInventory).toBeDefined();
+    expect(jsonSchemas.qaEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
     expect(jsonSchemas.planningArtifact).toBeDefined();
     expect(jsonSchemas.designArtifact).toBeDefined();

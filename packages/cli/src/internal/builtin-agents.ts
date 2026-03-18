@@ -8,6 +8,7 @@ import {
   implementationArtifactSchema,
   implementationInventorySchema,
   qaArtifactSchema,
+  qaEvidenceNormalizationSchema,
   qaRequestSchema,
   planningArtifactSchema
 } from "@h9-foundry/agentforge-schemas";
@@ -22,6 +23,7 @@ import type {
   PlanningArtifact,
   PlanningRequest,
   QaArtifact,
+  QaEvidenceNormalization,
   QaRequest,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
@@ -123,6 +125,61 @@ function buildValidationCommand(
   }
 
   return `${packageManager} ${scriptName}`;
+}
+
+function collectValidationCommands(
+  repoRoot: string | undefined,
+  packageManager: string,
+  packageScopes: readonly string[]
+): NormalizedValidationCommand[] {
+  const discoveredValidationCommands: NormalizedValidationCommand[] = [];
+  const registerScripts = (packageJsonPath: string, source: "package-script" | "workspace-script", packageName?: string) => {
+    const scripts = parsePackageScripts(packageJsonPath);
+    for (const scriptName of Object.keys(scripts)) {
+      const command = buildValidationCommand(packageManager, scriptName, packageName);
+      discoveredValidationCommands.push({
+        command,
+        source,
+        classification: allowedValidationScriptNames.has(scriptName) ? "approval_required" : "deny",
+        reason: allowedValidationScriptNames.has(scriptName)
+          ? "Discovered from a bounded repository script; execution would still require approval."
+          : "Command is not in the bounded allowlist for workflow validation."
+      });
+    }
+  };
+
+  if (!repoRoot) {
+    return discoveredValidationCommands;
+  }
+
+  registerScripts(join(repoRoot, "package.json"), "package-script");
+  for (const packageScope of packageScopes) {
+    const packageJsonPath = join(repoRoot, packageScope, "package.json");
+    if (!existsSync(packageJsonPath)) {
+      continue;
+    }
+
+    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+    const packageName = isRecord(parsed) && typeof parsed.name === "string" ? parsed.name : packageScope;
+    registerScripts(packageJsonPath, "workspace-script", packageName);
+  }
+
+  return discoveredValidationCommands;
+}
+
+function loadBundleArtifactKinds(bundlePath: string): string[] {
+  if (!existsSync(bundlePath)) {
+    return [];
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  if (!isRecord(parsed) || !Array.isArray(parsed.lifecycleArtifacts)) {
+    return [];
+  }
+
+  return parsed.lifecycleArtifacts
+    .map((artifact) => (isRecord(artifact) && typeof artifact.artifactKind === "string" ? artifact.artifactKind : undefined))
+    .filter((artifactKind): artifactKind is string => Boolean(artifactKind));
 }
 
 function derivePackageScope(pathValue: string): string | undefined {
@@ -682,6 +739,115 @@ const qaIntakeAgent: RuntimeAgent = {
   }
 };
 
+const qaEvidenceNormalizationAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "qa-evidence-normalizer",
+    displayName: "QA Evidence Normalizer",
+    category: "qa",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/package.json", "**/*.json", "**/*.xml", "**/*.log", "**/*.md"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "test",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const qaRequest = getWorkflowInput<QaRequest>(stateSlice, "qaRequest");
+    if (!qaRequest) {
+      throw new Error("qa-review requires validated QA request inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const packageManager = stateSlice.repo?.packageManager || "pnpm";
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const targetType = typeof intakeMetadata.targetType === "string" ? intakeMetadata.targetType : "local-reference";
+    const targetPath = repoRoot ? join(repoRoot, qaRequest.targetRef) : qaRequest.targetRef;
+    if (repoRoot && !existsSync(targetPath)) {
+      throw new Error(`QA target reference not found: ${qaRequest.targetRef}`);
+    }
+
+    const referencedArtifactKinds = targetType === "artifact-bundle" ? loadBundleArtifactKinds(targetPath) : [];
+    const normalizedEvidenceSources = [...new Set([qaRequest.targetRef, ...qaRequest.evidenceSources])];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`QA evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const bundleAffectedPaths =
+      targetType === "artifact-bundle" && referencedArtifactKinds.includes("implementation-proposal") && existsSync(targetPath)
+        ? asStringArray(
+            (() => {
+              const parsed = JSON.parse(readFileSync(targetPath, "utf8")) as unknown;
+              if (!isRecord(parsed) || !Array.isArray(parsed.lifecycleArtifacts)) {
+                return [];
+              }
+
+              const implementationArtifact = parsed.lifecycleArtifacts.find(
+                (artifact) =>
+                  isRecord(artifact) &&
+                  artifact.artifactKind === "implementation-proposal" &&
+                  isRecord(artifact.payload) &&
+                  Array.isArray(artifact.payload.affectedPaths)
+              ) as { payload?: { affectedPaths?: unknown[] } } | undefined;
+              return implementationArtifact?.payload?.affectedPaths ?? [];
+            })()
+          )
+        : [];
+    const affectedPackages = [...new Set(bundleAffectedPaths.map((pathValue) => derivePackageScope(pathValue)).filter((value): value is string => Boolean(value)))];
+    const allowedValidationCommands = collectValidationCommands(repoRoot, packageManager, affectedPackages).filter(
+      (entry) => entry.classification === "approval_required"
+    );
+    const allowlistedCommands = new Set(allowedValidationCommands.map((entry) => entry.command));
+    const normalizedExecutedChecks = qaRequest.executedChecks.map(normalizeRequestedCommand);
+    const unrecognizedExecutedChecks = normalizedExecutedChecks.filter((command) => !allowlistedCommands.has(command));
+    const normalization = qaEvidenceNormalizationSchema.parse({
+      targetRef: qaRequest.targetRef,
+      targetType,
+      referencedArtifactKinds,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      normalizedExecutedChecks,
+      unrecognizedExecutedChecks,
+      affectedPackages,
+      allowedValidationCommands
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized QA evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.allowedValidationCommands.length} allowlisted validation command(s).`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies QaEvidenceNormalization
+    });
+  }
+};
+
 const qaAnalystAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -726,11 +892,19 @@ const qaAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const normalizedEvidenceSources = asStringArray(intakeMetadata.evidenceSources);
-    const normalizedExecutedChecks = asStringArray(intakeMetadata.executedChecks);
+    const evidenceMetadata = isRecord(stateSlice.agentResults?.evidence?.metadata) ? stateSlice.agentResults.evidence.metadata : {};
+    const normalizedEvidenceSources = asStringArray(evidenceMetadata.normalizedEvidenceSources);
+    const normalizedExecutedChecks = asStringArray(evidenceMetadata.normalizedExecutedChecks);
     const normalizedFocusAreas = asStringArray(intakeMetadata.focusAreas);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
-    const targetType = typeof intakeMetadata.targetType === "string" ? intakeMetadata.targetType : "local-reference";
+    const missingEvidenceSources = asStringArray(evidenceMetadata.missingEvidenceSources);
+    const unrecognizedExecutedChecks = asStringArray(evidenceMetadata.unrecognizedExecutedChecks);
+    const targetType =
+      typeof evidenceMetadata.targetType === "string"
+        ? evidenceMetadata.targetType
+        : typeof intakeMetadata.targetType === "string"
+          ? intakeMetadata.targetType
+          : "local-reference";
     const evidenceSources =
       normalizedEvidenceSources.length > 0
         ? normalizedEvidenceSources
@@ -763,8 +937,10 @@ const qaAnalystAgent: RuntimeAgent = {
           ];
     const coverageGaps = [
       ...(evidenceSources.length === 0 ? ["No QA evidence sources were provided beyond the target reference."] : []),
+      ...missingEvidenceSources.map((pathValue) => `Referenced QA evidence is missing: ${pathValue}`),
       ...(focusAreas.includes("coverage") ? ["Coverage evidence still needs deterministic normalization before it can be promoted to an official QA signal."] : []),
-      ...(executedChecks.length === 0 ? ["No executed validation checks were recorded in the request."] : [])
+      ...(executedChecks.length === 0 ? ["No executed validation checks were recorded in the request."] : []),
+      ...unrecognizedExecutedChecks.map((command) => `Executed check is outside the bounded allowlist and still needs manual interpretation: ${command}`)
     ];
     const recommendedNextChecks = [
       ...executedChecks.map((command) => `Review the recorded output for \`${command}\` before promotion.`),
@@ -912,35 +1088,7 @@ const implementationInventoryAgent: RuntimeAgent = {
         )
       )
     ];
-    const discoveredValidationCommands: NormalizedValidationCommand[] = [];
-    const registerScripts = (packageJsonPath: string, source: "package-script" | "workspace-script", packageName?: string) => {
-      const scripts = parsePackageScripts(packageJsonPath);
-      for (const scriptName of Object.keys(scripts)) {
-        const command = buildValidationCommand(packageManager, scriptName, packageName);
-        discoveredValidationCommands.push({
-          command,
-          source,
-          classification: allowedValidationScriptNames.has(scriptName) ? "approval_required" : "deny",
-          reason: allowedValidationScriptNames.has(scriptName)
-            ? "Discovered from a bounded repository script; execution would still require approval."
-            : "Command is not in the bounded allowlist for implementation validation."
-        });
-      }
-    };
-
-    if (repoRoot) {
-      registerScripts(join(repoRoot, "package.json"), "package-script");
-      for (const packageScope of affectedPackages) {
-        const packageJsonPath = join(repoRoot, packageScope, "package.json");
-        if (!existsSync(packageJsonPath)) {
-          continue;
-        }
-
-        const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
-        const packageName = isRecord(parsed) && typeof parsed.name === "string" ? parsed.name : packageScope;
-        registerScripts(packageJsonPath, "workspace-script", packageName);
-      }
-    }
+    const discoveredValidationCommands = collectValidationCommands(repoRoot, packageManager, affectedPackages);
 
     const normalizedRequestedCommands = implementationRequest.validationCommands.map(normalizeRequestedCommand);
     const allowlistedCommands = new Set(
@@ -1516,6 +1664,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["design-inventory", designInventoryAgent],
     ["implementation-intake", implementationIntakeAgent],
     ["qa-intake", qaIntakeAgent],
+    ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],
     ["qa-analyst", qaAnalystAgent],
     ["implementation-inventory", implementationInventoryAgent],
     ["implementation-planner", implementationPlannerAgent],

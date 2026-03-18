@@ -699,4 +699,24 @@ describe("cli smoke flows", () => {
 
     await expect(runLocalWorkflow("qa-review", root)).rejects.toThrow(/targetRef/i);
   });
+
+  it("rejects qa-review when the referenced QA target does not exist", async () => {
+    const root = createGitFixture("agentops-qa-missing-target-");
+
+    initProject(root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        "targetRef: .agentops/runs/missing/bundle.json",
+        "evidenceSources:",
+        "  - .agentops/runs/missing/summary.md",
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - coverage"
+      ].join("\n")
+    );
+
+    await expect(runLocalWorkflow("qa-review", root)).rejects.toThrow(/QA target reference not found/i);
+  });
 });

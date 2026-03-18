@@ -341,6 +341,18 @@ export const implementationInventorySchema = z.object({
   discoveredValidationCommands: z.array(normalizedValidationCommandSchema).default([])
 });
 
+export const qaEvidenceNormalizationSchema = z.object({
+  targetRef: z.string().min(1),
+  targetType: z.enum(["artifact-bundle", "validation-output", "local-reference"]),
+  referencedArtifactKinds: z.array(z.string().min(1)).default([]),
+  normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
+  missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  normalizedExecutedChecks: z.array(z.string().min(1)).default([]),
+  unrecognizedExecutedChecks: z.array(z.string().min(1)).default([]),
+  affectedPackages: z.array(z.string().min(1)).default([]),
+  allowedValidationCommands: z.array(normalizedValidationCommandSchema).default([])
+});
+
 export const repoMetadataSchema = z.object({
   root: z.string().min(1),
   name: z.string().min(1),
@@ -684,6 +696,7 @@ export const schemaRegistry = {
   qaRequest: qaRequestSchema,
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
+  qaEvidenceNormalization: qaEvidenceNormalizationSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -944,6 +957,26 @@ const implementationInventoryFixture = {
   ]
 } as const;
 
+const qaEvidenceNormalizationFixture = {
+  targetRef: ".agentops/runs/run-789/bundle.json",
+  targetType: "artifact-bundle",
+  referencedArtifactKinds: ["implementation-proposal"],
+  normalizedEvidenceSources: [".agentops/runs/run-789/bundle.json", ".agentops/runs/run-789/summary.md"],
+  missingEvidenceSources: [],
+  normalizedExecutedChecks: ["pnpm test"],
+  unrecognizedExecutedChecks: [],
+  affectedPackages: ["packages/cli"],
+  allowedValidationCommands: [
+    normalizedValidationCommandFixture,
+    {
+      command: "pnpm build",
+      source: "package-script",
+      classification: "approval_required",
+      reason: "Discovered from a bounded repository script; execution would still require approval."
+    }
+  ]
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -1052,6 +1085,7 @@ export const schemaFixtures = {
   qaRequest: qaRequestFixture,
   normalizedValidationCommand: normalizedValidationCommandFixture,
   implementationInventory: implementationInventoryFixture,
+  qaEvidenceNormalization: qaEvidenceNormalizationFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,
