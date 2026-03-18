@@ -284,7 +284,18 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
   }
 
   function sanitizeLifecycleArtifact(artifact: LifecycleArtifact): LifecycleArtifact {
-    return lifecycleArtifactSchema.parse(sanitizeUnknown(artifact, redactSecrets));
+    const sanitized = lifecycleArtifactSchema.parse(sanitizeUnknown(artifact, redactSecrets));
+    if (sanitized.artifactKind !== "security-report") {
+      return sanitized;
+    }
+
+    return lifecycleArtifactSchema.parse({
+      ...sanitized,
+      redaction: {
+        ...sanitized.redaction,
+        categories: Array.from(new Set([...sanitized.redaction.categories, "security-sensitive"]))
+      }
+    });
   }
 
   return {

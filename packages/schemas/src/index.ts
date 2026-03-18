@@ -362,6 +362,18 @@ export const qaEvidenceNormalizationSchema = z.object({
   allowedValidationCommands: z.array(normalizedValidationCommandSchema).default([])
 });
 
+export const securityEvidenceNormalizationSchema = z.object({
+  targetRef: z.string().min(1),
+  targetType: z.enum(["artifact-bundle", "local-reference"]),
+  referencedArtifactKinds: z.array(z.string().min(1)).default([]),
+  normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
+  missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  normalizedFocusAreas: z.array(z.string().min(1)).default([]),
+  securitySignals: z.array(z.string().min(1)).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([]),
+  affectedPackages: z.array(z.string().min(1)).default([])
+});
+
 export const repoMetadataSchema = z.object({
   root: z.string().min(1),
   name: z.string().min(1),
@@ -726,6 +738,7 @@ export const schemaRegistry = {
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
+  securityEvidenceNormalization: securityEvidenceNormalizationSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -893,7 +906,7 @@ const securityArtifactFixture = {
     severitySummary: "highest severity: medium; 1 synthesized security finding.",
     mitigations: ["Review dependency-risk evidence before release promotion."],
     releaseImpact: "candidate release requires explicit security review before promotion.",
-    followUpWork: ["Add deterministic security evidence normalization before broader promotion."]
+    followUpWork: ["Use deterministic security evidence normalization outputs before broader promotion."]
   }
 } as const;
 
@@ -1042,6 +1055,24 @@ const qaEvidenceNormalizationFixture = {
   ]
 } as const;
 
+const securityEvidenceNormalizationFixture = {
+  targetRef: ".agentops/runs/run-790/bundle.json",
+  targetType: "artifact-bundle",
+  referencedArtifactKinds: ["implementation-proposal"],
+  normalizedEvidenceSources: [".agentops/runs/run-790/bundle.json", ".agentops/runs/run-790/summary.md"],
+  missingEvidenceSources: [],
+  normalizedFocusAreas: ["dependency-risk", "release-readiness"],
+  securitySignals: [
+    "Referenced artifact kinds: implementation-proposal",
+    "Affected packages inferred from bounded artifact payloads: packages/cli, packages/runtime"
+  ],
+  provenanceRefs: [
+    ".agentops/runs/run-790/bundle.json#implementation-proposal",
+    ".agentops/runs/run-790/summary.md"
+  ],
+  affectedPackages: ["packages/cli", "packages/runtime"]
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -1152,6 +1183,7 @@ export const schemaFixtures = {
   normalizedValidationCommand: normalizedValidationCommandFixture,
   implementationInventory: implementationInventoryFixture,
   qaEvidenceNormalization: qaEvidenceNormalizationFixture,
+  securityEvidenceNormalization: securityEvidenceNormalizationFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
   designArtifact: designArtifactFixture,

@@ -208,4 +208,52 @@ describe("policy engine", () => {
     expect(sanitized.payload.recommendedNextSteps[0]).toContain("[REDACTED_API_KEY]");
     expect(sanitized.payload.linkedIssues).toEqual(planningArtifact.payload.linkedIssues);
   });
+
+  it("marks security-report artifacts as security-sensitive during sanitization", () => {
+    const engine = createPolicyEngine(
+      {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "approval_required"
+        },
+        paths: {
+          allowedRead: ["**/*"],
+          allowedWrite: [".agentops/runs/**", "tests/**"],
+          blocked: [".env*", "secrets/**"]
+        },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
+        tools: {
+          "filesystem.read-file": { effect: "allow" }
+        }
+      },
+      "/repo"
+    );
+
+    const securityArtifact = lifecycleArtifactSchema.parse(JSON.parse(JSON.stringify(schemaFixtures.securityArtifact)));
+    expect(securityArtifact.artifactKind).toBe("security-report");
+    if (securityArtifact.artifactKind !== "security-report") {
+      throw new Error("Expected security artifact fixture");
+    }
+
+    const sanitized = engine.sanitizeLifecycleArtifact({
+      ...securityArtifact,
+      summary: "summary token=ghp_1234567890ABCDE"
+    });
+
+    expect(sanitized.summary).toContain("[REDACTED_TOKEN]");
+    expect(sanitized.artifactKind).toBe("security-report");
+    if (sanitized.artifactKind !== "security-report") {
+      throw new Error("Expected sanitized security artifact");
+    }
+    expect(sanitized.redaction.categories).toContain("security-sensitive");
+  });
 });

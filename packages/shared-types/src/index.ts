@@ -37,6 +37,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  securityEvidenceNormalizationSchema,
   securityArtifactPayloadSchema,
   securityArtifactSchema,
   securityRequestSchema,
@@ -90,6 +91,7 @@ export type QaArtifactPayload = Infer<typeof qaArtifactPayloadSchema>;
 export type QaArtifact = Infer<typeof qaArtifactSchema>;
 export type QaEvidenceNormalization = Infer<typeof qaEvidenceNormalizationSchema>;
 export type QaRequest = Infer<typeof qaRequestSchema>;
+export type SecurityEvidenceNormalization = Infer<typeof securityEvidenceNormalizationSchema>;
 export type SecurityArtifactPayload = Infer<typeof securityArtifactPayloadSchema>;
 export type SecurityArtifact = Infer<typeof securityArtifactSchema>;
 export type SecurityRequest = Infer<typeof securityRequestSchema>;

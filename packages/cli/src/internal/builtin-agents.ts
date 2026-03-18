@@ -11,6 +11,7 @@ import {
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
   securityArtifactSchema,
+  securityEvidenceNormalizationSchema,
   securityRequestSchema,
   planningArtifactSchema
 } from "@h9-foundry/agentforge-schemas";
@@ -28,6 +29,7 @@ import type {
   QaEvidenceNormalization,
   QaRequest,
   SecurityArtifact,
+  SecurityEvidenceNormalization,
   SecurityRequest,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
@@ -184,6 +186,34 @@ function loadBundleArtifactKinds(bundlePath: string): string[] {
   return parsed.lifecycleArtifacts
     .map((artifact) => (isRecord(artifact) && typeof artifact.artifactKind === "string" ? artifact.artifactKind : undefined))
     .filter((artifactKind): artifactKind is string => Boolean(artifactKind));
+}
+
+function loadBundleArtifactPayloadPaths(bundlePath: string): string[] {
+  if (!existsSync(bundlePath)) {
+    return [];
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  if (!isRecord(parsed) || !Array.isArray(parsed.lifecycleArtifacts)) {
+    return [];
+  }
+
+  return parsed.lifecycleArtifacts.flatMap((artifact) => {
+    if (!isRecord(artifact) || !isRecord(artifact.payload)) {
+      return [];
+    }
+
+    const payload = artifact.payload as Record<string, unknown>;
+    if (Array.isArray(payload.affectedPaths)) {
+      return asStringArray(payload.affectedPaths);
+    }
+
+    if (Array.isArray(payload.evidenceSources)) {
+      return asStringArray(payload.evidenceSources);
+    }
+
+    return [];
+  });
 }
 
 function derivePackageScope(pathValue: string): string | undefined {
@@ -854,6 +884,105 @@ const securityIntakeAgent: RuntimeAgent = {
   }
 };
 
+const securityEvidenceNormalizationAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "security-evidence-normalizer",
+    displayName: "Security Evidence Normalizer",
+    category: "security",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.md", "**/package.json"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "security",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const securityRequest = getWorkflowInput<SecurityRequest>(stateSlice, "securityRequest");
+    if (!securityRequest) {
+      throw new Error("security-review requires validated security request inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const targetType = typeof intakeMetadata.targetType === "string" && intakeMetadata.targetType === "artifact-bundle"
+      ? "artifact-bundle"
+      : "local-reference";
+    const targetPath = repoRoot ? join(repoRoot, securityRequest.targetRef) : securityRequest.targetRef;
+    if (repoRoot && !existsSync(targetPath)) {
+      throw new Error(`Security target reference not found: ${securityRequest.targetRef}`);
+    }
+
+    const referencedArtifactKinds = targetType === "artifact-bundle" ? loadBundleArtifactKinds(targetPath) : [];
+    const normalizedEvidenceSources = [...new Set([securityRequest.targetRef, ...securityRequest.evidenceSources])];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`Security evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const normalizedFocusAreas = securityRequest.focusAreas.length > 0 ? [...new Set(securityRequest.focusAreas)] : ["general-review"];
+    const affectedPackages =
+      targetType === "artifact-bundle"
+        ? [...new Set(loadBundleArtifactPayloadPaths(targetPath).map(derivePackageScope).filter((value): value is string => Boolean(value)))]
+        : [];
+    const securitySignals = [
+      ...(referencedArtifactKinds.length > 0 ? [`Referenced artifact kinds: ${referencedArtifactKinds.join(", ")}`] : []),
+      ...(affectedPackages.length > 0 ? [`Affected packages inferred from bounded artifact payloads: ${affectedPackages.join(", ")}`] : []),
+      ...(normalizedFocusAreas.length > 0 ? [`Requested focus areas: ${normalizedFocusAreas.join(", ")}`] : []),
+      "Security evidence collection remains local, read-only, and bounded to validated references."
+    ];
+    const provenanceRefs = [
+      securityRequest.targetRef,
+      ...securityRequest.evidenceSources,
+      ...referencedArtifactKinds.map((artifactKind) => `${securityRequest.targetRef}#${artifactKind}`)
+    ];
+    const normalization = securityEvidenceNormalizationSchema.parse({
+      targetRef: securityRequest.targetRef,
+      targetType,
+      referencedArtifactKinds,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      normalizedFocusAreas,
+      securitySignals,
+      provenanceRefs: [...new Set(provenanceRefs)],
+      affectedPackages
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized security evidence for ${securityRequest.targetRef}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies SecurityEvidenceNormalization
+    });
+  }
+};
+
 const securityAnalystAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -898,12 +1027,18 @@ const securityAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const referencedArtifactKinds = asStringArray(intakeMetadata.referencedArtifactKinds);
-    const normalizedFocusAreas = asStringArray(intakeMetadata.focusAreas);
+    const evidenceMetadata = securityEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const referencedArtifactKinds =
+      normalizedEvidence?.referencedArtifactKinds ?? asStringArray(intakeMetadata.referencedArtifactKinds);
+    const normalizedFocusAreas =
+      normalizedEvidence?.normalizedFocusAreas ?? asStringArray(intakeMetadata.focusAreas);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
     const evidenceSources =
-      asStringArray(intakeMetadata.evidenceSources).length > 0
-        ? asStringArray(intakeMetadata.evidenceSources)
+      normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+        ? normalizedEvidence.normalizedEvidenceSources
+        : asStringArray(intakeMetadata.evidenceSources).length > 0
+          ? asStringArray(intakeMetadata.evidenceSources)
         : [...new Set([securityRequest.targetRef, ...securityRequest.evidenceSources])];
     const focusAreas = normalizedFocusAreas.length > 0 ? normalizedFocusAreas : securityRequest.focusAreas;
     const inferredSeverity = securityRequest.releaseContext === "blocking" ? "high" : securityRequest.releaseContext === "candidate" ? "medium" : "low";
@@ -938,10 +1073,11 @@ const securityAnalystAgent: RuntimeAgent = {
       ...(normalizedConstraints.length > 0 ? [`Keep security follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
     ];
     const followUpWork = [
+      ...(normalizedEvidence?.securitySignals ?? []),
       ...(referencedArtifactKinds.length > 0
         ? [`Confirm the security posture for referenced artifacts: ${referencedArtifactKinds.join(", ")}.`]
         : []),
-      "Add deterministic security evidence normalization before broadening the workflow surface."
+      "Use deterministic security evidence normalization outputs before broadening the workflow surface."
     ];
     const summary = `Security report prepared for ${securityRequest.targetRef}.`;
     const securityReport = securityArtifactSchema.parse({
@@ -949,10 +1085,18 @@ const securityAnalystAgent: RuntimeAgent = {
         state,
         "Security Review",
         summary,
-        [requestFile ?? ".agentops/requests/security.yaml", securityRequest.targetRef, ...securityRequest.evidenceSources]
+        [
+          requestFile ?? ".agentops/requests/security.yaml",
+          ...(normalizedEvidence?.provenanceRefs ?? [securityRequest.targetRef, ...securityRequest.evidenceSources])
+        ]
       ),
       artifactKind: "security-report",
       lifecycleDomain: "security",
+      redaction: {
+        applied: true,
+        strategyVersion: "1.0.0",
+        categories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key", "security-sensitive"]
+      },
       payload: {
         targetRef: securityRequest.targetRef,
         evidenceSources,
@@ -986,7 +1130,8 @@ const securityAnalystAgent: RuntimeAgent = {
           evidenceSources,
           focusAreas,
           constraints: normalizedConstraints,
-          referencedArtifactKinds
+          referencedArtifactKinds,
+          normalizedEvidence: normalizedEvidence ?? null
         },
         synthesizedAssessment: {
           severitySummary: securityReport.payload.severitySummary,
@@ -1924,6 +2069,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["implementation-intake", implementationIntakeAgent],
     ["qa-intake", qaIntakeAgent],
     ["security-intake", securityIntakeAgent],
+    ["security-evidence-normalizer", securityEvidenceNormalizationAgent],
     ["security-analyst", securityAnalystAgent],
     ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],
     ["qa-analyst", qaAnalystAgent],

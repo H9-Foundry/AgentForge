@@ -263,6 +263,10 @@ nodes:
     kind: deterministic
     agent: security-intake
     outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: security-evidence-normalizer
+    outputs_to: agentResults.evidence
   - id: security
     kind: reasoning
     agent: security-analyst
