@@ -33,13 +33,14 @@ Available now:
 - starter `qa-analyst` agent
 - `qa-report` lifecycle artifact emission
 - deterministic QA evidence normalization and allowlisted validation collection
+- deterministic ingestion of explicit local GitHub Actions/check-run evidence exports
 - audit bundle and lifecycle artifact infrastructure
 - release verification and package checks
 
 Not yet available:
 
 - additional QA workflow variants beyond `qa-review`
-- broader CI-hosted or external QA evidence ingestion
+- broader CI-hosted or network-backed QA evidence ingestion
 
 ## Recommended Initial Workflow Family
 
@@ -113,7 +114,7 @@ Deterministic responsibilities:
 
 - request validation
 - evidence collection from allowlisted local sources
-- normalization of known test outputs
+- normalization of known test outputs and explicit local GitHub Actions exports
 - artifact persistence and audit linkage
 
 Reasoning responsibilities:

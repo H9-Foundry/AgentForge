@@ -5,6 +5,8 @@ import {
   auditBundleSchema,
   designArtifactSchema,
   designRequestSchema,
+  githubActionsEvidenceNormalizationSchema,
+  githubActionsEvidenceSchema,
   githubHandoffSummarySchema,
   githubReferenceSchema,
   githubWorkflowStatusMappingSchema,
@@ -41,6 +43,10 @@ describe("schema fixtures", () => {
     expect(() => qaRequestSchema.parse(schemaFixtures.qaRequest)).not.toThrow();
     expect(() => securityRequestSchema.parse(schemaFixtures.securityRequest)).not.toThrow();
     expect(() => githubReferenceSchema.parse(schemaFixtures.githubReference)).not.toThrow();
+    expect(() => githubActionsEvidenceSchema.parse(schemaFixtures.githubActionsEvidence)).not.toThrow();
+    expect(() =>
+      githubActionsEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization.githubActions)
+    ).not.toThrow();
     expect(() => githubHandoffSummarySchema.parse(schemaFixtures.githubHandoffSummary)).not.toThrow();
     expect(() => githubWorkflowStatusMappingSchema.parse(schemaFixtures.githubWorkflowStatusMapping)).not.toThrow();
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
@@ -69,6 +75,8 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.qaRequest).toBeDefined();
     expect(jsonSchemas.securityRequest).toBeDefined();
     expect(jsonSchemas.githubReference).toBeDefined();
+    expect(jsonSchemas.githubActionsEvidence).toBeDefined();
+    expect(jsonSchemas.githubActionsEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.githubHandoffSummary).toBeDefined();
     expect(jsonSchemas.githubWorkflowStatusMapping).toBeDefined();
     expect(jsonSchemas.normalizedValidationCommand).toBeDefined();

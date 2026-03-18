@@ -175,6 +175,48 @@ describe("builtin qa evidence normalizer", () => {
       )
     );
     writeFileSync(join(root, ".agentops", "runs", "run-impl", "summary.md"), "# summary\n");
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "evidence", "github-actions-ci.json"),
+      JSON.stringify(
+        {
+          repository: "H9-Foundry/fixture",
+          workflowName: "CI",
+          workflowRunId: 12345,
+          runAttempt: 1,
+          event: "pull_request",
+          headBranch: "main",
+          headSha: "abc123",
+          status: "completed",
+          conclusion: "failure",
+          htmlUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345",
+          jobs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345/job/1"
+            },
+            {
+              name: "lint",
+              status: "completed",
+              conclusion: "failure",
+              htmlUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345/job/2"
+            }
+          ],
+          checkRuns: [
+            {
+              name: "validate-public-packages",
+              status: "completed",
+              conclusion: "success",
+              detailsUrl: "https://github.com/H9-Foundry/fixture/actions/runs/12345/job/3"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
     mkdirSync(join(root, "packages", "app"), { recursive: true });
     writeFileSync(
       join(root, "packages", "app", "package.json"),
@@ -208,7 +250,7 @@ describe("builtin qa evidence normalizer", () => {
         workflowInputs: {
           qaRequest: {
             targetRef: ".agentops/runs/run-impl/bundle.json",
-            evidenceSources: [".agentops/runs/run-impl/summary.md"],
+            evidenceSources: [".agentops/runs/run-impl/summary.md", ".agentops/evidence/github-actions-ci.json"],
             executedChecks: ["pnpm test"],
             focusAreas: ["coverage"],
             constraints: ["Keep QA evidence collection read-only"],
@@ -229,13 +271,19 @@ describe("builtin qa evidence normalizer", () => {
 
     expect(output.metadata?.normalizedEvidenceSources).toEqual([
       ".agentops/runs/run-impl/bundle.json",
-      ".agentops/runs/run-impl/summary.md"
+      ".agentops/runs/run-impl/summary.md",
+      ".agentops/evidence/github-actions-ci.json"
     ]);
     expect(output.metadata?.referencedArtifactKinds).toContain("implementation-proposal");
     expect(output.metadata?.allowedValidationCommands).toEqual(
       expect.arrayContaining([expect.objectContaining({ command: "pnpm test", classification: "approval_required" })])
     );
     expect(output.metadata?.unrecognizedExecutedChecks).toEqual([]);
+    const githubActionsMetadata = output.metadata?.githubActions as
+      | { workflowNames?: string[]; failingChecks?: string[] }
+      | undefined;
+    expect(githubActionsMetadata?.workflowNames).toEqual(["CI"]);
+    expect(githubActionsMetadata?.failingChecks).toEqual(["CI / lint"]);
   });
 });
 
