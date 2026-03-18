@@ -1602,6 +1602,9 @@ describe("cli smoke flows", () => {
         artifactKind?: string;
         payload?: {
           maintenanceScope?: string;
+          evidenceSources?: string[];
+          routingRecommendation?: string;
+          followUpWorkflowRefs?: string[];
           followUpIssues?: string[];
           dependencyUpdates?: string[];
           docsUpdates?: string[];
@@ -1610,9 +1613,13 @@ describe("cli smoke flows", () => {
     }>(maintenanceRun.jsonPath);
     expect(bundle.workflow).toBe("maintenance-triage");
     expect(bundle.entries.some((entry) => entry.nodeId === "intake")).toBe(true);
+    expect(bundle.entries.some((entry) => entry.nodeId === "evidence")).toBe(true);
     expect(bundle.entries.some((entry) => entry.nodeId === "maintenance")).toBe(true);
     expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("maintenance-report");
     expect(bundle.lifecycleArtifacts[0]?.payload?.maintenanceScope).toContain("dependency and docs hygiene");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.evidenceSources).toContain(".agentops/runs/run-release/bundle.json");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.routingRecommendation).toBe("implementation-proposal");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.followUpWorkflowRefs).toContain("release-readiness");
     expect(bundle.lifecycleArtifacts[0]?.payload?.followUpIssues).toContain("#145");
     expect(bundle.lifecycleArtifacts[0]?.payload?.dependencyUpdates).toContain(".agentops/evidence/dependency-alerts.json");
     expect(bundle.lifecycleArtifacts[0]?.payload?.docsUpdates).toContain(".agentops/evidence/docs-task.md");

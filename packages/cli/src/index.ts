@@ -353,6 +353,10 @@ nodes:
     kind: deterministic
     agent: maintenance-intake
     outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: maintenance-evidence-normalizer
+    outputs_to: agentResults.evidence
   - id: maintenance
     kind: reasoning
     agent: maintenance-analyst

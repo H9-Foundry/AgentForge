@@ -77,6 +77,30 @@ describe("maintenance analyst agent", () => {
               releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
               constraints: ["Keep maintenance triage read-only"]
             }
+          },
+          evidence: {
+            metadata: {
+              maintenanceGoal: "Triage dependency and docs hygiene follow-up after the latest release.",
+              dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+              docsTaskRefs: [".agentops/evidence/docs-task.md"],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+              normalizedEvidenceSources: [
+                ".agentops/evidence/dependency-alerts.json",
+                ".agentops/evidence/docs-task.md",
+                ".agentops/runs/run-release/bundle.json"
+              ],
+              missingEvidenceSources: [],
+              referencedArtifactKinds: ["release-report"],
+              affectedPackagesOrDocs: ["docs/quickstart.md", "packages/cli"],
+              maintenanceSignals: ["Release report references contribute bounded maintenance follow-up context."],
+              followUpWorkflowRefs: ["implementation-proposal", "release-readiness"],
+              routingRecommendation: "implementation-proposal",
+              provenanceRefs: [
+                ".agentops/evidence/dependency-alerts.json",
+                ".agentops/evidence/docs-task.md",
+                ".agentops/runs/run-release/bundle.json#release-report"
+              ]
+            }
           }
         }
       } as never,
@@ -92,6 +116,11 @@ describe("maintenance analyst agent", () => {
     }
 
     expect(artifact.payload.maintenanceScope).toContain("dependency and docs hygiene");
+    expect(artifact.payload.evidenceSources).toContain(".agentops/runs/run-release/bundle.json");
+    expect(artifact.payload.affectedPackagesOrDocs).toContain("packages/cli");
+    expect(artifact.payload.routingRecommendation).toBe("implementation-proposal");
+    expect(artifact.payload.followUpWorkflowRefs).toContain("release-readiness");
+    expect(artifact.payload.risks.length).toBeGreaterThan(0);
     expect(artifact.payload.dependencyUpdates).toContain(".agentops/evidence/dependency-alerts.json");
     expect(artifact.payload.docsUpdates).toContain(".agentops/evidence/docs-task.md");
     expect(artifact.payload.followUpIssues).toContain("#152");

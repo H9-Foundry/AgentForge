@@ -12,6 +12,7 @@ import {
   incidentEvidenceNormalizationSchema,
   incidentRequestSchema,
   maintenanceArtifactSchema,
+  maintenanceEvidenceNormalizationSchema,
   maintenanceRequestSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
@@ -39,6 +40,7 @@ import type {
   IncidentEvidenceNormalization,
   IncidentRequest,
   MaintenanceArtifact,
+  MaintenanceEvidenceNormalization,
   MaintenanceRequest,
   NormalizedValidationCommand,
   PlanningArtifact,
@@ -379,6 +381,11 @@ function derivePackageScope(pathValue: string): string | undefined {
   }
 
   return undefined;
+}
+
+function includesAnyKeyword(values: readonly string[], keywords: readonly string[]): boolean {
+  const haystack = values.join(" ").toLowerCase();
+  return keywords.some((keyword) => haystack.includes(keyword));
 }
 
 function getWorkflowInput<T>(stateSlice: Partial<WorkflowStateEnvelope>, key: string): T | undefined {
@@ -1287,6 +1294,142 @@ const maintenanceIntakeAgent: RuntimeAgent = {
   }
 };
 
+const maintenanceEvidenceNormalizerAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "maintenance-evidence-normalizer",
+    displayName: "Maintenance Evidence Normalizer",
+    category: "maintain",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.md", "**/*.txt", "**/package.json"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "maintain",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const maintenanceRequest = getWorkflowInput<MaintenanceRequest>(stateSlice, "maintenanceRequest");
+    if (!maintenanceRequest) {
+      throw new Error("maintenance-triage requires validated maintenance inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const dependencyAlertRefs =
+      asStringArray(intakeMetadata.dependencyAlertRefs).length > 0
+        ? asStringArray(intakeMetadata.dependencyAlertRefs)
+        : maintenanceRequest.dependencyAlertRefs;
+    const docsTaskRefs =
+      asStringArray(intakeMetadata.docsTaskRefs).length > 0
+        ? asStringArray(intakeMetadata.docsTaskRefs)
+        : maintenanceRequest.docsTaskRefs;
+    const releaseReportRefs =
+      asStringArray(intakeMetadata.releaseReportRefs).length > 0
+        ? asStringArray(intakeMetadata.releaseReportRefs)
+        : maintenanceRequest.releaseReportRefs;
+    const normalizedEvidenceSources = [...new Set([...dependencyAlertRefs, ...docsTaskRefs, ...releaseReportRefs])];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`Maintenance evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const referencedArtifactKinds = [
+      ...new Set(releaseReportRefs.flatMap((pathValue) => (repoRoot ? loadBundleArtifactKinds(join(repoRoot, pathValue)) : [])))
+    ];
+    const releasePayloadPaths = releaseReportRefs.flatMap((pathValue) => (repoRoot ? loadBundleArtifactPayloadPaths(join(repoRoot, pathValue)) : []));
+    const affectedPackagesOrDocs = [
+      ...new Set(
+        [...docsTaskRefs, ...releasePayloadPaths]
+          .map((pathValue) => derivePackageScope(pathValue) ?? pathValue)
+          .filter((value): value is string => Boolean(value))
+      )
+    ];
+    const maintenanceSignals = [
+      ...normalizedEvidenceSources.map((pathValue) => describeEvidenceObservation(repoRoot, pathValue)),
+      ...(dependencyAlertRefs.length > 0 ? ["Dependency alert references contribute bounded maintenance follow-up context."] : []),
+      ...(docsTaskRefs.length > 0 ? ["Documentation task references contribute bounded maintenance follow-up context."] : []),
+      ...(releaseReportRefs.length > 0 ? ["Release report references contribute bounded maintenance follow-up context."] : []),
+      ...(referencedArtifactKinds.length > 0 ? [`Referenced artifact kinds: ${referencedArtifactKinds.join(", ")}`] : [])
+    ];
+    const routingInputs = [
+      maintenanceRequest.maintenanceGoal,
+      ...dependencyAlertRefs,
+      ...docsTaskRefs,
+      ...releaseReportRefs,
+      ...maintenanceSignals
+    ];
+    const securitySignal =
+      referencedArtifactKinds.includes("security-report") ||
+      includesAnyKeyword(routingInputs, ["security", "vulnerability", "vuln", "cve", "advisory"]);
+    const qaSignal =
+      referencedArtifactKinds.includes("qa-report") ||
+      includesAnyKeyword(routingInputs, ["qa", "test", "coverage", "flaky"]);
+    const followUpWorkflowRefs = [
+      ...new Set([
+        ...(securitySignal ? ["security-review"] : []),
+        ...(dependencyAlertRefs.length > 0 || docsTaskRefs.length > 0 ? ["implementation-proposal"] : []),
+        ...(releaseReportRefs.length > 0 ? ["release-readiness"] : []),
+        ...(qaSignal ? ["qa-review"] : [])
+      ])
+    ];
+    const routingRecommendation = followUpWorkflowRefs[0] ?? "implementation-proposal";
+    const provenanceRefs = [
+      ...new Set([
+        ...dependencyAlertRefs,
+        ...docsTaskRefs,
+        ...releaseReportRefs.map((pathValue) => `${pathValue}#release-report`)
+      ])
+    ];
+    const normalization = maintenanceEvidenceNormalizationSchema.parse({
+      maintenanceGoal: maintenanceRequest.maintenanceGoal,
+      dependencyAlertRefs,
+      docsTaskRefs,
+      releaseReportRefs,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      referencedArtifactKinds,
+      affectedPackagesOrDocs,
+      maintenanceSignals,
+      followUpWorkflowRefs,
+      routingRecommendation,
+      provenanceRefs
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized maintenance evidence across ${normalization.normalizedEvidenceSources.length} source(s) for ${maintenanceRequest.maintenanceGoal}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies MaintenanceEvidenceNormalization
+    });
+  }
+};
+
 const maintenanceAnalystAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -1333,32 +1476,62 @@ const maintenanceAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const dependencyAlertRefs = asStringArray(intakeMetadata.dependencyAlertRefs).length > 0
-      ? asStringArray(intakeMetadata.dependencyAlertRefs)
-      : maintenanceRequest.dependencyAlertRefs;
-    const docsTaskRefs = asStringArray(intakeMetadata.docsTaskRefs).length > 0
-      ? asStringArray(intakeMetadata.docsTaskRefs)
-      : maintenanceRequest.docsTaskRefs;
-    const releaseReportRefs = asStringArray(intakeMetadata.releaseReportRefs).length > 0
-      ? asStringArray(intakeMetadata.releaseReportRefs)
-      : maintenanceRequest.releaseReportRefs;
+    const evidenceMetadata = maintenanceEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const dependencyAlertRefs =
+      normalizedEvidence?.dependencyAlertRefs ??
+      (asStringArray(intakeMetadata.dependencyAlertRefs).length > 0
+        ? asStringArray(intakeMetadata.dependencyAlertRefs)
+        : maintenanceRequest.dependencyAlertRefs);
+    const docsTaskRefs =
+      normalizedEvidence?.docsTaskRefs ??
+      (asStringArray(intakeMetadata.docsTaskRefs).length > 0
+        ? asStringArray(intakeMetadata.docsTaskRefs)
+        : maintenanceRequest.docsTaskRefs);
+    const releaseReportRefs =
+      normalizedEvidence?.releaseReportRefs ??
+      (asStringArray(intakeMetadata.releaseReportRefs).length > 0
+        ? asStringArray(intakeMetadata.releaseReportRefs)
+        : maintenanceRequest.releaseReportRefs);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
-    const evidenceSources = [...new Set([...dependencyAlertRefs, ...docsTaskRefs, ...releaseReportRefs])];
+    const evidenceSources =
+      normalizedEvidence?.normalizedEvidenceSources ?? [...new Set([...dependencyAlertRefs, ...docsTaskRefs, ...releaseReportRefs])];
+    const affectedPackagesOrDocs = normalizedEvidence?.affectedPackagesOrDocs ?? [];
+    const followUpWorkflowRefs = normalizedEvidence?.followUpWorkflowRefs ?? [];
+    const routingRecommendation = normalizedEvidence?.routingRecommendation ?? "implementation-proposal";
+    const maintenanceSignals = normalizedEvidence?.maintenanceSignals ?? [];
+    const referencedArtifactKinds = normalizedEvidence?.referencedArtifactKinds ?? [];
     const currentFindings = [
-      ...(dependencyAlertRefs.length > 0 ? [`${dependencyAlertRefs.length} dependency alert reference(s) require maintenance triage.`] : []),
-      ...(docsTaskRefs.length > 0 ? [`${docsTaskRefs.length} docs task reference(s) require maintenance triage.`] : []),
-      ...(releaseReportRefs.length > 0 ? [`${releaseReportRefs.length} release-report reference(s) contribute maintenance follow-up context.`] : [])
+      ...(maintenanceSignals.length > 0
+        ? maintenanceSignals
+        : [
+            ...(dependencyAlertRefs.length > 0 ? [`${dependencyAlertRefs.length} dependency alert reference(s) require maintenance triage.`] : []),
+            ...(docsTaskRefs.length > 0 ? [`${docsTaskRefs.length} docs task reference(s) require maintenance triage.`] : []),
+            ...(releaseReportRefs.length > 0 ? [`${releaseReportRefs.length} release-report reference(s) contribute maintenance follow-up context.`] : [])
+          ])
     ];
     const recommendedActions = [
       ...dependencyAlertRefs.map((pathValue) => `Review dependency alert reference \`${pathValue}\` before choosing a follow-up workflow.`),
       ...docsTaskRefs.map((pathValue) => `Review docs task reference \`${pathValue}\` before choosing a follow-up workflow.`),
       ...releaseReportRefs.map((pathValue) => `Review release report reference \`${pathValue}\` for maintenance-linked follow-up work.`),
+      ...(affectedPackagesOrDocs.length > 0 ? [`Review the affected maintenance surfaces: ${affectedPackagesOrDocs.join(", ")}.`] : []),
+      ...(followUpWorkflowRefs.length > 0
+        ? [`Route the next bounded follow-up through ${routingRecommendation} (${followUpWorkflowRefs.join(", ")} considered).`]
+        : []),
       ...(normalizedConstraints.length > 0 ? [`Keep maintenance follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
     ];
     const priorityAssessment =
       releaseReportRefs.length > 0 || dependencyAlertRefs.length > 1
         ? "Elevated maintenance triage: release-linked or multi-alert follow-up should be prioritized before broader maintenance work."
         : "Routine maintenance triage: review bounded references and route follow-up deliberately.";
+    const risks = [
+      ...(releaseReportRefs.length > 0 ? ["Release-linked maintenance follow-up can drift if release-readiness is deferred."] : []),
+      ...(dependencyAlertRefs.length > 0 ? ["Dependency alert follow-up can widen change scope once implementation work begins."] : []),
+      ...(docsTaskRefs.length > 0 ? ["Documentation debt can diverge from implemented behavior if maintenance triage is deferred."] : []),
+      ...(referencedArtifactKinds.includes("security-report")
+        ? ["Security-linked maintenance follow-up should remain prioritized until the linked evidence is resolved."]
+        : [])
+    ];
     const stalenessSignals = [
       ...(dependencyAlertRefs.length > 0 ? ["Dependency alert follow-up remains pending review."] : []),
       ...(docsTaskRefs.length > 0 ? ["Documentation maintenance follow-up remains pending review."] : []),
@@ -1378,6 +1551,8 @@ const maintenanceAnalystAgent: RuntimeAgent = {
       lifecycleDomain: "maintain",
       payload: {
         maintenanceScope: maintenanceRequest.maintenanceGoal,
+        evidenceSources,
+        affectedPackagesOrDocs,
         currentFindings:
           currentFindings.length > 0
             ? currentFindings
@@ -1386,6 +1561,9 @@ const maintenanceAnalystAgent: RuntimeAgent = {
           recommendedActions.length > 0
             ? recommendedActions
             : ["Add at least one bounded maintenance reference before broadening the workflow surface."],
+        routingRecommendation,
+        followUpWorkflowRefs,
+        risks,
         priorityAssessment,
         dependencyUpdates: dependencyAlertRefs,
         docsUpdates: docsTaskRefs,
@@ -1408,12 +1586,18 @@ const maintenanceAnalystAgent: RuntimeAgent = {
           dependencyAlertRefs,
           docsTaskRefs,
           releaseReportRefs,
+          affectedPackagesOrDocs,
+          maintenanceSignals,
+          referencedArtifactKinds,
           issueRefs: maintenanceIssueRefs,
           constraints: normalizedConstraints
         },
         synthesizedAssessment: {
           priorityAssessment: maintenanceReport.payload.priorityAssessment,
           recommendedActions: maintenanceReport.payload.recommendedActions,
+          routingRecommendation: maintenanceReport.payload.routingRecommendation,
+          followUpWorkflowRefs: maintenanceReport.payload.followUpWorkflowRefs,
+          risks: maintenanceReport.payload.risks,
           followUpIssues: maintenanceReport.payload.followUpIssues
         }
       }
@@ -3211,6 +3395,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["incident-intake", incidentIntakeAgent],
     ["incident-evidence-normalizer", incidentEvidenceNormalizationAgent],
     ["maintenance-intake", maintenanceIntakeAgent],
+    ["maintenance-evidence-normalizer", maintenanceEvidenceNormalizerAgent],
     ["maintenance-analyst", maintenanceAnalystAgent],
     ["incident-analyst", incidentAnalystAgent],
     ["release-intake", releaseIntakeAgent],

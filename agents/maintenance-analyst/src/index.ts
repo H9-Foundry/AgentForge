@@ -1,5 +1,11 @@
-import { agentManifestSchema, agentOutputSchema, maintenanceArtifactSchema } from "@h9-foundry/agentforge-schemas";
-import type { GithubReference, MaintenanceArtifact, MaintenanceRequest, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
+import { agentManifestSchema, agentOutputSchema, maintenanceArtifactSchema, maintenanceEvidenceNormalizationSchema } from "@h9-foundry/agentforge-schemas";
+import type {
+  GithubReference,
+  MaintenanceArtifact,
+  MaintenanceEvidenceNormalization,
+  MaintenanceRequest,
+  WorkflowStateEnvelope
+} from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -122,32 +128,62 @@ export const maintenanceAnalystAgent: RuntimeAgent = {
     }
 
     const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
-    const dependencyAlertRefs = asStringArray(intakeMetadata.dependencyAlertRefs).length > 0
-      ? asStringArray(intakeMetadata.dependencyAlertRefs)
-      : maintenanceRequest.dependencyAlertRefs;
-    const docsTaskRefs = asStringArray(intakeMetadata.docsTaskRefs).length > 0
-      ? asStringArray(intakeMetadata.docsTaskRefs)
-      : maintenanceRequest.docsTaskRefs;
-    const releaseReportRefs = asStringArray(intakeMetadata.releaseReportRefs).length > 0
-      ? asStringArray(intakeMetadata.releaseReportRefs)
-      : maintenanceRequest.releaseReportRefs;
+    const evidenceMetadata = maintenanceEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence: MaintenanceEvidenceNormalization | undefined = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const dependencyAlertRefs =
+      normalizedEvidence?.dependencyAlertRefs ??
+      (asStringArray(intakeMetadata.dependencyAlertRefs).length > 0
+        ? asStringArray(intakeMetadata.dependencyAlertRefs)
+        : maintenanceRequest.dependencyAlertRefs);
+    const docsTaskRefs =
+      normalizedEvidence?.docsTaskRefs ??
+      (asStringArray(intakeMetadata.docsTaskRefs).length > 0
+        ? asStringArray(intakeMetadata.docsTaskRefs)
+        : maintenanceRequest.docsTaskRefs);
+    const releaseReportRefs =
+      normalizedEvidence?.releaseReportRefs ??
+      (asStringArray(intakeMetadata.releaseReportRefs).length > 0
+        ? asStringArray(intakeMetadata.releaseReportRefs)
+        : maintenanceRequest.releaseReportRefs);
     const constraints = asStringArray(intakeMetadata.constraints);
-    const evidenceSources = [...new Set([...dependencyAlertRefs, ...docsTaskRefs, ...releaseReportRefs])];
+    const evidenceSources =
+      normalizedEvidence?.normalizedEvidenceSources ?? [...new Set([...dependencyAlertRefs, ...docsTaskRefs, ...releaseReportRefs])];
+    const affectedPackagesOrDocs = normalizedEvidence?.affectedPackagesOrDocs ?? [];
+    const followUpWorkflowRefs = normalizedEvidence?.followUpWorkflowRefs ?? [];
+    const routingRecommendation = normalizedEvidence?.routingRecommendation ?? "implementation-proposal";
+    const maintenanceSignals = normalizedEvidence?.maintenanceSignals ?? [];
+    const referencedArtifactKinds = normalizedEvidence?.referencedArtifactKinds ?? [];
     const currentFindings = [
-      ...(dependencyAlertRefs.length > 0 ? [`${dependencyAlertRefs.length} dependency alert reference(s) require maintenance triage.`] : []),
-      ...(docsTaskRefs.length > 0 ? [`${docsTaskRefs.length} docs task reference(s) require maintenance triage.`] : []),
-      ...(releaseReportRefs.length > 0 ? [`${releaseReportRefs.length} release-report reference(s) contribute maintenance follow-up context.`] : [])
+      ...(maintenanceSignals.length > 0
+        ? maintenanceSignals
+        : [
+            ...(dependencyAlertRefs.length > 0 ? [`${dependencyAlertRefs.length} dependency alert reference(s) require maintenance triage.`] : []),
+            ...(docsTaskRefs.length > 0 ? [`${docsTaskRefs.length} docs task reference(s) require maintenance triage.`] : []),
+            ...(releaseReportRefs.length > 0 ? [`${releaseReportRefs.length} release-report reference(s) contribute maintenance follow-up context.`] : [])
+          ])
     ];
     const recommendedActions = [
       ...dependencyAlertRefs.map((pathValue) => `Review dependency alert reference \`${pathValue}\` before choosing a follow-up workflow.`),
       ...docsTaskRefs.map((pathValue) => `Review docs task reference \`${pathValue}\` before choosing a follow-up workflow.`),
       ...releaseReportRefs.map((pathValue) => `Review release report reference \`${pathValue}\` for maintenance-linked follow-up work.`),
+      ...(affectedPackagesOrDocs.length > 0 ? [`Review the affected maintenance surfaces: ${affectedPackagesOrDocs.join(", ")}.`] : []),
+      ...(followUpWorkflowRefs.length > 0
+        ? [`Route the next bounded follow-up through ${routingRecommendation} (${followUpWorkflowRefs.join(", ")} considered).`]
+        : []),
       ...(constraints.length > 0 ? [`Keep maintenance follow-up bounded by: ${constraints.join("; ")}.`] : [])
     ];
     const priorityAssessment =
       dependencyAlertRefs.length > 1 || releaseReportRefs.length > 0
         ? "Elevated maintenance triage: release-linked or multi-alert follow-up should be prioritized before broader maintenance work."
         : "Routine maintenance triage: review bounded references and route follow-up deliberately.";
+    const risks = [
+      ...(releaseReportRefs.length > 0 ? ["Release-linked maintenance follow-up can drift if release-readiness is deferred."] : []),
+      ...(dependencyAlertRefs.length > 0 ? ["Dependency alert follow-up can widen change scope once implementation work begins."] : []),
+      ...(docsTaskRefs.length > 0 ? ["Documentation debt can diverge from implemented behavior if maintenance triage is deferred."] : []),
+      ...(referencedArtifactKinds.includes("security-report")
+        ? ["Security-linked maintenance follow-up should remain prioritized until the linked evidence is resolved."]
+        : [])
+    ];
     const stalenessSignals = [
       ...(dependencyAlertRefs.length > 0 ? ["Dependency alert follow-up remains pending review."] : []),
       ...(docsTaskRefs.length > 0 ? ["Documentation maintenance follow-up remains pending review."] : []),
@@ -166,6 +202,8 @@ export const maintenanceAnalystAgent: RuntimeAgent = {
       lifecycleDomain: "maintain",
       payload: {
         maintenanceScope: maintenanceRequest.maintenanceGoal,
+        evidenceSources,
+        affectedPackagesOrDocs,
         currentFindings:
           currentFindings.length > 0
             ? currentFindings
@@ -174,6 +212,9 @@ export const maintenanceAnalystAgent: RuntimeAgent = {
           recommendedActions.length > 0
             ? recommendedActions
             : ["Add at least one bounded maintenance reference before broadening the workflow surface."],
+        routingRecommendation,
+        followUpWorkflowRefs,
+        risks,
         priorityAssessment,
         dependencyUpdates: dependencyAlertRefs,
         docsUpdates: docsTaskRefs,
@@ -196,12 +237,18 @@ export const maintenanceAnalystAgent: RuntimeAgent = {
           dependencyAlertRefs,
           docsTaskRefs,
           releaseReportRefs,
+          affectedPackagesOrDocs,
+          maintenanceSignals,
+          referencedArtifactKinds,
           issueRefs: maintenanceIssueRefs,
           constraints
         },
         synthesizedAssessment: {
           priorityAssessment: maintenanceReport.payload.priorityAssessment,
           recommendedActions: maintenanceReport.payload.recommendedActions,
+          routingRecommendation: maintenanceReport.payload.routingRecommendation,
+          followUpWorkflowRefs: maintenanceReport.payload.followUpWorkflowRefs,
+          risks: maintenanceReport.payload.risks,
           followUpIssues: maintenanceReport.payload.followUpIssues
         }
       }

@@ -447,6 +447,21 @@ export const incidentEvidenceNormalizationSchema = z.object({
   referencedArtifactKinds: z.array(z.string().min(1)).default([])
 });
 
+export const maintenanceEvidenceNormalizationSchema = z.object({
+  maintenanceGoal: z.string().min(1),
+  dependencyAlertRefs: z.array(z.string().min(1)).default([]),
+  docsTaskRefs: z.array(z.string().min(1)).default([]),
+  releaseReportRefs: z.array(z.string().min(1)).default([]),
+  normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
+  missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  referencedArtifactKinds: z.array(z.string().min(1)).default([]),
+  affectedPackagesOrDocs: z.array(z.string().min(1)).default([]),
+  maintenanceSignals: z.array(z.string().min(1)).default([]),
+  followUpWorkflowRefs: z.array(z.string().min(1)).default([]),
+  routingRecommendation: z.string().min(1),
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
 export const repoMetadataSchema = z.object({
   root: z.string().min(1),
   name: z.string().min(1),
@@ -775,8 +790,13 @@ export const releaseArtifactPayloadSchema = z.object({
 
 export const maintenanceArtifactPayloadSchema = z.object({
   maintenanceScope: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  affectedPackagesOrDocs: z.array(z.string().min(1)).default([]),
   currentFindings: z.array(z.string().min(1)).default([]),
   recommendedActions: z.array(z.string().min(1)).default([]),
+  routingRecommendation: z.string().min(1),
+  followUpWorkflowRefs: z.array(z.string().min(1)).default([]),
+  risks: z.array(z.string().min(1)).default([]),
   priorityAssessment: z.string().min(1),
   dependencyUpdates: z.array(z.string().min(1)).default([]),
   docsUpdates: z.array(z.string().min(1)).default([]),
@@ -939,6 +959,7 @@ export const schemaRegistry = {
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
   securityEvidenceNormalization: securityEvidenceNormalizationSchema,
   incidentEvidenceNormalization: incidentEvidenceNormalizationSchema,
+  maintenanceEvidenceNormalization: maintenanceEvidenceNormalizationSchema,
   policyDocument: policyDocumentSchema,
   effectivePolicySnapshot: effectivePolicySnapshotSchema,
   workflowDefinition: workflowDefinitionSchema,
@@ -1211,8 +1232,20 @@ const maintenanceArtifactFixture = {
   summary: "Maintenance report for documentation and dependency hygiene.",
   payload: {
     maintenanceScope: "Docs and dependency hygiene",
+    evidenceSources: [
+      ".agentops/evidence/dependency-alerts.json",
+      ".agentops/evidence/docs-task.md",
+      ".agentops/runs/run-release/bundle.json"
+    ],
+    affectedPackagesOrDocs: ["docs/quickstart.md", "packages/cli"],
     currentFindings: ["README needs clearer first-run guidance"],
     recommendedActions: ["Rewrite quickstart", "Refresh sample repo docs"],
+    routingRecommendation: "implementation-proposal",
+    followUpWorkflowRefs: ["implementation-proposal", "release-readiness"],
+    risks: [
+      "Release-linked maintenance follow-up may drift if the latest release report is not revisited.",
+      "Docs debt can diverge from implemented behavior if maintenance triage is deferred."
+    ],
     priorityAssessment: "high",
     dependencyUpdates: ["vitest@4.1.0"],
     docsUpdates: ["docs/quickstart.md"],
@@ -1473,6 +1506,34 @@ const incidentEvidenceNormalizationFixture = {
   referencedArtifactKinds: ["release-report"]
 } as const;
 
+const maintenanceEvidenceNormalizationFixture = {
+  maintenanceGoal: "Triage dependency and docs hygiene follow-up after the latest release.",
+  dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+  docsTaskRefs: [".agentops/evidence/docs-task.md"],
+  releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+  normalizedEvidenceSources: [
+    ".agentops/evidence/dependency-alerts.json",
+    ".agentops/evidence/docs-task.md",
+    ".agentops/runs/run-release/bundle.json"
+  ],
+  missingEvidenceSources: [],
+  referencedArtifactKinds: ["release-report"],
+  affectedPackagesOrDocs: ["docs/quickstart.md", "packages/cli"],
+  maintenanceSignals: [
+    "Observed source .agentops/evidence/dependency-alerts.json during deterministic intake.",
+    "Observed source .agentops/evidence/docs-task.md during deterministic intake.",
+    "Observed source .agentops/runs/run-release/bundle.json during deterministic intake.",
+    "Release report references contribute bounded maintenance follow-up context."
+  ],
+  followUpWorkflowRefs: ["implementation-proposal", "release-readiness"],
+  routingRecommendation: "implementation-proposal",
+  provenanceRefs: [
+    ".agentops/evidence/dependency-alerts.json",
+    ".agentops/evidence/docs-task.md",
+    ".agentops/runs/run-release/bundle.json#release-report"
+  ]
+} as const;
+
 const releaseEvidenceNormalizationFixture = {
   qaReportRefs: [".agentops/runs/run-789/bundle.json"],
   securityReportRefs: [".agentops/runs/run-790/bundle.json"],
@@ -1635,6 +1696,7 @@ export const schemaFixtures = {
   qaEvidenceNormalization: qaEvidenceNormalizationFixture,
   securityEvidenceNormalization: securityEvidenceNormalizationFixture,
   incidentEvidenceNormalization: incidentEvidenceNormalizationFixture,
+  maintenanceEvidenceNormalization: maintenanceEvidenceNormalizationFixture,
   releaseEvidenceNormalization: releaseEvidenceNormalizationFixture,
   lifecycleArtifactEnvelope: planningArtifactFixture,
   planningArtifact: planningArtifactFixture,
