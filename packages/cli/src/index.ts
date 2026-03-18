@@ -779,10 +779,10 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
   const config = loadAgentForgeConfig(root);
   const runsRoot = join(root, config.runtime.runsPath);
   const entries = existsSync(runsRoot) ? readdirSync(runsRoot).sort() : [];
-  const latest = entries.at(-1);
+  const latest = [...entries].reverse().find((entry) => existsSync(join(runsRoot, entry, "bundle.json")));
 
   if (!latest) {
-    throw new Error("No recorded runs found.");
+    throw new Error("No complete recorded runs found.");
   }
 
   const bundle = JSON.parse(readFileSync(join(runsRoot, latest, "bundle.json"), "utf8")) as Record<string, unknown>;
