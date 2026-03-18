@@ -33,14 +33,15 @@ Available now:
 - schema fixtures and runtime tests
 - release verification
 - local dogfooding for `pr-review`
+- `eval-spec` schema plus a deterministic local fixture corpus for the current official workflow surface
 - support matrix and roadmap framing
 
 Not yet available:
 
-- eval spec schema
-- benchmark dataset or fixture corpus
 - workflow-scoring contracts
 - repeatable regression comparison across workflow versions
+- local eval runner and `eval-result` artifact emission
+- benchmark comparison and regression reporting
 
 ## Framework Layers
 
@@ -101,7 +102,7 @@ The roadmap should eventually introduce:
 - `eval-result`
 - `benchmark-summary`
 
-The first phase should define these as schema and reporting targets before implementation.
+The first phase now defines `eval-spec` plus a deterministic fixture corpus. The later phases still need to implement `eval-result` and `benchmark-summary` behavior.
 
 ## Relationship To Workflow Growth
 
@@ -120,4 +121,3 @@ This epic should be decomposed into at least:
 1. eval-spec schema and deterministic fixture corpus for core workflows
 2. local eval runner with score normalization and artifact emission
 3. benchmark comparison and regression-reporting surface for workflow and agent variants
-

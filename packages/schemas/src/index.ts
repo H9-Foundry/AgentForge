@@ -54,6 +54,16 @@ export const catalogDomainSchema = z.enum([
 ]);
 export const supportLevelSchema = z.enum(["official", "partial", "planned", "internal"]);
 export const maturitySchema = z.enum(["concept", "prototype", "mvp", "expanding", "stable"]);
+export const evalRepoFixtureSchema = z.enum(["agentforge-monorepo", "blank-local"]);
+export const evalWorkflowSchema = z.enum([
+  "pr-review",
+  "planning-discovery",
+  "architecture-design-review",
+  "implementation-proposal",
+  "qa-review",
+  "security-review",
+  "maintenance-triage"
+]);
 export const trustScopeSchema = z.enum([
   "core-only",
   "official-core-only",
@@ -760,6 +770,95 @@ export const maintenanceRequestSchema = z.object({
   constraints: z.array(z.string().min(1)).default([])
 });
 
+export const evalPolicyExpectationSchema = z.object({
+  executionMode: executionModeSchema.default("inspect"),
+  readOnly: z.boolean().default(true),
+  sideEffectClasses: z.array(sideEffectClassSchema).default(["observe", "suggest"]),
+  approvalRequiredActions: z.array(z.string().min(1)).default([])
+});
+
+export const evalRedactionExpectationSchema = z.object({
+  applied: z.boolean().default(true),
+  expectedCategories: z.array(z.string().min(1)).default([])
+});
+
+export const evalArtifactExpectationSchema = z.object({
+  artifactKind: lifecycleArtifactKindSchema,
+  lifecycleDomain: lifecycleDomainSchema,
+  requiredPayloadFields: z.array(z.string().min(1)).default([]),
+  requiredSummaryTerms: z.array(z.string().min(1)).default([])
+});
+
+const evalSpecBaseShape = {
+  schemaVersion: z.string().min(1),
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().min(1),
+  repoFixture: evalRepoFixtureSchema,
+  expectedStatus: runStatusSchema.default("success"),
+  notes: z.array(z.string().min(1)).default([]),
+  policyExpectations: evalPolicyExpectationSchema,
+  redactionExpectations: evalRedactionExpectationSchema,
+  artifactExpectations: z.array(evalArtifactExpectationSchema).default([])
+} as const;
+
+export const prReviewEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("pr-review")
+});
+
+export const planningEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("planning-discovery"),
+  request: planningRequestSchema
+});
+
+export const designEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("architecture-design-review"),
+  request: designRequestSchema
+});
+
+export const implementationEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("implementation-proposal"),
+  request: implementationRequestSchema
+});
+
+export const qaEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("qa-review"),
+  request: qaRequestSchema
+});
+
+export const securityEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("security-review"),
+  request: securityRequestSchema
+});
+
+export const maintenanceEvalSpecSchema = z.object({
+  ...evalSpecBaseShape,
+  workflow: z.literal("maintenance-triage"),
+  request: maintenanceRequestSchema
+});
+
+export const evalSpecSchema = z.discriminatedUnion("workflow", [
+  prReviewEvalSpecSchema,
+  planningEvalSpecSchema,
+  designEvalSpecSchema,
+  implementationEvalSpecSchema,
+  qaEvalSpecSchema,
+  securityEvalSpecSchema,
+  maintenanceEvalSpecSchema
+]);
+
+export const evalFixtureCorpusSchema = z.object({
+  schemaVersion: z.string().min(1),
+  generatedAt: z.string().datetime(),
+  specs: z.array(evalSpecSchema).min(1)
+});
+
 export const releaseEvidenceNormalizationSchema = z.object({
   qaReportRefs: z.array(z.string().min(1)).default([]),
   securityReportRefs: z.array(z.string().min(1)).default([]),
@@ -954,6 +1053,11 @@ export const schemaRegistry = {
   releaseRequest: releaseRequestSchema,
   incidentRequest: incidentRequestSchema,
   maintenanceRequest: maintenanceRequestSchema,
+  evalPolicyExpectation: evalPolicyExpectationSchema,
+  evalRedactionExpectation: evalRedactionExpectationSchema,
+  evalArtifactExpectation: evalArtifactExpectationSchema,
+  evalSpec: evalSpecSchema,
+  evalFixtureCorpus: evalFixtureCorpusSchema,
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
@@ -1534,6 +1638,222 @@ const maintenanceEvidenceNormalizationFixture = {
   ]
 } as const;
 
+const evalFixtureCorpusFixture = {
+  schemaVersion: "1.0.0",
+  generatedAt: "2026-03-18T12:00:00.000Z",
+  specs: [
+    {
+      schemaVersion: "1.0.0",
+      id: "pr-review-local-baseline",
+      name: "PR review local baseline",
+      workflow: "pr-review",
+      description: "Baseline deterministic expectations for the official PR review wedge.",
+      repoFixture: "agentforge-monorepo",
+      expectedStatus: "success",
+      notes: ["No lifecycle artifact is emitted in the current official PR review wedge."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: []
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: []
+    },
+    {
+      schemaVersion: "1.0.0",
+      id: "planning-discovery-local-brief",
+      name: "Planning discovery emits planning brief",
+      workflow: "planning-discovery",
+      description: "Deterministic expectations for the first official planning workflow.",
+      repoFixture: "blank-local",
+      expectedStatus: "success",
+      request: {
+        problemStatement: "Define the first planning-discovery workflow wedge.",
+        goals: ["Produce one planning brief artifact"],
+        constraints: ["Keep the workflow local-first and read-only"],
+        issueRefs: ["#127", "#128"],
+        pathHints: ["packages/cli", "packages/runtime", "docs/PLANNING_DISCOVERY_WORKFLOW.md"],
+        assumptions: ["CLI-first execution remains the evaluator path"]
+      },
+      notes: ["The CLI-first local path should remain read-only by default."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: []
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: [
+        {
+          artifactKind: "planning-brief",
+          lifecycleDomain: "plan",
+          requiredPayloadFields: ["problemStatement", "objectives", "recommendedNextSteps"],
+          requiredSummaryTerms: ["planning", "brief"]
+        }
+      ]
+    },
+    {
+      schemaVersion: "1.0.0",
+      id: "architecture-design-review-local-record",
+      name: "Architecture design review emits design record",
+      workflow: "architecture-design-review",
+      description: "Deterministic expectations for the first official design workflow.",
+      repoFixture: "blank-local",
+      expectedStatus: "success",
+      request: {
+        planningBriefRef: ".agentops/runs/run-123/bundle.json",
+        decisionTarget: "Choose the first planning workflow implementation shape.",
+        constraints: ["Keep deterministic intake validation before reasoning"],
+        pathHints: ["packages/schemas", "packages/runtime", "packages/cli"],
+        alternatives: ["single-agent workflow", "deterministic intake plus reasoning"],
+        questions: ["How should planning artifacts be referenced downstream?"]
+      },
+      notes: ["Design review requires a prior planning brief reference."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: []
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: [
+        {
+          artifactKind: "design-record",
+          lifecycleDomain: "design",
+          requiredPayloadFields: ["decisionSummary", "chosenApproach", "optionsConsidered"],
+          requiredSummaryTerms: ["design", "record"]
+        }
+      ]
+    },
+    {
+      schemaVersion: "1.0.0",
+      id: "implementation-proposal-local-plan",
+      name: "Implementation proposal emits implementation artifact",
+      workflow: "implementation-proposal",
+      description: "Deterministic expectations for the official implementation workflow.",
+      repoFixture: "blank-local",
+      expectedStatus: "success",
+      request: implementationRequestFixture,
+      notes: ["The initial implementation wedge is proposal-only and read-only."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: ["Any validation command execution remains approval-gated."]
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: [
+        {
+          artifactKind: "implementation-proposal",
+          lifecycleDomain: "build",
+          requiredPayloadFields: ["designRecordRef", "implementationGoal", "validationPlan"],
+          requiredSummaryTerms: ["implementation", "proposal"]
+        }
+      ]
+    },
+    {
+      schemaVersion: "1.0.0",
+      id: "qa-review-local-report",
+      name: "QA review emits qa report",
+      workflow: "qa-review",
+      description: "Deterministic expectations for the official QA workflow.",
+      repoFixture: "blank-local",
+      expectedStatus: "success",
+      request: qaRequestFixture,
+      notes: ["QA remains bounded to validated local evidence and normalized check references."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: ["Executing new validation commands remains approval-gated."]
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: [
+        {
+          artifactKind: "qa-report",
+          lifecycleDomain: "test",
+          requiredPayloadFields: ["targetRef", "evidenceSources", "recommendedNextChecks"],
+          requiredSummaryTerms: ["QA", "report"]
+        }
+      ]
+    },
+    {
+      schemaVersion: "1.0.0",
+      id: "security-review-local-report",
+      name: "Security review emits security report",
+      workflow: "security-review",
+      description: "Deterministic expectations for the official security workflow.",
+      repoFixture: "blank-local",
+      expectedStatus: "success",
+      request: securityRequestFixture,
+      notes: ["Security review remains read-only and more restrictive than generic review wedges."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: []
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: [
+        {
+          artifactKind: "security-report",
+          lifecycleDomain: "security",
+          requiredPayloadFields: ["targetRef", "severitySummary", "releaseImpact"],
+          requiredSummaryTerms: ["security", "report"]
+        }
+      ]
+    },
+    {
+      schemaVersion: "1.0.0",
+      id: "maintenance-triage-local-report",
+      name: "Maintenance triage emits maintenance report",
+      workflow: "maintenance-triage",
+      description: "Deterministic expectations for the official maintenance workflow.",
+      repoFixture: "blank-local",
+      expectedStatus: "success",
+      request: maintenanceRequestFixture,
+      notes: ["Maintenance triage stays read-only and routes work without applying dependency or docs changes."],
+      policyExpectations: {
+        executionMode: "inspect",
+        readOnly: true,
+        sideEffectClasses: ["observe", "suggest"],
+        approvalRequiredActions: []
+      },
+      redactionExpectations: {
+        applied: true,
+        expectedCategories: ["secrets"]
+      },
+      artifactExpectations: [
+        {
+          artifactKind: "maintenance-report",
+          lifecycleDomain: "maintain",
+          requiredPayloadFields: ["maintenanceScope", "routingRecommendation", "priorityAssessment"],
+          requiredSummaryTerms: ["maintenance", "report"]
+        }
+      ]
+    }
+  ]
+} as const;
+
 const releaseEvidenceNormalizationFixture = {
   qaReportRefs: [".agentops/runs/run-789/bundle.json"],
   securityReportRefs: [".agentops/runs/run-790/bundle.json"],
@@ -1687,6 +2007,8 @@ export const schemaFixtures = {
   releaseRequest: releaseRequestFixture,
   incidentRequest: incidentRequestFixture,
   maintenanceRequest: maintenanceRequestFixture,
+  evalSpec: evalFixtureCorpusFixture.specs[1],
+  evalFixtureCorpus: evalFixtureCorpusFixture,
   githubReference: githubReferenceFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,
