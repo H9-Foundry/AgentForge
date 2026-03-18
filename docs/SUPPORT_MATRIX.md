@@ -20,7 +20,8 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `architecture-design-review` | Official | CLI-first design workflow that consumes a planning brief and emits a `design-record` artifact. |
 | `implementation-proposal` | Official | CLI-first implementation workflow that consumes a design record, emits an `implementation-proposal` artifact, and keeps the default path read-only and proposal-only. |
 | `qa-review` | Official | Dedicated QA workflow that consumes an implementation proposal and emits a `qa-report` artifact with deterministic evidence normalization ahead of reasoning. |
-| security / DevSecOps | Planned | Security controls exist, but not a broader official security workflow family. |
+| `security-review` | Official | Dedicated security workflow that consumes bounded local evidence, emits a `security-report` artifact, and keeps the default path read-only with tighter policy handling. |
+| security / DevSecOps extensions | Planned | Additional security variants beyond `security-review` are not implemented yet. |
 | release / CI-CD | Planned | Release automation exists, but not as a broader official SDLC workflow family. |
 | operations / incident handoff | Planned | Roadmap item only. |
 | maintenance / dependency/docs hygiene | Planned | Roadmap item only. |
@@ -34,6 +35,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `design-analyst` | Official | Starter design agent for `architecture-design-review`. |
 | `implementation-planner` | Official | Starter implementation agent for `implementation-proposal`. |
 | `qa-analyst` | Official | Starter QA agent for `qa-review`. |
+| `security-analyst` | Official | Starter security agent for `security-review`. |
 | `security-audit` | Official | Current starter agent. |
 | `code-review` | Official | Current starter agent. |
 | `test-generation` | Official | Current starter agent. |

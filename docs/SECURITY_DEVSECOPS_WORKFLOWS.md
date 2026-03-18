@@ -1,25 +1,25 @@
 # Security And DevSecOps Workflow Expansion
 
-This document defines the design target for issue [#55](https://github.com/H9-Foundry/AgentForge/issues/55).
+This document defines the security workflow expansion for issue [#55](https://github.com/H9-Foundry/AgentForge/issues/55).
 
-It describes how AgentForge should grow security workflows beyond the current security posture and starter audit behavior.
+It now records the implemented `security-review` wedge and the remaining planned growth beyond that initial workflow.
 
-It does **not** claim that these workflows are implemented or officially shipped today.
+It does **not** claim that the broader security family is fully implemented today.
 
 ## Why This Exists
 
-AgentForge already has strong policy, redaction, and release-trust controls, but it does not yet expose a first-class security workflow family.
+AgentForge already has strong policy, redaction, and release-trust controls, and it now exposes one first-class security workflow wedge.
 
-Without explicit security workflows:
+Before `security-review`, the repo lacked:
 
 - security review intent is mixed into generic review paths
 - compliance and DevSecOps use cases have no bounded workflow wedge
 - security-specific evidence and findings are not normalized separately
 - future supply-chain and release-hardening work lacks a clear upstream workflow model
 
-## Design Goal
+## Current Goal
 
-The first security expansion should define a workflow family that:
+The current security expansion should:
 
 - keeps the current security posture as a hard baseline
 - adds explicit workflows for bounded security review and evidence collection
@@ -34,16 +34,19 @@ Available now:
 - lifecycle artifact sanitization and audit linkage
 - starter `security-audit` agent
 - release verification and trusted publishing
+- official `security-review` workflow asset
+- starter `security-analyst`
+- `security-report` lifecycle artifact emission
+- deterministic security evidence normalization and security-domain policy handling
 
 Not yet available:
 
-- official security workflow assets
-- dedicated security lifecycle artifacts beyond design targets
 - explicit DevSecOps evidence adapters or compliance-oriented workflows
+- additional official security variants beyond `security-review`
 
 ## Recommended Initial Workflow Family
 
-Phase 2 should define one first official wedge:
+The first official security wedge is now:
 
 - `security-review`
 
@@ -53,7 +56,7 @@ Later planned variants can include:
 - `compliance-evidence-assembly`
 - `supply-chain-verification`
 
-Only `security-review` should be targeted for first implementation planning.
+Only `security-review` is implemented today. The later variants remain planned.
 
 ## User Jobs
 
@@ -156,12 +159,20 @@ Adapter expectations:
 - dependency and advisory ingestion must remain explicit and policy-aware
 - future compliance evidence adapters must preserve redaction and auditability
 
-## Follow-On Implementation Slices
+## Implemented Initial Slices
 
-This epic should be decomposed into at least:
+Completed:
 
 1. security request schema and official `security-review` workflow asset
 2. `security-analyst` starter agent and `security-report` artifact emission
 3. deterministic local security evidence collection and normalization
 4. security-domain policy wiring for evidence visibility, redaction, and escalation posture
 
+## Remaining Planned Expansion
+
+The broader security/DevSecOps family still needs:
+
+1. additional security variants such as dependency-risk review and compliance evidence assembly
+2. richer explicit evidence adapters beyond bounded local security evidence
+3. workflow-level GitHub and CI handoff integration
+4. eval and benchmark coverage for security-specific workflow quality

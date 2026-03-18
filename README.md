@@ -129,7 +129,7 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 | Architecture / design | Available now | `architecture-design-review` is an official local workflow that consumes a planning brief and emits a `design-record` artifact. |
 | Build / implementation | Available now | `implementation-proposal` is an official local workflow that consumes a design record, emits an `implementation-proposal` artifact, and keeps the default path read-only and proposal-only. |
 | Review / test / QA | Available now | `pr-review` remains official, and `qa-review` is now an official local workflow that consumes an implementation proposal and emits a `qa-report` artifact without widening the default side-effect posture. |
-| Security / compliance / DevSecOps | Partial | Policy, trust, redaction, and audit exist; broader security workflows are planned. |
+| Security / compliance / DevSecOps | Available now | `security-review` is an official local workflow that consumes bounded local evidence, emits a `security-report` artifact, and keeps the default path read-only; broader security variants remain planned. |
 | Release / CI/CD | Partial | Release verification and package publishing exist; broader CI/CD workflow coverage is planned. |
 | Operate / incidents / observability handoff | Planned | Not implemented yet. |
 | Maintain / upgrades / docs hygiene | Partial | Release hygiene and dependency maintenance are present; dedicated workflows are planned. |
