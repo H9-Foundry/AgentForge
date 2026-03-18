@@ -1,5 +1,18 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.7.0
+
+### Minor Changes
+
+- b0f9b53: Normalize bounded QA evidence deterministically and wire `qa-review` to consume allowlisted validation evidence before QA reasoning.
+- df17a9c: Add the bounded `qa-analyst` starter agent and emit `qa-report` lifecycle artifacts for `qa-review`.
+- 65b7ee1: Add the bounded `security-review` request contract and official workflow asset.
+
+### Patch Changes
+
+- 9c1d8d0: Add deterministic security evidence normalization and stricter security-report redaction handling for `security-review`.
+- bdae136: Add the bounded `security-analyst` workflow stage and first `security-report` lifecycle artifact for `security-review`.
+
 ## 0.6.0
 
 ### Minor Changes
