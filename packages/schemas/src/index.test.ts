@@ -16,6 +16,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  securityArtifactSchema,
   securityRequestSchema,
   planningRequestSchema,
   planningArtifactSchema,
@@ -67,6 +68,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.designArtifact).toBeDefined();
     expect(jsonSchemas.implementationArtifact).toBeDefined();
     expect(jsonSchemas.qaArtifact).toBeDefined();
+    expect(jsonSchemas.securityArtifact).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();
     expect(jsonSchemas.releaseArtifact).toBeDefined();
     expect(jsonSchemas.maintenanceArtifact).toBeDefined();
@@ -154,6 +156,7 @@ describe("schema fixtures", () => {
     expect(() => designArtifactSchema.parse(schemaFixtures.designArtifact)).not.toThrow();
     expect(() => implementationArtifactSchema.parse(schemaFixtures.implementationArtifact)).not.toThrow();
     expect(() => qaArtifactSchema.parse(schemaFixtures.qaArtifact)).not.toThrow();
+    expect(() => securityArtifactSchema.parse(schemaFixtures.securityArtifact)).not.toThrow();
     expect(() => reviewArtifactSchema.parse(schemaFixtures.reviewArtifact)).not.toThrow();
     expect(() => releaseArtifactSchema.parse(schemaFixtures.releaseArtifact)).not.toThrow();
     expect(() => maintenanceArtifactSchema.parse(schemaFixtures.maintenanceArtifact)).not.toThrow();

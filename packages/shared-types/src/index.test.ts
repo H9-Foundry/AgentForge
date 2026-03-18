@@ -14,6 +14,7 @@ import type {
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
+  SecurityArtifact,
   SecurityRequest,
   ReleaseArtifact,
   ReleaseVerificationCheck,
@@ -31,6 +32,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<ImplementationArtifact["lifecycleDomain"]>().toEqualTypeOf<"build">();
     expectTypeOf<QaArtifact["artifactKind"]>().toEqualTypeOf<"qa-report">();
     expectTypeOf<QaArtifact["lifecycleDomain"]>().toEqualTypeOf<"test">();
+    expectTypeOf<SecurityArtifact["artifactKind"]>().toEqualTypeOf<"security-report">();
+    expectTypeOf<SecurityArtifact["lifecycleDomain"]>().toEqualTypeOf<"security">();
     expectTypeOf<ReviewArtifact["artifactKind"]>().toEqualTypeOf<"review-report">();
     expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
     expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();

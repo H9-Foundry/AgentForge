@@ -18,11 +18,12 @@ export const lifecycleArtifactKindSchema = z.enum([
   "design-record",
   "implementation-proposal",
   "qa-report",
+  "security-report",
   "review-report",
   "release-report",
   "maintenance-report"
 ]);
-export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "review", "release", "maintain"]);
+export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "review", "release", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 export const catalogDomainSchema = z.enum([
@@ -538,6 +539,16 @@ export const qaArtifactPayloadSchema = z.object({
   releaseImpact: z.string().min(1)
 });
 
+export const securityArtifactPayloadSchema = z.object({
+  targetRef: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  findings: z.array(findingSchema).default([]),
+  severitySummary: z.string().min(1),
+  mitigations: z.array(z.string().min(1)).default([]),
+  releaseImpact: z.string().min(1),
+  followUpWork: z.array(z.string().min(1)).default([])
+});
+
 export const implementationArtifactPayloadSchema = z.object({
   designRecordRef: z.string().min(1),
   implementationGoal: z.string().min(1),
@@ -609,6 +620,12 @@ export const qaArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   payload: qaArtifactPayloadSchema
 });
 
+export const securityArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("security-report"),
+  lifecycleDomain: z.literal("security"),
+  payload: securityArtifactPayloadSchema
+});
+
 export const reviewArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("review-report"),
   lifecycleDomain: z.literal("review"),
@@ -632,6 +649,7 @@ export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   designArtifactSchema,
   implementationArtifactSchema,
   qaArtifactSchema,
+  securityArtifactSchema,
   reviewArtifactSchema,
   releaseArtifactSchema,
   maintenanceArtifactSchema
@@ -681,6 +699,7 @@ export const schemaRegistry = {
   designArtifactPayload: designArtifactPayloadSchema,
   implementationArtifactPayload: implementationArtifactPayloadSchema,
   qaArtifactPayload: qaArtifactPayloadSchema,
+  securityArtifactPayload: securityArtifactPayloadSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
@@ -690,6 +709,7 @@ export const schemaRegistry = {
   designArtifact: designArtifactSchema,
   implementationArtifact: implementationArtifactSchema,
   qaArtifact: qaArtifactSchema,
+  securityArtifact: securityArtifactSchema,
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
@@ -846,6 +866,34 @@ const qaArtifactFixture = {
     coverageGaps: ["Coverage evidence was referenced but not normalized into a deterministic summary."],
     recommendedNextChecks: ["Review the referenced validation output before promotion.", "Confirm release-risk expectations with the owning maintainer."],
     releaseImpact: "candidate release requires QA follow-up before promotion."
+  }
+} as const;
+
+const securityArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "security-report",
+  lifecycleDomain: "security",
+  summary: "Security report for the bounded implementation proposal handoff.",
+  payload: {
+    targetRef: ".agentops/runs/run-790/bundle.json",
+    evidenceSources: [".agentops/runs/run-790/summary.md"],
+    findings: [
+      {
+        id: "security-finding-1",
+        title: "Dependency risk still needs bounded interpretation",
+        summary: "The security workflow synthesized a dependency-risk concern from validated references.",
+        severity: "medium",
+        rationale:
+          "This slice emits a structured security report from validated evidence references before deterministic evidence normalization lands.",
+        confidence: 0.78,
+        location: ".agentops/requests/security.yaml",
+        tags: ["security", "dependency-risk"]
+      }
+    ],
+    severitySummary: "highest severity: medium; 1 synthesized security finding.",
+    mitigations: ["Review dependency-risk evidence before release promotion."],
+    releaseImpact: "candidate release requires explicit security review before promotion.",
+    followUpWork: ["Add deterministic security evidence normalization before broader promotion."]
   }
 } as const;
 
@@ -1109,6 +1157,7 @@ export const schemaFixtures = {
   designArtifact: designArtifactFixture,
   implementationArtifact: implementationArtifactFixture,
   qaArtifact: qaArtifactFixture,
+  securityArtifact: securityArtifactFixture,
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   maintenanceArtifact: maintenanceArtifactFixture,

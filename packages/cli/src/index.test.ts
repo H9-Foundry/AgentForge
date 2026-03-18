@@ -892,9 +892,10 @@ describe("cli smoke flows", () => {
 
     expect(securityRun.status).toBe("success");
     expect(securityRun.findings).toBe(0);
-    expect(securityRun.artifactKinds).toEqual([]);
+    expect(securityRun.artifactKinds).toContain("security-report");
 
-    const bundle = readJson<{ workflow: string }>(securityRun.jsonPath);
+    const bundle = readJson<{ workflow: string; lifecycleArtifacts: Array<{ artifactKind: string }> }>(securityRun.jsonPath);
     expect(bundle.workflow).toBe("security-review");
+    expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "security-report")).toBe(true);
   });
 });
