@@ -38,12 +38,13 @@ Partially implemented now:
 
 - deterministic GitHub issue and PR reference normalization shared across lifecycle workflow inputs and artifacts
 - bounded local-to-GitHub status mapping primitives for later handoff and reporting work
+- deterministic GitHub handoff rendering for planning, design, QA, and release artifacts
 
 Not yet available:
 
 - official GitHub-backed workflow adapters beyond the current narrow paths
 - explicit project/status-sync workflow surfaces
-- bounded GitHub handoff rendering or comment/report publication
+- automatic GitHub comment/report publication
 - GitHub Actions evidence ingestion for lifecycle workflows
 
 ## Near-Term Maturity Wedge
@@ -107,6 +108,6 @@ It should remain:
 This epic is now decomposed into:
 
 1. implemented: GitHub issue/PR reference and status normalization shared across lifecycle workflows
-2. next: bounded GitHub handoff/comment/report surfaces for planning, design, QA, and release artifacts
+2. implemented in part: bounded GitHub handoff rendering for planning, design, QA, and release artifacts
 3. next: GitHub Actions evidence ingestion for QA and release workflows
 4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior

@@ -478,6 +478,26 @@ export const githubWorkflowStatusMappingSchema = z.object({
   reason: z.string().min(1)
 });
 
+export const githubHandoffArtifactKindSchema = z.enum(["planning-brief", "design-record", "qa-report", "release-report"]);
+
+export const githubHandoffSectionSchema = z.object({
+  heading: z.string().min(1),
+  lines: z.array(z.string().min(1)).default([])
+});
+
+export const githubHandoffSummarySchema = z.object({
+  artifactKind: githubHandoffArtifactKindSchema,
+  workflow: z.string().min(1),
+  githubStatus: githubWorkflowStatusSchema,
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  body: z.string().min(1),
+  issueRefs: z.array(githubReferenceSchema).default([]),
+  pullRequestRefs: z.array(githubReferenceSchema).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([]),
+  sections: z.array(githubHandoffSectionSchema).default([])
+});
+
 export const lifecycleArtifactSourceReferenceSchema = z.object({
   sourceType: lifecycleArtifactSourceTypeSchema,
   runId: z.string().min(1).optional(),
@@ -723,6 +743,8 @@ export const schemaRegistry = {
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,
   githubReference: githubReferenceSchema,
+  githubHandoffSection: githubHandoffSectionSchema,
+  githubHandoffSummary: githubHandoffSummarySchema,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingSchema,
   lifecycleArtifactWorkflowReference: lifecycleArtifactWorkflowReferenceSchema,
   lifecycleArtifactSourceReference: lifecycleArtifactSourceReferenceSchema,
@@ -1073,6 +1095,29 @@ const githubWorkflowStatusMappingFixture = {
   reason: "Successful local workflow runs map to completed GitHub handoff status."
 } as const;
 
+const githubHandoffSummaryFixture = {
+  artifactKind: "planning-brief",
+  workflow: "planning-discovery",
+  githubStatus: "completed",
+  title: "Planning handoff for H9-Foundry/AgentForge#78",
+  summary: "Planning brief scoped the next bounded workflow slice.",
+  body: [
+    "Planning handoff for `planning-discovery`.",
+    "",
+    "Summary:",
+    "- Planning brief scoped the next bounded workflow slice."
+  ].join("\n"),
+  issueRefs: [githubReferenceFixture],
+  pullRequestRefs: [],
+  provenanceRefs: [".agentops/runs/run-123/bundle.json", "docs/ROADMAP.md"],
+  sections: [
+    {
+      heading: "Summary",
+      lines: ["Planning brief scoped the next bounded workflow slice."]
+    }
+  ]
+} as const;
+
 const implementationInventoryFixture = {
   requestedTargetPaths: ["packages/cli", "packages/runtime"],
   resolvedAffectedPaths: ["packages/cli/src/index.ts", "packages/runtime/src/index.ts"],
@@ -1237,6 +1282,7 @@ export const schemaFixtures = {
   qaRequest: qaRequestFixture,
   securityRequest: securityRequestFixture,
   githubReference: githubReferenceFixture,
+  githubHandoffSummary: githubHandoffSummaryFixture,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingFixture,
   normalizedValidationCommand: normalizedValidationCommandFixture,
   implementationInventory: implementationInventoryFixture,
