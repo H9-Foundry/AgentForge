@@ -1,5 +1,20 @@
 # @h9-foundry/agentforge-audit
 
+## 0.7.1
+
+### Patch Changes
+
+- caf3644: Add deterministic GitHub handoff rendering contracts and audit helpers for planning, design, QA, and release lifecycle artifacts.
+- 7a599ac: Add the bounded `incident-analyst` workflow stage and first `incident-brief` lifecycle artifact for `incident-handoff`.
+- Updated dependencies [967d03b]
+- Updated dependencies [caf3644]
+- Updated dependencies [9f6df53]
+- Updated dependencies [7a599ac]
+- Updated dependencies [46fcef9]
+- Updated dependencies [6d0a3b6]
+- Updated dependencies [63d571d]
+  - @h9-foundry/agentforge-shared-types@0.7.1
+
 ## 0.7.0
 
 ### Patch Changes

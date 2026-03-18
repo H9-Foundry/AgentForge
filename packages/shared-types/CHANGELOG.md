@@ -1,5 +1,25 @@
 # @h9-foundry/agentforge-shared-types
 
+## 0.7.1
+
+### Patch Changes
+
+- 967d03b: Add deterministic local GitHub Actions evidence normalization for QA workflows and shared workflow-linkage contracts for later release-readiness use.
+- caf3644: Add deterministic GitHub handoff rendering contracts and audit helpers for planning, design, QA, and release lifecycle artifacts.
+- 9f6df53: Add deterministic GitHub issue and pull request normalization primitives for lifecycle workflows, including shared reference/status contracts and propagated normalized refs in workflow artifacts.
+- 7a599ac: Add the bounded `incident-analyst` workflow stage and first `incident-brief` lifecycle artifact for `incident-handoff`.
+- 46fcef9: Add the bounded `incident-handoff` intake workflow, incident request schema, and deterministic staged-evidence validation.
+- 6d0a3b6: Add the bounded `release-readiness` request schema, workflow asset scaffolding, and deterministic CLI intake validation.
+- 63d571d: Add deterministic release-state normalization and approval-classified publish or promotion mediation for the local `release-readiness` workflow.
+- Updated dependencies [967d03b]
+- Updated dependencies [caf3644]
+- Updated dependencies [9f6df53]
+- Updated dependencies [7a599ac]
+- Updated dependencies [46fcef9]
+- Updated dependencies [6d0a3b6]
+- Updated dependencies [63d571d]
+  - @h9-foundry/agentforge-schemas@0.7.1
+
 ## 0.7.0
 
 ### Minor Changes
