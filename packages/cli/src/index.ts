@@ -324,6 +324,10 @@ nodes:
     kind: deterministic
     agent: incident-intake
     outputs_to: agentResults.intake
+  - id: incident
+    kind: reasoning
+    agent: incident-analyst
+    outputs_to: agentResults.incident
   - id: report
     kind: report
     outputs_to: reports.final

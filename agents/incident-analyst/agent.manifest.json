@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "name": "incident-analyst",
+  "displayName": "Incident Analyst",
+  "category": "operate",
+  "runtime": {
+    "minVersion": "0.1.0",
+    "kind": "reasoning"
+  },
+  "permissions": {
+    "model": true,
+    "network": false,
+    "tools": [],
+    "readPaths": ["**/*"],
+    "writePaths": []
+  },
+  "inputs": ["workflowInputs", "repo", "changes", "agentResults"],
+  "outputs": ["lifecycleArtifacts"],
+  "contextPolicy": {
+    "sections": ["workflowInputs", "repo", "changes", "agentResults"],
+    "minimalContext": true
+  },
+  "catalog": {
+    "domain": "operate",
+    "supportLevel": "internal",
+    "maturity": "mvp",
+    "trustScope": "official-core-only"
+  },
+  "trust": {
+    "tier": "core",
+    "source": "official",
+    "reviewed": true
+  }
+}

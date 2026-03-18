@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import type {
   DesignArtifact,
+  IncidentArtifact,
   PlanningArtifact,
   QaArtifact,
   ReleaseArtifact
@@ -38,6 +39,14 @@ describe("renderGitHubHandoffSummary", () => {
     expect(summary.artifactKind).toBe("qa-report");
     expect(summary.sections.some((section) => section.heading === "Findings")).toBe(true);
     expect(summary.sections.some((section) => section.heading === "Coverage Gaps")).toBe(true);
+  });
+
+  it("renders a bounded incident handoff summary", () => {
+    const summary = renderGitHubHandoffSummary(cloneFixture(schemaFixtures.incidentArtifact) as unknown as IncidentArtifact);
+
+    expect(summary.artifactKind).toBe("incident-brief");
+    expect(summary.sections.some((section) => section.heading === "Timeline Summary")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "Follow-Up Workflows")).toBe(true);
   });
 
   it("renders a bounded release handoff summary with overrideable status mapping", () => {
