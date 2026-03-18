@@ -1084,6 +1084,212 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "security-report")).toBe(true);
   });
 
+  it("fails release-readiness before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    await expect(runLocalWorkflow("release-readiness", root)).rejects.toThrow("Missing release request");
+  });
+
+  it("rejects underspecified release-readiness requests before reasoning", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the next release candidate",
+      versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }]
+    });
+
+    await expect(runLocalWorkflow("release-readiness", root)).rejects.toThrow(
+      /Release request is underspecified/i
+    );
+  });
+
+  it("rejects release-readiness when the referenced QA bundle lacks a qa-report artifact", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    const bundleDir = join(root, ".agentops", "runs", "run-review");
+    mkdirSync(bundleDir, { recursive: true });
+    writeFileSync(
+      join(bundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-review",
+          workflow: "pr-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.reviewArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-review/bundle.json",
+            markdown: ".agentops/runs/run-review/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(bundleDir, "summary.md"), "# review summary\n");
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the next release candidate",
+      versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+      qaReportRefs: [".agentops/runs/run-review/bundle.json"]
+    });
+
+    await expect(runLocalWorkflow("release-readiness", root)).rejects.toThrow(
+      /does not contain a qa-report artifact/i
+    );
+  });
+
+  it("runs release-readiness after valid qa-report and security-report handoff bundles", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+
+    const qaBundleDir = join(root, ".agentops", "runs", "run-qa");
+    mkdirSync(qaBundleDir, { recursive: true });
+    writeFileSync(
+      join(qaBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-qa",
+          workflow: "qa-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.qaArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-qa/bundle.json",
+            markdown: ".agentops/runs/run-qa/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(qaBundleDir, "summary.md"), "# qa summary\n");
+
+    const securityBundleDir = join(root, ".agentops", "runs", "run-security");
+    mkdirSync(securityBundleDir, { recursive: true });
+    writeFileSync(
+      join(securityBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-security",
+          workflow: "security-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.securityArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-security/bundle.json",
+            markdown: ".agentops/runs/run-security/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(securityBundleDir, "summary.md"), "# security summary\n");
+
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the 0.7.0 candidate for maintainer review",
+      versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      evidenceSources: [".agentops/runs/run-security/summary.md"],
+      constraints: ["Keep release readiness read-only by default"]
+    });
+
+    const releaseRun = await runLocalWorkflow("release-readiness", root);
+
+    expect(releaseRun.status).toBe("success");
+    expect(releaseRun.artifactCount).toBe(0);
+
+    const bundle = readJson<{ workflow: string; lifecycleArtifacts: Array<{ artifactKind: string }> }>(releaseRun.jsonPath);
+    expect(bundle.workflow).toBe("release-readiness");
+    expect(bundle.lifecycleArtifacts).toHaveLength(0);
+  });
+
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {
     const root = createGitFixture("agentops-github-refs-");
     initProject(root);

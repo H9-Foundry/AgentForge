@@ -681,6 +681,15 @@ export const releaseVersionTargetSchema = z.object({
   version: z.string().min(1)
 });
 
+export const releaseRequestSchema = z.object({
+  releaseScope: z.string().min(1),
+  versionTargets: z.array(releaseVersionTargetSchema).min(1),
+  qaReportRefs: z.array(z.string().min(1)).default([]),
+  securityReportRefs: z.array(z.string().min(1)).default([]),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([])
+});
+
 export const releaseArtifactPayloadSchema = z.object({
   releaseScope: z.string().min(1),
   versionTargets: z.array(releaseVersionTargetSchema).min(1),
@@ -841,6 +850,7 @@ export const schemaRegistry = {
   implementationRequest: implementationRequestSchema,
   qaRequest: qaRequestSchema,
   securityRequest: securityRequestSchema,
+  releaseRequest: releaseRequestSchema,
   normalizedValidationCommand: normalizedValidationCommandSchema,
   implementationInventory: implementationInventorySchema,
   qaEvidenceNormalization: qaEvidenceNormalizationSchema,
@@ -1129,6 +1139,15 @@ const securityRequestFixture = {
   releaseContext: "candidate"
 } as const;
 
+const releaseRequestFixture = {
+  releaseScope: "Prepare the 0.7.0 candidate for maintainer review",
+  versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+  qaReportRefs: [".agentops/runs/run-789/bundle.json"],
+  securityReportRefs: [".agentops/runs/run-790/bundle.json"],
+  evidenceSources: [".agentops/runs/run-790/summary.md"],
+  constraints: ["Keep release readiness read-only by default"]
+} as const;
+
 const normalizedValidationCommandFixture = {
   command: "pnpm test",
   source: "request",
@@ -1389,6 +1408,7 @@ export const schemaFixtures = {
   implementationRequest: implementationRequestFixture,
   qaRequest: qaRequestFixture,
   securityRequest: securityRequestFixture,
+  releaseRequest: releaseRequestFixture,
   githubReference: githubReferenceFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,

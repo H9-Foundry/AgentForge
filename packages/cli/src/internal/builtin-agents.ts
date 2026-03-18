@@ -11,6 +11,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  releaseRequestSchema,
   securityArtifactSchema,
   securityEvidenceNormalizationSchema,
   securityRequestSchema,
@@ -32,6 +33,7 @@ import type {
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
+  ReleaseRequest,
   SecurityArtifact,
   SecurityEvidenceNormalization,
   SecurityRequest,
@@ -960,6 +962,69 @@ const securityIntakeAgent: RuntimeAgent = {
         }),
         targetType,
         referencedArtifactKinds
+      }
+    });
+  }
+};
+
+const releaseIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "release-intake",
+    displayName: "Release Intake",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const releaseRequest = getWorkflowInput<ReleaseRequest>(stateSlice, "releaseRequest");
+    const releaseIssueRefs = getWorkflowInput<string[]>(stateSlice, "releaseIssueRefs") ?? [];
+    const releaseGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "releaseGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!releaseRequest) {
+      throw new Error("release-readiness requires a validated release request before runtime execution.");
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded release request from ${requestFile ?? ".agentops/requests/release.yaml"} for ${releaseRequest.releaseScope}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...releaseRequestSchema.parse(releaseRequest),
+        releaseIssueRefs,
+        releaseGithubRefs,
+        evidenceSourceCount:
+          releaseRequest.qaReportRefs.length + releaseRequest.securityReportRefs.length + releaseRequest.evidenceSources.length
       }
     });
   }
@@ -2181,6 +2246,7 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["implementation-intake", implementationIntakeAgent],
     ["qa-intake", qaIntakeAgent],
     ["security-intake", securityIntakeAgent],
+    ["release-intake", releaseIntakeAgent],
     ["security-evidence-normalizer", securityEvidenceNormalizationAgent],
     ["security-analyst", securityAnalystAgent],
     ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],
