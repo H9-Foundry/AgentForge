@@ -1593,14 +1593,29 @@ describe("cli smoke flows", () => {
     const maintenanceRun = await runLocalWorkflow("maintenance-triage", root);
 
     expect(maintenanceRun.status).toBe("success");
-    expect(maintenanceRun.artifactCount).toBe(0);
+    expect(maintenanceRun.artifactCount).toBe(1);
 
     const bundle = readJson<{
       workflow: string;
       entries: Array<{ nodeId: string }>;
+      lifecycleArtifacts: Array<{
+        artifactKind?: string;
+        payload?: {
+          maintenanceScope?: string;
+          followUpIssues?: string[];
+          dependencyUpdates?: string[];
+          docsUpdates?: string[];
+        };
+      }>;
     }>(maintenanceRun.jsonPath);
     expect(bundle.workflow).toBe("maintenance-triage");
     expect(bundle.entries.some((entry) => entry.nodeId === "intake")).toBe(true);
+    expect(bundle.entries.some((entry) => entry.nodeId === "maintenance")).toBe(true);
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("maintenance-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.maintenanceScope).toContain("dependency and docs hygiene");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.followUpIssues).toContain("#145");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.dependencyUpdates).toContain(".agentops/evidence/dependency-alerts.json");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.docsUpdates).toContain(".agentops/evidence/docs-task.md");
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

@@ -353,6 +353,10 @@ nodes:
     kind: deterministic
     agent: maintenance-intake
     outputs_to: agentResults.intake
+  - id: maintenance
+    kind: reasoning
+    agent: maintenance-analyst
+    outputs_to: agentResults.maintenance
   - id: report
     kind: report
     outputs_to: reports.final

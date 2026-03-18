@@ -544,6 +544,93 @@ describe("builtin incident analyst agent", () => {
   });
 });
 
+describe("builtin maintenance analyst agent", () => {
+  it("emits a maintenance-report artifact from bounded maintenance inputs", async () => {
+    const agent = createBuiltinAgentRegistry().get("maintenance-analyst");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {
+        version: "1.0.0",
+        runId: "run-maintenance",
+        workflow: "maintenance-triage",
+        mode: "inspect",
+        repo: {
+          root: "/repo",
+          name: "repo",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        changes: {
+          changedFiles: [],
+          stagedFiles: [],
+          untrackedFiles: [],
+          impactedPaths: [],
+          diffStats: { filesChanged: 0, insertions: 0, deletions: 0 },
+          fileDetails: []
+        },
+        context: {
+          localExecution: true,
+          ciExecution: false,
+          trigger: "manual",
+          timestamp: new Date().toISOString()
+        },
+        policy: {} as never,
+        approvals: [],
+        findings: [],
+        proposedActions: [],
+        lifecycleArtifacts: [],
+        blockedPlugins: [],
+        workflowInputs: {},
+        agentResults: {},
+        auditTrail: []
+      },
+      stateSlice: {
+        workflowInputs: {
+          maintenanceRequest: {
+            maintenanceGoal: "Triage dependency and docs hygiene follow-up.",
+            dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+            docsTaskRefs: [".agentops/evidence/docs-task.md"],
+            releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+            issueRefs: ["#152"],
+            constraints: ["Keep maintenance triage read-only"]
+          },
+          maintenanceIssueRefs: ["#152"],
+          maintenanceGithubRefs: [schemaFixtures.githubReference],
+          requestFile: ".agentops/requests/maintenance.yaml"
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              dependencyAlertRefs: [".agentops/evidence/dependency-alerts.json"],
+              docsTaskRefs: [".agentops/evidence/docs-task.md"],
+              releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+              constraints: ["Keep maintenance triage read-only"]
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.lifecycleArtifacts).toHaveLength(1);
+    const artifact = output.lifecycleArtifacts[0];
+    expect(artifact?.artifactKind).toBe("maintenance-report");
+    if (!artifact || artifact.artifactKind !== "maintenance-report") {
+      throw new Error("Expected maintenance-report artifact.");
+    }
+
+    expect(artifact.payload.maintenanceScope).toContain("dependency and docs hygiene");
+    expect(artifact.payload.dependencyUpdates).toContain(".agentops/evidence/dependency-alerts.json");
+    expect(artifact.payload.docsUpdates).toContain(".agentops/evidence/docs-task.md");
+    expect(artifact.payload.followUpIssues).toContain("#152");
+  });
+});
+
 describe("builtin security analyst agent", () => {
   it("emits a security-report artifact from bounded security inputs", async () => {
     const agent = createBuiltinAgentRegistry().get("security-analyst");
