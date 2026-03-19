@@ -11,7 +11,7 @@ Can AgentForge be used in another repository today as a local-only pre-PR qualit
 
 Today, a technical evaluator can install the published CLI, run the official local workflow surface, and inspect bounded run artifacts without GitHub wiring. That is enough for pilot-style local usage in another repository.
 
-It is not yet plug-and-play for less technical adopters. The remaining gaps are preset-based startup, a simpler quick path, clearer external agent packaging, and explicit support guidance that does not assume familiarity with request-file authoring.
+It is not yet plug-and-play for less technical adopters. Preset-based startup and the canonical four-step quick path now exist on current `main`, but they are still source-build only until the next npm release. Clearer external agent packaging and published quick-path availability remain open gaps.
 
 ## Readiness Levels
 
@@ -38,8 +38,8 @@ The local-only adoption bar is met only when all of these are true:
 | Official workflow discoverability | Pass | README, support docs, and quickstart now describe the published CLI surface explicitly. |
 | Safe local-first defaults | Pass | Default posture remains local-first and read-only, with approval-gated side effects. |
 | Deterministic artifact inspection | Pass | Official workflows and evals emit inspectable run bundles with structured artifact output. |
-| Quick path without maintainer docs | Partial | A technical evaluator can follow the published quickstart, but less-technical users still face request-file friction. |
-| No-YAML startup for a common path | Fail | Preset-based startup is not implemented yet. |
+| Quick path without maintainer docs | Partial | Current `main` now provides one canonical four-step quick path, but it has not reached the latest published CLI yet. |
+| No-YAML startup for a common path | Partial | `init --preset planning-discovery` exists on current `main`, but it is source-build only until the next npm release. |
 | External starter-agent packaging clarity | Fail | Starter agents are still primarily repo-internal surfaces. |
 
 ## Decision Guidance
@@ -59,6 +59,7 @@ Do not describe AgentForge as plug-and-play for less technical adopters until:
 
 - preset-based startup exists
 - one non-technical quick path exists and is documented as supported
+- the quick path is available in the published CLI, not only on current `main`
 - external agent packaging/support boundaries are explicit
 - product-facing docs no longer assume request-file authoring for the first successful path
 
