@@ -23,6 +23,11 @@ import {
   designArtifactPayloadSchema,
   designArtifactSchema,
   designRequestSchema,
+  evalArtifactExpectationSchema,
+  evalFixtureCorpusSchema,
+  evalPolicyExpectationSchema,
+  evalRedactionExpectationSchema,
+  evalSpecSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
   githubActionsCheckRunEvidenceSchema,
@@ -109,6 +114,11 @@ export type DesignArtifactOption = Infer<typeof designArtifactOptionSchema>;
 export type DesignArtifactPayload = Infer<typeof designArtifactPayloadSchema>;
 export type DesignArtifact = Infer<typeof designArtifactSchema>;
 export type DesignRequest = Infer<typeof designRequestSchema>;
+export type EvalArtifactExpectation = Infer<typeof evalArtifactExpectationSchema>;
+export type EvalPolicyExpectation = Infer<typeof evalPolicyExpectationSchema>;
+export type EvalRedactionExpectation = Infer<typeof evalRedactionExpectationSchema>;
+export type EvalSpec = Infer<typeof evalSpecSchema>;
+export type EvalFixtureCorpus = Infer<typeof evalFixtureCorpusSchema>;
 export type ImplementationArtifactPayload = Infer<typeof implementationArtifactPayloadSchema>;
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
 export type ImplementationInventory = Infer<typeof implementationInventorySchema>;

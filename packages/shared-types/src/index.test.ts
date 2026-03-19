@@ -4,6 +4,11 @@ import type {
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
+  EvalArtifactExpectation,
+  EvalFixtureCorpus,
+  EvalPolicyExpectation,
+  EvalRedactionExpectation,
+  EvalSpec,
   ImplementationArtifact,
   ImplementationInventory,
   ImplementationRequest,
@@ -64,6 +69,12 @@ describe("shared lifecycle artifact types", () => {
   it("exports workflow request helper types", () => {
     expectTypeOf<PlanningRequest["problemStatement"]>().toEqualTypeOf<string>();
     expectTypeOf<DesignRequest["planningBriefRef"]>().toEqualTypeOf<string>();
+    expectTypeOf<EvalSpec["schemaVersion"]>().toEqualTypeOf<string>();
+    expectTypeOf<EvalSpec["expectedStatus"]>().toEqualTypeOf<"success" | "partial" | "failed">();
+    expectTypeOf<EvalFixtureCorpus["specs"]>().toEqualTypeOf<EvalSpec[]>();
+    expectTypeOf<EvalArtifactExpectation["requiredPayloadFields"]>().toEqualTypeOf<string[]>();
+    expectTypeOf<EvalPolicyExpectation["readOnly"]>().toEqualTypeOf<boolean>();
+    expectTypeOf<EvalRedactionExpectation["expectedCategories"]>().toEqualTypeOf<string[]>();
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
     expectTypeOf<IncidentRequest["incidentSummary"]>().toEqualTypeOf<string>();

@@ -120,7 +120,7 @@ If the published CLI reports `packageManager: "unknown"` in a generic repo, omit
 
 ## Run The Official QA Workflow
 
-`qa-review` is official on current `main`, but until the next npm release includes the latest QA slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
+`qa-review` is now available in the published CLI as part of the official local workflow surface.
 
 Create a QA request that points at the prior implementation bundle:
 
@@ -135,11 +135,11 @@ releaseContext: candidate
 EOF
 ```
 
-Run the official QA wedge from the current repo build:
+Run the official QA wedge:
 
 ```bash
-node packages/cli/dist/bin.js run qa-review --json
-node packages/cli/dist/bin.js explain last-run --json
+npx @h9-foundry/agentforge-cli run qa-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 The QA bundle should include one `qa-report` lifecycle artifact with normalized evidence sources, normalized executed checks, coverage gaps, findings, and recommended next checks. The default path remains read-only and bounded to local evidence.
@@ -148,7 +148,7 @@ If package-manager detection is unavailable in the published generic-repo path, 
 
 ## Run The Official Security Workflow
 
-`security-review` is official on current `main`, but until the next npm release includes the latest security slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
+`security-review` is now available in the published CLI as part of the official local workflow surface.
 
 Create a security request that points at the prior QA or implementation bundle:
 
@@ -165,18 +165,18 @@ releaseContext: candidate
 EOF
 ```
 
-Run the official security wedge from the current repo build:
+Run the official security wedge:
 
 ```bash
-node packages/cli/dist/bin.js run security-review --json
-node packages/cli/dist/bin.js explain last-run --json
+npx @h9-foundry/agentforge-cli run security-review --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 The security bundle should include one `security-report` lifecycle artifact with normalized security evidence provenance, findings, severity summary, mitigations, release impact, and follow-up work. The default path remains read-only and more restrictive than the generic review wedges.
 
 ## Run The Official Maintenance Workflow
 
-`maintenance-triage` is official on current `main`, but until the next npm release includes the latest maintenance slices you should run it from the source build even if you used the published CLI for the earlier evaluator steps.
+`maintenance-triage` is now available in the published CLI as part of the official local workflow surface.
 
 Create a maintenance request that points at the prior security or release bundle:
 
@@ -190,11 +190,11 @@ constraints:
 EOF
 ```
 
-Run the official maintenance wedge from the current repo build:
+Run the official maintenance wedge:
 
 ```bash
-node packages/cli/dist/bin.js run maintenance-triage --json
-node packages/cli/dist/bin.js explain last-run --json
+npx @h9-foundry/agentforge-cli run maintenance-triage --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 The maintenance bundle should include one `maintenance-report` lifecycle artifact with deterministic evidence sources, affected packages or docs, routing recommendation, and bounded next-step guidance. The default path remains read-only and does not apply dependency updates or docs edits automatically.
