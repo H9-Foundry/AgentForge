@@ -11,6 +11,10 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 - inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, `implementation-proposal`, `qa-report`, `security-report`, and `maintenance-report`
 - evaluate the secure-by-default runtime model before broader SDLC workflow support lands
 
+## Adoption Target
+
+AgentForge is ready now for technical early adopters who want local-first, read-only workflow tooling before PR creation. Plug-and-play external adoption for less technical users is an active product target, not a completed claim: the goal is to make the published CLI installable, understandable, and usable in other repositories without monorepo knowledge or hand-authoring request YAML for common paths.
+
 ## Try It In 2 Minutes
 
 The fastest evaluator path is the published CLI, not a source build.
@@ -126,6 +130,7 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 - plugin ecosystem and registry-facing surfaces
 - evals, benchmarks, and compatibility guarantees
 - enterprise governance, tenancy, and scale-oriented controls
+- plug-and-play external adoption and less-technical user readiness
 
 ## SDLC Lifecycle Coverage
 
