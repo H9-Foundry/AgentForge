@@ -17,6 +17,7 @@ export const registryPluginTypeSchema = z.enum(["agent", "adapter", "workflow"])
 export const registryDistributionChannelSchema = z.enum(["manual", "npm"]);
 export const registryInstallSupportSchema = z.enum(["manual-only", "not-supported"]);
 export const registryActivationSupportSchema = z.enum(["not-supported", "approval-required"]);
+export const registryDistributionVerificationModeSchema = z.enum(["none", "checksum", "attestation"]);
 export const lifecycleArtifactKindSchema = z.enum([
   "planning-brief",
   "design-record",
@@ -103,7 +104,9 @@ export const registryPluginDistributionSchema = z.object({
   version: z.string().min(1),
   reference: z.string().min(1),
   installSupport: registryInstallSupportSchema.default("manual-only"),
-  activationSupport: registryActivationSupportSchema.default("not-supported")
+  activationSupport: registryActivationSupportSchema.default("not-supported"),
+  verificationMode: registryDistributionVerificationModeSchema.default("none"),
+  verificationEvidenceRefs: z.array(z.string().min(1)).default([])
 });
 
 export const registryPluginCatalogEntrySchema = z.object({
@@ -2704,7 +2707,41 @@ export const schemaFixtures = {
       version: "0.1.0",
       reference: "packages/local-review",
       installSupport: "manual-only",
-      activationSupport: "approval-required"
+      activationSupport: "approval-required",
+      verificationMode: "none",
+      verificationEvidenceRefs: []
+    }
+  },
+  verifiedRegistryPluginCatalogEntry: {
+    id: "remote-review",
+    displayName: "Remote Review Plugin",
+    pluginType: "agent",
+    description: "Catalog entry for a remote review plugin with verified distribution metadata.",
+    catalog: {
+      domain: "review",
+      supportLevel: "planned",
+      maturity: "prototype",
+      trustScope: "official-and-reviewed-local"
+    },
+    trust: {
+      tier: "verified",
+      source: "official",
+      reviewed: true
+    },
+    compatibility: {
+      agentforgeVersionRange: ">=0.9.0",
+      manifestVersion: 1,
+      supportedWorkflowDomains: ["review", "test"]
+    },
+    distribution: {
+      channel: "npm",
+      packageName: "@example/remote-review",
+      version: "1.2.3",
+      reference: "npm:@example/remote-review@1.2.3",
+      installSupport: "not-supported",
+      activationSupport: "approval-required",
+      verificationMode: "attestation",
+      verificationEvidenceRefs: ["https://example.com/attestations/remote-review"]
     }
   },
   registryPluginCatalog: {
@@ -2738,7 +2775,9 @@ export const schemaFixtures = {
           version: "0.1.0",
           reference: "packages/local-review",
           installSupport: "manual-only",
-          activationSupport: "approval-required"
+          activationSupport: "approval-required",
+          verificationMode: "none",
+          verificationEvidenceRefs: []
         }
       }
     ]

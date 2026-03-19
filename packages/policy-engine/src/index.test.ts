@@ -269,6 +269,55 @@ describe("policy engine", () => {
     });
   });
 
+  it("denies non-manual plugin activation when distribution verification metadata is missing", () => {
+    const engine = createPolicyEngine(
+      {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "approval_required"
+        },
+        paths: {
+          allowedRead: ["**/*"],
+          allowedWrite: [".agentops/runs/**", "tests/**"],
+          blocked: [".env*", "secrets/**"]
+        },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
+        tools: {
+          "filesystem.read-file": { effect: "allow" }
+        }
+      },
+      "/repo"
+    );
+
+    expect(
+      engine.evaluatePluginActivation(
+        "remote-review",
+        { tier: "verified", source: "official", reviewed: true },
+        {
+          distributionChannel: "npm",
+          activationSupport: "approval-required",
+          verificationMode: "none",
+          verificationEvidenceRefs: [],
+          approvalGranted: true
+        }
+      )
+    ).toEqual({
+      allowed: false,
+      effect: "deny",
+      requiresApproval: false,
+      reason: "Plugin distribution verification is required for remote-review before non-manual activation"
+    });
+  });
+
   it("sanitizes lifecycle artifact summaries and nested payload strings", () => {
     const engine = createPolicyEngine(
       {
