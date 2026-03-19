@@ -6,6 +6,8 @@ import {
   benchmarkArtifactSchema,
   ciArtifactEvidenceSchema,
   ciEvidenceSchema,
+  dependencyIntegrityEvidenceSchema,
+  dependencyInventoryEntrySchema,
   genericCiEvidenceExportSchema,
   gitlabCiEvidenceExportSchema,
   designArtifactSchema,
@@ -71,6 +73,8 @@ describe("schema fixtures", () => {
     expect(() => ciEvidenceSchema.parse(schemaFixtures.ciEvidence)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.gitlabCiEvidence)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.genericCiEvidence)).not.toThrow();
+    expect(() => dependencyInventoryEntrySchema.parse(schemaFixtures.dependencyIntegrityEvidence.inventoryEntries[0])).not.toThrow();
+    expect(() => dependencyIntegrityEvidenceSchema.parse(schemaFixtures.dependencyIntegrityEvidence)).not.toThrow();
     expect(() => gitlabCiEvidenceExportSchema.parse(schemaFixtures.gitlabCiEvidenceExport)).not.toThrow();
     expect(() => genericCiEvidenceExportSchema.parse(schemaFixtures.genericCiEvidenceExport)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.adapterCapabilityMetadata)).not.toThrow();
@@ -122,6 +126,8 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.scmReference).toBeDefined();
     expect(jsonSchemas.ciArtifactEvidence).toBeDefined();
     expect(jsonSchemas.ciEvidence).toBeDefined();
+    expect(jsonSchemas.dependencyInventoryEntry).toBeDefined();
+    expect(jsonSchemas.dependencyIntegrityEvidence).toBeDefined();
     expect(jsonSchemas.genericCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.gitlabCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.adapterCapabilityMetadata).toBeDefined();

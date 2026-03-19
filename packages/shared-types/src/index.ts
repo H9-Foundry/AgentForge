@@ -39,6 +39,8 @@ import {
   benchmarkDeterministicDeltaSchema,
   ciArtifactEvidenceSchema,
   ciEvidenceSchema,
+  dependencyIntegrityEvidenceSchema,
+  dependencyInventoryEntrySchema,
   ciJobEvidenceSchema,
   genericCiEvidenceExportSchema,
   gitlabCiEvidenceExportSchema,
@@ -117,6 +119,8 @@ export type AuditRedaction = Infer<typeof auditRedactionSchema>;
 export type CiArtifactEvidence = Infer<typeof ciArtifactEvidenceSchema>;
 export type CiJobEvidence = Infer<typeof ciJobEvidenceSchema>;
 export type CiEvidence = Infer<typeof ciEvidenceSchema>;
+export type DependencyInventoryEntry = Infer<typeof dependencyInventoryEntrySchema>;
+export type DependencyIntegrityEvidence = Infer<typeof dependencyIntegrityEvidenceSchema>;
 export type GenericCiEvidenceExport = Infer<typeof genericCiEvidenceExportSchema>;
 export type GitlabCiJobEvidenceExport = Infer<typeof gitlabCiJobEvidenceExportSchema>;
 export type GitlabCiEvidenceExport = Infer<typeof gitlabCiEvidenceExportSchema>;

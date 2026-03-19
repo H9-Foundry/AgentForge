@@ -1529,9 +1529,27 @@ describe("cli smoke flows", () => {
     expect(securityRun.findings).toBe(0);
     expect(securityRun.artifactKinds).toContain("security-report");
 
-    const bundle = readJson<{ workflow: string; lifecycleArtifacts: Array<{ artifactKind: string }> }>(securityRun.jsonPath);
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          dependencyIntegritySignals?: string[];
+          followUpWork?: string[];
+        };
+      }>;
+    }>(securityRun.jsonPath);
     expect(bundle.workflow).toBe("security-review");
     expect(bundle.lifecycleArtifacts.some((artifact) => artifact.artifactKind === "security-report")).toBe(true);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.dependencyIntegritySignals).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Dependency inventory covers"),
+        expect.stringContaining("pnpm-lock.yaml")
+      ])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.followUpWork).toEqual(
+      expect.arrayContaining([expect.stringContaining("Dependency inventory covers")])
+    );
   });
 
   it("fails release-readiness before reasoning when the request is missing", async () => {
@@ -1758,6 +1776,7 @@ describe("cli smoke flows", () => {
           versionResolutions?: Array<{ name: string; status: string }>;
           approvalRecommendations?: Array<{ action: string; classification: string }>;
           verificationChecks?: Array<{ name: string; status: string }>;
+          dependencyIntegritySignals?: string[];
         };
       }>;
     }>(releaseRun.jsonPath);
@@ -1773,7 +1792,22 @@ describe("cli smoke flows", () => {
       expect.arrayContaining([expect.objectContaining({ action: "publish-packages", classification: "approval_required" })])
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.map((check) => check.name)).toEqual(
-      expect.arrayContaining(["qa-report-refs", "security-report-refs", "local-release-evidence", "workspace-version-targets"])
+      expect.arrayContaining([
+        "qa-report-refs",
+        "security-report-refs",
+        "local-release-evidence",
+        "dependency-integrity",
+        "workspace-version-targets"
+      ])
+    );
+    expect(
+      bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.find((check) => check.name === "dependency-integrity")
+    ).toEqual(expect.objectContaining({ status: "passed" }));
+    expect(bundle.lifecycleArtifacts[0]?.payload?.dependencyIntegritySignals).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Dependency inventory covers"),
+        expect.stringContaining("pnpm-lock.yaml")
+      ])
     );
   });
 
