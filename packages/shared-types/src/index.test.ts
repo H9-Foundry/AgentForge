@@ -4,10 +4,15 @@ import type {
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
+  EvalArtifact,
+  EvalArtifactPayload,
   EvalArtifactExpectation,
+  EvalDeterministicCheck,
   EvalFixtureCorpus,
+  EvalModelDependentCheck,
   EvalPolicyExpectation,
   EvalRedactionExpectation,
+  EvalSetupRun,
   EvalSpec,
   ImplementationArtifact,
   ImplementationInventory,
@@ -50,6 +55,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<QaArtifact["lifecycleDomain"]>().toEqualTypeOf<"test">();
     expectTypeOf<SecurityArtifact["artifactKind"]>().toEqualTypeOf<"security-report">();
     expectTypeOf<SecurityArtifact["lifecycleDomain"]>().toEqualTypeOf<"security">();
+    expectTypeOf<EvalArtifact["artifactKind"]>().toEqualTypeOf<"eval-result">();
+    expectTypeOf<EvalArtifact["lifecycleDomain"]>().toEqualTypeOf<"evaluate">();
     expectTypeOf<ReviewArtifact["artifactKind"]>().toEqualTypeOf<"review-report">();
     expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
     expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();
@@ -75,6 +82,9 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<EvalArtifactExpectation["requiredPayloadFields"]>().toEqualTypeOf<string[]>();
     expectTypeOf<EvalPolicyExpectation["readOnly"]>().toEqualTypeOf<boolean>();
     expectTypeOf<EvalRedactionExpectation["expectedCategories"]>().toEqualTypeOf<string[]>();
+    expectTypeOf<EvalArtifactPayload["deterministicChecks"]>().toEqualTypeOf<EvalDeterministicCheck[]>();
+    expectTypeOf<EvalArtifactPayload["modelDependentChecks"]>().toEqualTypeOf<EvalModelDependentCheck[]>();
+    expectTypeOf<EvalArtifactPayload["setupRuns"]>().toEqualTypeOf<EvalSetupRun[]>();
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
     expectTypeOf<IncidentRequest["incidentSummary"]>().toEqualTypeOf<string>();

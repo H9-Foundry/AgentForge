@@ -20,11 +20,12 @@ export const lifecycleArtifactKindSchema = z.enum([
   "incident-brief",
   "qa-report",
   "security-report",
+  "eval-result",
   "review-report",
   "release-report",
   "maintenance-report"
 ]);
-export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "review", "release", "operate", "maintain"]);
+export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "evaluate", "review", "release", "operate", "maintain"]);
 export const lifecycleArtifactSourceTypeSchema = z.enum(["workflow-run", "manual-input", "imported"]);
 export const lifecycleArtifactStatusSchema = z.enum(["draft", "complete", "superseded", "cancelled"]);
 export const githubReferenceKindSchema = z.enum(["issue", "pull_request"]);
@@ -903,6 +904,44 @@ export const maintenanceArtifactPayloadSchema = z.object({
   followUpIssues: z.array(z.string().min(1)).default([])
 });
 
+export const evalCheckStatusSchema = z.enum(["passed", "failed", "not_applicable"]);
+
+export const evalDeterministicCheckSchema = z.object({
+  name: z.string().min(1),
+  status: evalCheckStatusSchema,
+  expected: z.string().min(1),
+  actual: z.string().min(1).optional(),
+  details: z.string().min(1).optional()
+});
+
+export const evalModelDependentCheckSchema = z.object({
+  name: z.string().min(1),
+  status: z.enum(["not_executed", "passed", "failed"]).default("not_executed"),
+  details: z.string().min(1).optional()
+});
+
+export const evalSetupRunSchema = z.object({
+  workflow: z.string().min(1),
+  runId: z.string().min(1),
+  bundlePath: z.string().min(1)
+});
+
+export const evalArtifactPayloadSchema = z.object({
+  specId: z.string().min(1),
+  specName: z.string().min(1),
+  workflow: evalWorkflowSchema,
+  repoFixture: evalRepoFixtureSchema,
+  workspacePath: z.string().min(1),
+  evaluatedRunId: z.string().min(1).optional(),
+  evaluatedBundlePath: z.string().min(1).optional(),
+  setupRuns: z.array(evalSetupRunSchema).default([]),
+  deterministicChecks: z.array(evalDeterministicCheckSchema).default([]),
+  modelDependentChecks: z.array(evalModelDependentCheckSchema).default([]),
+  passed: z.boolean(),
+  failureCount: z.number().int().nonnegative(),
+  warningCount: z.number().int().nonnegative().default(0)
+});
+
 export const planningArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("planning-brief"),
   lifecycleDomain: z.literal("plan"),
@@ -939,6 +978,12 @@ export const securityArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   payload: securityArtifactPayloadSchema
 });
 
+export const evalArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("eval-result"),
+  lifecycleDomain: z.literal("evaluate"),
+  payload: evalArtifactPayloadSchema
+});
+
 export const reviewArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("review-report"),
   lifecycleDomain: z.literal("review"),
@@ -964,6 +1009,7 @@ export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   incidentArtifactSchema,
   qaArtifactSchema,
   securityArtifactSchema,
+  evalArtifactSchema,
   reviewArtifactSchema,
   releaseArtifactSchema,
   maintenanceArtifactSchema
@@ -1023,6 +1069,10 @@ export const schemaRegistry = {
   incidentArtifactPayload: incidentArtifactPayloadSchema,
   qaArtifactPayload: qaArtifactPayloadSchema,
   securityArtifactPayload: securityArtifactPayloadSchema,
+  evalDeterministicCheck: evalDeterministicCheckSchema,
+  evalModelDependentCheck: evalModelDependentCheckSchema,
+  evalSetupRun: evalSetupRunSchema,
+  evalArtifactPayload: evalArtifactPayloadSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
@@ -1037,6 +1087,7 @@ export const schemaRegistry = {
   incidentArtifact: incidentArtifactSchema,
   qaArtifact: qaArtifactSchema,
   securityArtifact: securityArtifactSchema,
+  evalArtifact: evalArtifactSchema,
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
@@ -1358,6 +1409,49 @@ const maintenanceArtifactFixture = {
   }
 } as const;
 
+const evalArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "eval-result",
+  lifecycleDomain: "evaluate",
+  summary: "Eval result confirmed deterministic expectations for planning-discovery-local-brief.",
+  payload: {
+    specId: "planning-discovery-local-brief",
+    specName: "Planning discovery emits planning brief",
+    workflow: "planning-discovery",
+    repoFixture: "blank-local",
+    workspacePath: ".agentops/evals/planning-discovery-local-brief/workspace",
+    evaluatedRunId: "run-456",
+    evaluatedBundlePath: ".agentops/evals/planning-discovery-local-brief/workspace/.agentops/runs/run-456/bundle.json",
+    setupRuns: [],
+    deterministicChecks: [
+      {
+        name: "run-status",
+        status: "passed",
+        expected: "success",
+        actual: "success",
+        details: "The evaluated workflow completed successfully."
+      },
+      {
+        name: "artifact-kind:planning-brief",
+        status: "passed",
+        expected: "planning-brief",
+        actual: "planning-brief",
+        details: "The evaluated bundle emitted the expected lifecycle artifact."
+      }
+    ],
+    modelDependentChecks: [
+      {
+        name: "rubric-scoring",
+        status: "not_executed",
+        details: "Provider-dependent scoring is out of scope for the first local eval runner slice."
+      }
+    ],
+    passed: true,
+    failureCount: 0,
+    warningCount: 0
+  }
+} as const;
+
 const invalidLifecycleArtifactEnvelopeFixture = {
   ...planningArtifactFixture,
   artifactKind: "incident-report",
@@ -1659,7 +1753,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: []
     },
@@ -1688,7 +1782,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: [
         {
@@ -1724,7 +1818,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: [
         {
@@ -1753,7 +1847,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: [
         {
@@ -1782,7 +1876,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: [
         {
@@ -1811,7 +1905,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: [
         {
@@ -1840,7 +1934,7 @@ const evalFixtureCorpusFixture = {
       },
       redactionExpectations: {
         applied: true,
-        expectedCategories: ["secrets"]
+        expectedCategories: ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"]
       },
       artifactExpectations: [
         {
@@ -2027,6 +2121,7 @@ export const schemaFixtures = {
   incidentArtifact: incidentArtifactFixture,
   qaArtifact: qaArtifactFixture,
   securityArtifact: securityArtifactFixture,
+  evalArtifact: evalArtifactFixture,
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   maintenanceArtifact: maintenanceArtifactFixture,
