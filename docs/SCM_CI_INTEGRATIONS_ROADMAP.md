@@ -35,9 +35,17 @@ Not yet available:
 - additional CI evidence adapters
 - host-agnostic workflow surfaces across multiple providers
 
+Implemented now:
+
+- host-agnostic SCM reference contracts
+- host-agnostic CI evidence contracts
+- adapter capability metadata for bounded host behavior
+
 ## Recommended Priority Order
 
 ### Priority 1: Host-Agnostic Reference Contracts
+
+Status: implemented as the first contract slice.
 
 Before adding more hosts, define:
 
@@ -103,4 +111,3 @@ This epic should be decomposed into at least:
 1. host-agnostic SCM and CI reference contracts plus adapter capability metadata
 2. GitLab issue/MR and CI evidence integration wedge as the first additional concrete host
 3. generic CI evidence adapter surface for bounded pipeline status and artifact ingestion
-

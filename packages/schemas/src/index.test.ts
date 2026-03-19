@@ -4,6 +4,7 @@ import {
   agentManifestSchema,
   auditBundleSchema,
   benchmarkArtifactSchema,
+  ciEvidenceSchema,
   designArtifactSchema,
   designRequestSchema,
   evalArtifactSchema,
@@ -14,6 +15,8 @@ import {
   githubHandoffSummarySchema,
   githubReferenceSchema,
   githubWorkflowStatusMappingSchema,
+  scmReferenceSchema,
+  adapterCapabilityMetadataSchema,
   getJsonSchemas,
   implementationArtifactSchema,
   implementationInventorySchema,
@@ -58,6 +61,9 @@ describe("schema fixtures", () => {
     expect(() => evalFixtureCorpusSchema.parse(schemaFixtures.evalFixtureCorpus)).not.toThrow();
     expect(() => releaseRequestSchema.parse(schemaFixtures.releaseRequest)).not.toThrow();
     expect(() => githubReferenceSchema.parse(schemaFixtures.githubReference)).not.toThrow();
+    expect(() => scmReferenceSchema.parse(schemaFixtures.scmReference)).not.toThrow();
+    expect(() => ciEvidenceSchema.parse(schemaFixtures.ciEvidence)).not.toThrow();
+    expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.adapterCapabilityMetadata)).not.toThrow();
     expect(() => githubActionsEvidenceSchema.parse(schemaFixtures.githubActionsEvidence)).not.toThrow();
     expect(() =>
       githubActionsEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization.githubActions)
@@ -101,6 +107,9 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.evalFixtureCorpus).toBeDefined();
     expect(jsonSchemas.releaseRequest).toBeDefined();
     expect(jsonSchemas.githubReference).toBeDefined();
+    expect(jsonSchemas.scmReference).toBeDefined();
+    expect(jsonSchemas.ciEvidence).toBeDefined();
+    expect(jsonSchemas.adapterCapabilityMetadata).toBeDefined();
     expect(jsonSchemas.githubActionsEvidence).toBeDefined();
     expect(jsonSchemas.githubActionsEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.githubHandoffSummary).toBeDefined();

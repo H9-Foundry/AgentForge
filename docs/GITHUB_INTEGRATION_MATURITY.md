@@ -97,6 +97,8 @@ Adapter expectations:
 
 GitHub is the first mature integration target because it already anchors planning and release.
 
+The host-agnostic SCM/CI contract layer now exists, so GitHub-specific references and Actions evidence should remain a host-specific baseline built on top of shared shapes rather than the shared model itself becoming GitHub-shaped.
+
 It should remain:
 
 - the best-supported near-term host integration
