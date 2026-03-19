@@ -176,6 +176,7 @@ function resolveWorkspacePackage(root: string | undefined, packageName: string):
 }
 
 const allowedValidationScriptNames = new Set(["test", "lint", "typecheck", "build", "build:packages", "release:verify"]);
+const fallbackValidationPackageManagers = ["pnpm", "npm", "yarn"] as const;
 
 function normalizeRequestedCommand(command: string): string {
   return command.trim().replace(/\s+/g, " ");
@@ -193,6 +194,18 @@ function buildValidationCommand(
   return `${packageManager} ${scriptName}`;
 }
 
+function resolveValidationCommandManagers(
+  packageManager: string,
+  packageName?: string
+): readonly string[] {
+  if (packageManager !== "unknown") {
+    return [packageManager];
+  }
+
+  // Generic repos without lockfiles still need deterministic command matching for bounded root scripts.
+  return packageName ? ["pnpm"] : fallbackValidationPackageManagers;
+}
+
 function collectValidationCommands(
   repoRoot: string | undefined,
   packageManager: string,
@@ -202,15 +215,17 @@ function collectValidationCommands(
   const registerScripts = (packageJsonPath: string, source: "package-script" | "workspace-script", packageName?: string) => {
     const scripts = parsePackageScripts(packageJsonPath);
     for (const scriptName of Object.keys(scripts)) {
-      const command = buildValidationCommand(packageManager, scriptName, packageName);
-      discoveredValidationCommands.push({
-        command,
-        source,
-        classification: allowedValidationScriptNames.has(scriptName) ? "approval_required" : "deny",
-        reason: allowedValidationScriptNames.has(scriptName)
-          ? "Discovered from a bounded repository script; execution would still require approval."
-          : "Command is not in the bounded allowlist for workflow validation."
-      });
+      for (const commandPackageManager of resolveValidationCommandManagers(packageManager, packageName)) {
+        const command = buildValidationCommand(commandPackageManager, scriptName, packageName);
+        discoveredValidationCommands.push({
+          command,
+          source,
+          classification: allowedValidationScriptNames.has(scriptName) ? "approval_required" : "deny",
+          reason: allowedValidationScriptNames.has(scriptName)
+            ? "Discovered from a bounded repository script; execution would still require approval."
+            : "Command is not in the bounded allowlist for workflow validation."
+        });
+      }
     }
   };
 

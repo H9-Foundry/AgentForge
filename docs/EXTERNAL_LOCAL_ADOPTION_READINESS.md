@@ -7,11 +7,11 @@ Can AgentForge be used in another repository today as a local-only pre-PR qualit
 ## Current Answer
 
 - technical early-adopter local-only adoption: `Partial`
-- less-technical plug-and-play local-only adoption: `Planned`
+- less-technical plug-and-play local-only adoption: `Partial`
 
 Today, a technical evaluator can install the published CLI, run the official local workflow surface, and inspect bounded run artifacts without GitHub wiring. That is enough for pilot-style local usage in another repository.
 
-It is not yet plug-and-play for less technical adopters. Preset-based startup and the canonical four-step quick path now exist on current `main`, but they are still source-build only until the next npm release. The external support boundary is now explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. Published quick-path availability remains the main open gap.
+It is not yet fully plug-and-play for less technical adopters. The published CLI now includes preset-based startup and the canonical four-step quick path, and the external support boundary is explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. The remaining gap is broader ease-of-use beyond the first bounded local-first path.
 
 ## Readiness Levels
 
@@ -34,12 +34,12 @@ The local-only adoption bar is met only when all of these are true:
 
 | Criterion | Status | Current Reality |
 | --- | --- | --- |
-| Published CLI parity | Pass | The latest published `0.8.0` CLI includes the official local workflow surface plus `eval run` and `eval compare`. |
+| Published CLI parity | Pass | The latest published `0.9.0` CLI includes the official local workflow surface plus the bounded planning preset startup path, `eval run`, and `eval compare`. |
 | Official workflow discoverability | Pass | README, support docs, and quickstart now describe the published CLI surface explicitly. |
 | Safe local-first defaults | Pass | Default posture remains local-first and read-only, with approval-gated side effects. |
 | Deterministic artifact inspection | Pass | Official workflows and evals emit inspectable run bundles with structured artifact output. |
-| Quick path without maintainer docs | Partial | Current `main` now provides one canonical four-step quick path, but it has not reached the latest published CLI yet. |
-| No-YAML startup for a common path | Partial | `init --preset planning-discovery` exists on current `main`, but it is source-build only until the next npm release. |
+| Quick path without maintainer docs | Pass | The published CLI now provides one canonical four-step quick path for the first request-driven workflow. |
+| No-YAML startup for a common path | Pass | `init --preset planning-discovery` is now available in the published CLI. |
 | External starter-agent packaging clarity | Pass | The support boundary is now explicit: external users consume workflows and presets through the CLI, while `agents/*` and `packages/registry-client` remain repo-internal. |
 
 ## Decision Guidance
@@ -59,7 +59,6 @@ Do not describe AgentForge as plug-and-play for less technical adopters until:
 
 - preset-based startup exists
 - one non-technical quick path exists and is documented as supported
-- the quick path is available in the published CLI, not only on current `main`
 - external agent packaging/support boundaries are explicit
 - product-facing docs no longer assume request-file authoring for the first successful path
 

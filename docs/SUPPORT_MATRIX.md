@@ -96,7 +96,7 @@ See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINES
 | Adoption Surface | Maturity | Notes |
 | --- | --- | --- |
 | technical local-first adoption | Partial | Strongest current external fit: technical evaluators can install the CLI, run official local workflows, and inspect audit artifacts without GitHub wiring. |
-| less-technical plug-and-play adoption | Planned | This is now an explicit product target, but it is not complete yet; the quick path and no-YAML startup are still source-build only until the next published release. |
+| less-technical plug-and-play adoption | Partial | The published CLI now includes one bounded quick path plus no-YAML preset startup, but broader adoption still expects low-to-mid technical comfort. |
 | agent-stack integration readiness | Planned | The supported external surface is still the CLI plus official workflows and presets; starter agents and `packages/registry-client` remain repo-internal. |
 
 ## Self-Hosting Scope
@@ -112,7 +112,7 @@ See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINES
 
 ## Compatibility Notes
 
-- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it.
+- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it, but the current quick path and preset startup are already available in the published CLI.
 - Current support is strongest for local repository execution and GitHub-centric release workflows.
 - Public compatibility commitments are intentionally narrow until broader workflow and integration support exists.
 - Planned support in this matrix should be treated as roadmap direction, not shipped capability.
