@@ -494,6 +494,31 @@ export const ciEvidenceSchema = z.object({
   provenanceSource: z.enum(["local-export", "adapter-read"]).default("local-export")
 });
 
+export const gitlabCiJobExportStatusSchema = z.enum(["pending", "running", "success", "failed", "canceled", "skipped"]);
+
+export const gitlabCiJobEvidenceExportSchema = z.object({
+  name: z.string().min(1),
+  status: gitlabCiJobExportStatusSchema,
+  webUrl: z.string().url().optional(),
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional()
+});
+
+export const gitlabCiEvidenceExportSchema = z.object({
+  sourcePath: z.string().min(1).optional(),
+  host: z.string().min(1).default("gitlab.com"),
+  projectPath: z.string().min(1),
+  pipelineId: z.number().int().positive(),
+  pipelineName: z.string().min(1).default("GitLab CI"),
+  runAttempt: z.number().int().positive().default(1),
+  event: z.string().min(1).optional(),
+  branch: z.string().min(1).optional(),
+  commitSha: z.string().min(1).optional(),
+  status: gitlabCiJobExportStatusSchema,
+  webUrl: z.string().url().optional(),
+  jobs: z.array(gitlabCiJobEvidenceExportSchema).default([])
+});
+
 export const adapterCapabilityKindSchema = z.enum([
   "issue-reference-normalization",
   "pull-request-reference-normalization",
@@ -524,6 +549,7 @@ export const qaEvidenceNormalizationSchema = z.object({
   unrecognizedExecutedChecks: z.array(z.string().min(1)).default([]),
   affectedPackages: z.array(z.string().min(1)).default([]),
   allowedValidationCommands: z.array(normalizedValidationCommandSchema).default([]),
+  ciEvidence: z.array(ciEvidenceSchema).default([]),
   githubActions: githubActionsEvidenceNormalizationSchema.default({
     evidence: [],
     workflowNames: [],
@@ -700,6 +726,7 @@ export const lifecycleArtifactSourceReferenceSchema = z.object({
   runId: z.string().min(1).optional(),
   inputRefs: z.array(z.string()).default([]),
   issueRefs: z.array(z.string()).default([]),
+  scmRefs: z.array(scmReferenceSchema).default([]),
   githubRefs: z.array(githubReferenceSchema).default([])
 });
 
@@ -1196,6 +1223,8 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   scmReference: scmReferenceSchema,
   ciJobEvidence: ciJobEvidenceSchema,
   ciEvidence: ciEvidenceSchema,
+  gitlabCiJobEvidenceExport: gitlabCiJobEvidenceExportSchema,
+  gitlabCiEvidenceExport: gitlabCiEvidenceExportSchema,
   adapterCapabilityMetadata: adapterCapabilityMetadataSchema,
   githubReference: githubReferenceSchema,
   githubActionsJobEvidence: githubActionsJobEvidenceSchema,
@@ -1754,6 +1783,32 @@ const scmReferenceFixture = {
   source: "#142"
 } as const;
 
+const gitlabIssueScmReferenceFixture = {
+  platform: "gitlab",
+  host: "gitlab.com",
+  namespace: "h9-foundry/platform",
+  repo: "agentforge",
+  kind: "issue",
+  identifier: "123",
+  number: 123,
+  canonical: "gitlab.com/h9-foundry/platform/agentforge#123",
+  url: "https://gitlab.com/h9-foundry/platform/agentforge/-/issues/123",
+  source: "#123"
+} as const;
+
+const gitlabMergeRequestScmReferenceFixture = {
+  platform: "gitlab",
+  host: "gitlab.com",
+  namespace: "h9-foundry/platform",
+  repo: "agentforge",
+  kind: "merge_request",
+  identifier: "45",
+  number: 45,
+  canonical: "gitlab.com/h9-foundry/platform/agentforge!45",
+  url: "https://gitlab.com/h9-foundry/platform/agentforge/-/merge_requests/45",
+  source: "!45"
+} as const;
+
 const githubWorkflowStatusMappingFixture = {
   workflow: "planning-discovery",
   localRunStatus: "success",
@@ -1827,6 +1882,62 @@ const ciEvidenceFixture = {
   provenanceSource: "local-export"
 } as const;
 
+const gitlabCiEvidenceExportFixture = {
+  sourcePath: ".agentops/evidence/gitlab-ci.json",
+  host: "gitlab.com",
+  projectPath: "h9-foundry/platform/agentforge",
+  pipelineId: 987654321,
+  pipelineName: "GitLab CI",
+  runAttempt: 1,
+  event: "merge_request_event",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "failed",
+  webUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/pipelines/987654321",
+  jobs: [
+    {
+      name: "test",
+      status: "success",
+      webUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/jobs/1"
+    },
+    {
+      name: "lint",
+      status: "failed",
+      webUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/jobs/2"
+    }
+  ]
+} as const;
+
+const gitlabCiEvidenceFixture = {
+  platform: "gitlab-ci",
+  host: "gitlab.com",
+  repository: "h9-foundry/platform/agentforge",
+  pipelineName: "GitLab CI",
+  pipelineRunId: "987654321",
+  runAttempt: 1,
+  event: "merge_request_event",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "failure",
+  htmlUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/pipelines/987654321",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/jobs/1"
+    },
+    {
+      name: "lint",
+      status: "completed",
+      conclusion: "failure",
+      htmlUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/jobs/2"
+    }
+  ],
+  provenanceSource: "local-export"
+} as const;
+
 const adapterCapabilityMetadataFixture = {
   platform: "github",
   host: "github.com",
@@ -1835,6 +1946,19 @@ const adapterCapabilityMetadataFixture = {
   capabilities: [
     "issue-reference-normalization",
     "pull-request-reference-normalization",
+    "local-ci-evidence-ingestion"
+  ],
+  trustBoundary: "local-only"
+} as const;
+
+const gitlabAdapterCapabilityMetadataFixture = {
+  platform: "gitlab",
+  host: "gitlab.com",
+  supportedScmReferenceKinds: ["issue", "merge_request"],
+  supportedCiPlatforms: ["gitlab-ci"],
+  capabilities: [
+    "issue-reference-normalization",
+    "merge-request-reference-normalization",
     "local-ci-evidence-ingestion"
   ],
   trustBoundary: "local-only"
@@ -1899,6 +2023,7 @@ const qaEvidenceNormalizationFixture = {
       reason: "Discovered from a bounded repository script; execution would still require approval."
     }
   ],
+  ciEvidence: [gitlabCiEvidenceFixture],
   githubActions: {
     evidence: [githubActionsEvidenceFixture],
     workflowNames: ["CI"],
@@ -2426,8 +2551,13 @@ export const schemaFixtures = {
   evalFixtureCorpus: evalFixtureCorpusFixture,
   githubReference: githubReferenceFixture,
   scmReference: scmReferenceFixture,
+  gitlabIssueScmReference: gitlabIssueScmReferenceFixture,
+  gitlabMergeRequestScmReference: gitlabMergeRequestScmReferenceFixture,
   ciEvidence: ciEvidenceFixture,
+  gitlabCiEvidenceExport: gitlabCiEvidenceExportFixture,
+  gitlabCiEvidence: gitlabCiEvidenceFixture,
   adapterCapabilityMetadata: adapterCapabilityMetadataFixture,
+  gitlabAdapterCapabilityMetadata: gitlabAdapterCapabilityMetadataFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingFixture,

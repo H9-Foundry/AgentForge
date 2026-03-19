@@ -9,7 +9,7 @@ import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 
 import { compareLocalEvalRuns, explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
 
-function createGitFixture(prefix: string): string {
+function createGitFixture(prefix: string, repositoryUrl = "https://github.com/H9-Foundry/fixture.git"): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
   execFileSync("git", ["init"], { cwd: root });
   execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
@@ -21,7 +21,7 @@ function createGitFixture(prefix: string): string {
         name: "fixture",
         repository: {
           type: "git",
-          url: "https://github.com/H9-Foundry/fixture.git"
+          url: repositoryUrl
         },
         scripts: {
           test: "echo test",
@@ -39,6 +39,14 @@ function createGitFixture(prefix: string): string {
   execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
   writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
   return root;
+}
+
+function createGitLabFixture(prefix: string): string {
+  return createGitFixture(prefix, "https://gitlab.com/h9-foundry/platform/fixture.git");
+}
+
+function createGenericHostFixture(prefix: string): string {
+  return createGitFixture(prefix, "https://example.com/acme/fixture.git");
 }
 
 function createGitFixtureWithoutLockfile(prefix: string): string {
@@ -1119,6 +1127,77 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("ingests bounded local GitLab CI evidence exports during qa-review", async () => {
+    const root = createGitLabFixture("agentops-qa-gitlab-ci-");
+
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "evidence", "gitlab-ci.json"),
+      JSON.stringify(
+        {
+          host: "gitlab.com",
+          projectPath: "h9-foundry/platform/fixture",
+          pipelineId: 98765,
+          pipelineName: "GitLab CI",
+          runAttempt: 1,
+          event: "merge_request_event",
+          branch: "main",
+          commitSha: "abc123",
+          status: "failed",
+          webUrl: "https://gitlab.com/h9-foundry/platform/fixture/-/pipelines/98765",
+          jobs: [
+            {
+              name: "test",
+              status: "success",
+              webUrl: "https://gitlab.com/h9-foundry/platform/fixture/-/jobs/1"
+            },
+            {
+              name: "lint",
+              status: "failed",
+              webUrl: "https://gitlab.com/h9-foundry/platform/fixture/-/jobs/2"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        "targetRef: package.json",
+        "evidenceSources:",
+        "  - .agentops/evidence/gitlab-ci.json",
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - release-readiness",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: { coverageGaps?: string[]; recommendedNextChecks?: string[]; releaseImpact?: string };
+      }>;
+    }>(qaRun.jsonPath);
+
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("qa-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.coverageGaps).toContain(
+      "Imported CI evidence still reports a failing check that needs manual review: GitLab CI / lint"
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.recommendedNextChecks).toContain(
+      "Review the imported CI evidence for pipeline `GitLab CI` before promotion."
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.releaseImpact).toContain(
+      "Imported CI evidence still shows failing checks: GitLab CI / lint."
+    );
+  });
+
   it("allows bounded QA executed checks in a generic repo when the package manager is unknown", async () => {
     const root = createGitFixtureWithoutLockfile("agentops-qa-generic-");
     initProject(root);
@@ -2151,5 +2230,120 @@ describe("cli smoke flows", () => {
     for (const bundle of [planningBundle, designBundle, implementationBundle, qaBundle, securityBundle]) {
       expect(bundle.lifecycleArtifacts[0]?.source.githubRefs?.map((entry) => entry.canonical)).toContain("H9-Foundry/fixture#142");
     }
+  });
+
+  it("propagates normalized GitLab SCM references through downstream lifecycle artifacts without creating GitHub refs", async () => {
+    const root = createGitLabFixture("agentops-gitlab-refs-");
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the GitLab normalization slice",
+        "goals:",
+        "  - Produce one planning brief",
+        "issueRefs:",
+        "  - '#123'",
+        "  - '!45'",
+        "  - 'https://gitlab.com/h9-foundry/platform/fixture/-/issues/77'",
+        "  - 'https://gitlab.com/h9-foundry/platform/fixture/-/merge_requests/88'",
+        "pathHints:",
+        "  - packages/cli",
+        "  - packages/schemas"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Design GitLab reference normalization",
+        "pathHints:",
+        "  - packages/cli"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Implement GitLab reference normalization",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - packages/cli",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        `targetRef: .agentops/runs/${implementationRun.runId}/bundle.json`,
+        "evidenceSources:",
+        `  - .agentops/runs/${implementationRun.runId}/summary.md`,
+        "focusAreas:",
+        "  - regression-risk"
+      ].join("\n")
+    );
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "security.yaml"),
+      [
+        `targetRef: .agentops/runs/${qaRun.runId}/bundle.json`,
+        "evidenceSources:",
+        `  - .agentops/runs/${qaRun.runId}/summary.md`,
+        "focusAreas:",
+        "  - dependency-risk",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+    const securityRun = await runLocalWorkflow("security-review", root);
+
+    const expectedCanonicals = [
+      "gitlab.com/h9-foundry/platform/fixture#123",
+      "gitlab.com/h9-foundry/platform/fixture!45",
+      "gitlab.com/h9-foundry/platform/fixture#77",
+      "gitlab.com/h9-foundry/platform/fixture!88"
+    ];
+    const bundles = [
+      readJson<{ lifecycleArtifacts: Array<{ source: { scmRefs?: Array<{ canonical: string }>; githubRefs?: Array<{ canonical: string }> } }> }>(planningRun.jsonPath),
+      readJson<{ lifecycleArtifacts: Array<{ source: { scmRefs?: Array<{ canonical: string }>; githubRefs?: Array<{ canonical: string }> } }> }>(designRun.jsonPath),
+      readJson<{ lifecycleArtifacts: Array<{ source: { scmRefs?: Array<{ canonical: string }>; githubRefs?: Array<{ canonical: string }> } }> }>(implementationRun.jsonPath),
+      readJson<{ lifecycleArtifacts: Array<{ source: { scmRefs?: Array<{ canonical: string }>; githubRefs?: Array<{ canonical: string }> } }> }>(qaRun.jsonPath),
+      readJson<{ lifecycleArtifacts: Array<{ source: { scmRefs?: Array<{ canonical: string }>; githubRefs?: Array<{ canonical: string }> } }> }>(securityRun.jsonPath)
+    ];
+
+    for (const bundle of bundles) {
+      expect(bundle.lifecycleArtifacts[0]?.source.scmRefs?.map((entry) => entry.canonical)).toEqual(
+        expect.arrayContaining(expectedCanonicals)
+      );
+      expect(bundle.lifecycleArtifacts[0]?.source.githubRefs ?? []).toEqual([]);
+    }
+  });
+
+  it("does not infer GitLab merge request shorthand outside a GitLab repo context", async () => {
+    const root = createGenericHostFixture("agentops-generic-refs-");
+    initProject(root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Confirm host-specific shorthand remains bounded",
+        "goals:",
+        "  - Produce one planning brief",
+        "issueRefs:",
+        "  - '!45'",
+        "pathHints:",
+        "  - packages/cli"
+      ].join("\n")
+    );
+
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    const planningBundle = readJson<{
+      lifecycleArtifacts: Array<{ source: { scmRefs?: Array<{ canonical: string }>; githubRefs?: Array<{ canonical: string }> } }>;
+    }>(planningRun.jsonPath);
+
+    expect(planningBundle.lifecycleArtifacts[0]?.source.scmRefs ?? []).toEqual([]);
+    expect(planningBundle.lifecycleArtifacts[0]?.source.githubRefs ?? []).toEqual([]);
   });
 });

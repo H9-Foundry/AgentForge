@@ -5,6 +5,7 @@ import {
   auditBundleSchema,
   benchmarkArtifactSchema,
   ciEvidenceSchema,
+  gitlabCiEvidenceExportSchema,
   designArtifactSchema,
   designRequestSchema,
   evalArtifactSchema,
@@ -62,8 +63,13 @@ describe("schema fixtures", () => {
     expect(() => releaseRequestSchema.parse(schemaFixtures.releaseRequest)).not.toThrow();
     expect(() => githubReferenceSchema.parse(schemaFixtures.githubReference)).not.toThrow();
     expect(() => scmReferenceSchema.parse(schemaFixtures.scmReference)).not.toThrow();
+    expect(() => scmReferenceSchema.parse(schemaFixtures.gitlabIssueScmReference)).not.toThrow();
+    expect(() => scmReferenceSchema.parse(schemaFixtures.gitlabMergeRequestScmReference)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.ciEvidence)).not.toThrow();
+    expect(() => ciEvidenceSchema.parse(schemaFixtures.gitlabCiEvidence)).not.toThrow();
+    expect(() => gitlabCiEvidenceExportSchema.parse(schemaFixtures.gitlabCiEvidenceExport)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.adapterCapabilityMetadata)).not.toThrow();
+    expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.gitlabAdapterCapabilityMetadata)).not.toThrow();
     expect(() => githubActionsEvidenceSchema.parse(schemaFixtures.githubActionsEvidence)).not.toThrow();
     expect(() =>
       githubActionsEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization.githubActions)
@@ -109,6 +115,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.githubReference).toBeDefined();
     expect(jsonSchemas.scmReference).toBeDefined();
     expect(jsonSchemas.ciEvidence).toBeDefined();
+    expect(jsonSchemas.gitlabCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.adapterCapabilityMetadata).toBeDefined();
     expect(jsonSchemas.githubActionsEvidence).toBeDefined();
     expect(jsonSchemas.githubActionsEvidenceNormalization).toBeDefined();

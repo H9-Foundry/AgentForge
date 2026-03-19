@@ -4,8 +4,10 @@ import { join } from "node:path";
 import {
   agentManifestSchema,
   agentOutputSchema,
+  ciEvidenceSchema,
   designArtifactSchema,
   githubActionsEvidenceSchema,
+  gitlabCiEvidenceExportSchema,
   implementationArtifactSchema,
   implementationInventorySchema,
   incidentArtifactSchema,
@@ -28,11 +30,13 @@ import {
 } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
+  CiEvidence,
   DesignArtifact,
   DesignRequest,
   GithubActionsEvidence,
   GithubActionsEvidenceNormalization,
   GithubReference,
+  GitlabCiEvidenceExport,
   ImplementationArtifact,
   ImplementationInventory,
   ImplementationRequest,
@@ -51,6 +55,7 @@ import type {
   ReleaseArtifact,
   ReleaseEvidenceNormalization,
   ReleaseRequest,
+  ScmReference,
   SecurityArtifact,
   SecurityEvidenceNormalization,
   SecurityRequest,
@@ -384,6 +389,96 @@ function normalizeGitHubActionsEvidence(
   };
 }
 
+function loadGitLabCiEvidenceExport(bundlePath: string): GitlabCiEvidenceExport | undefined {
+  if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  const candidate = isRecord(parsed) ? { ...parsed, sourcePath: parsed.sourcePath ?? bundlePath } : parsed;
+  const result = gitlabCiEvidenceExportSchema.safeParse(candidate);
+  return result.success ? result.data : undefined;
+}
+
+function mapGitLabCiStatus(status: GitlabCiEvidenceExport["status"]): Pick<CiEvidence, "status" | "conclusion"> {
+  switch (status) {
+    case "pending":
+      return { status: "queued" };
+    case "running":
+      return { status: "in_progress" };
+    case "success":
+      return { status: "completed", conclusion: "success" };
+    case "failed":
+      return { status: "completed", conclusion: "failure" };
+    case "canceled":
+      return { status: "completed", conclusion: "cancelled" };
+    case "skipped":
+      return { status: "completed", conclusion: "skipped" };
+  }
+}
+
+function normalizeGitLabCiEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): CiEvidence[] {
+  return evidenceSources.flatMap((pathValue) => {
+    if (!repoRoot) {
+      return [];
+    }
+
+    const normalized = loadGitLabCiEvidenceExport(join(repoRoot, pathValue));
+    if (!normalized) {
+      return [];
+    }
+
+    const pipelineStatus = mapGitLabCiStatus(normalized.status);
+    const jobs = normalized.jobs.map((job) => {
+      const jobStatus = mapGitLabCiStatus(job.status);
+      return {
+        name: job.name,
+        status: jobStatus.status,
+        conclusion: jobStatus.conclusion,
+        htmlUrl: job.webUrl,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt
+      };
+    });
+
+    const evidence = ciEvidenceSchema.parse({
+      platform: "gitlab-ci",
+      host: normalized.host,
+      repository: normalized.projectPath,
+      pipelineName: normalized.pipelineName,
+      pipelineRunId: `${normalized.pipelineId}`,
+      runAttempt: normalized.runAttempt,
+      event: normalized.event,
+      branch: normalized.branch,
+      commitSha: normalized.commitSha,
+      status: pipelineStatus.status,
+      conclusion: pipelineStatus.conclusion,
+      htmlUrl: normalized.webUrl,
+      jobs,
+      provenanceSource: "local-export"
+    });
+
+    return [evidence];
+  });
+}
+
+function summarizeCiEvidenceFailures(evidence: CiEvidence): string[] {
+  const failedJobs = evidence.jobs
+    .filter((job) => job.status === "completed" && isFailingGitHubActionsConclusion(job.conclusion))
+    .map((job) => `${evidence.pipelineName} / ${job.name}`);
+  const runLevelFailure =
+    failedJobs.length === 0 &&
+      evidence.status === "completed" &&
+      isFailingGitHubActionsConclusion(evidence.conclusion)
+      ? [`${evidence.pipelineName} / pipeline-run`]
+      : [];
+
+  return [...failedJobs, ...runLevelFailure];
+}
+
 function derivePackageScope(pathValue: string): string | undefined {
   const segments = pathValue.split("/").filter(Boolean);
   if (segments.length < 2) {
@@ -417,6 +512,7 @@ function buildLifecycleArtifactEnvelopeBase(
   summary: string,
   inputRefs: readonly string[],
   issueRefs: readonly string[] = [],
+  scmRefs: readonly ScmReference[] = [],
   githubRefs: readonly GithubReference[] = []
 ) {
   return {
@@ -430,6 +526,7 @@ function buildLifecycleArtifactEnvelopeBase(
       runId: state.runId,
       inputRefs: [...inputRefs],
       issueRefs: [...issueRefs],
+      scmRefs: [...scmRefs],
       githubRefs: [...githubRefs]
     },
     status: "complete" as const,
@@ -464,6 +561,7 @@ function buildArtifactEnvelopeBase(
   summary: string,
   inputRefs: readonly string[],
   issueRefs: readonly string[],
+  scmRefs: readonly ScmReference[] = [],
   githubRefs: readonly GithubReference[] = []
 ) {
   return {
@@ -476,6 +574,7 @@ function buildArtifactEnvelopeBase(
       runId: state.runId,
       inputRefs: [...inputRefs],
       issueRefs: [...issueRefs],
+      scmRefs: [...scmRefs],
       githubRefs: [...githubRefs]
     },
     status: "complete" as const,
@@ -605,6 +704,7 @@ const planningAnalystAgent: RuntimeAgent = {
   outputSchema: agentOutputSchema,
   async execute({ state, stateSlice }) {
     const planningRequest = getWorkflowInput<PlanningRequest>(stateSlice, "planningRequest");
+    const planningScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "planningScmRefs") ?? [];
     const planningGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "planningGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!planningRequest) {
@@ -636,6 +736,7 @@ const planningAnalystAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/planning.yaml"],
         planningRequest.issueRefs,
+        planningScmRefs,
         planningGithubRefs
       ),
       artifactKind: "planning-brief",
@@ -1278,6 +1379,7 @@ const maintenanceIntakeAgent: RuntimeAgent = {
     const maintenanceRequest = getWorkflowInput<MaintenanceRequest>(stateSlice, "maintenanceRequest");
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     const maintenanceIssueRefs = getWorkflowInput<string[]>(stateSlice, "maintenanceIssueRefs") ?? [];
+    const maintenanceScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "maintenanceScmRefs") ?? [];
     const maintenanceGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "maintenanceGithubRefs") ?? [];
     if (!maintenanceRequest) {
       throw new Error("maintenance-triage requires a validated maintenance request before runtime execution.");
@@ -1299,6 +1401,7 @@ const maintenanceIntakeAgent: RuntimeAgent = {
           issueRefs: [...new Set(maintenanceRequest.issueRefs)]
         }),
         maintenanceIssueRefs,
+        maintenanceScmRefs,
         maintenanceGithubRefs,
         evidenceSourceCount:
           maintenanceRequest.dependencyAlertRefs.length +
@@ -1484,6 +1587,7 @@ const maintenanceAnalystAgent: RuntimeAgent = {
   async execute({ state, stateSlice }) {
     const maintenanceRequest = getWorkflowInput<MaintenanceRequest>(stateSlice, "maintenanceRequest");
     const maintenanceIssueRefs = getWorkflowInput<string[]>(stateSlice, "maintenanceIssueRefs") ?? [];
+    const maintenanceScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "maintenanceScmRefs") ?? [];
     const maintenanceGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "maintenanceGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!maintenanceRequest) {
@@ -1560,6 +1664,7 @@ const maintenanceAnalystAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/maintenance.yaml", ...evidenceSources],
         maintenanceIssueRefs,
+        maintenanceScmRefs,
         maintenanceGithubRefs
       ),
       artifactKind: "maintenance-report",
@@ -1660,6 +1765,7 @@ const incidentAnalystAgent: RuntimeAgent = {
     const incidentRequest = getWorkflowInput<IncidentRequest>(stateSlice, "incidentRequest");
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     const incidentIssueRefs = getWorkflowInput<string[]>(stateSlice, "incidentIssueRefs") ?? [];
+    const incidentScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "incidentScmRefs") ?? [];
     const incidentGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "incidentGithubRefs") ?? [];
     if (!incidentRequest) {
       throw new Error("incident-handoff requires validated incident inputs before incident analysis.");
@@ -1709,6 +1815,7 @@ const incidentAnalystAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/incident.yaml", ...evidenceSources],
         incidentIssueRefs,
+        incidentScmRefs,
         incidentGithubRefs
       ),
       artifactKind: "incident-brief",
@@ -1807,6 +1914,7 @@ const releaseIntakeAgent: RuntimeAgent = {
   async execute({ stateSlice }) {
     const releaseRequest = getWorkflowInput<ReleaseRequest>(stateSlice, "releaseRequest");
     const releaseIssueRefs = getWorkflowInput<string[]>(stateSlice, "releaseIssueRefs") ?? [];
+    const releaseScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "releaseScmRefs") ?? [];
     const releaseGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "releaseGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!releaseRequest) {
@@ -1823,6 +1931,7 @@ const releaseIntakeAgent: RuntimeAgent = {
       metadata: {
         ...releaseRequestSchema.parse(releaseRequest),
         releaseIssueRefs,
+        releaseScmRefs,
         releaseGithubRefs,
         evidenceSourceCount:
           releaseRequest.qaReportRefs.length + releaseRequest.securityReportRefs.length + releaseRequest.evidenceSources.length
@@ -2047,6 +2156,7 @@ const releaseAnalystAgent: RuntimeAgent = {
   async execute({ state, stateSlice }) {
     const releaseRequest = getWorkflowInput<ReleaseRequest>(stateSlice, "releaseRequest");
     const releaseIssueRefs = getWorkflowInput<string[]>(stateSlice, "releaseIssueRefs") ?? [];
+    const releaseScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "releaseScmRefs") ?? [];
     const releaseGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "releaseGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!releaseRequest) {
@@ -2140,6 +2250,7 @@ const releaseAnalystAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/release.yaml", ...allEvidenceRefs],
         releaseIssueRefs,
+        releaseScmRefs,
         releaseGithubRefs
       ),
       artifactKind: "release-report",
@@ -2329,6 +2440,7 @@ const securityAnalystAgent: RuntimeAgent = {
   async execute({ state, stateSlice }) {
     const securityRequest = getWorkflowInput<SecurityRequest>(stateSlice, "securityRequest");
     const securityIssueRefs = getWorkflowInput<string[]>(stateSlice, "securityIssueRefs") ?? [];
+    const securityScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "securityScmRefs") ?? [];
     const securityGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "securityGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!securityRequest) {
@@ -2399,6 +2511,7 @@ const securityAnalystAgent: RuntimeAgent = {
           ...(normalizedEvidence?.provenanceRefs ?? [securityRequest.targetRef, ...securityRequest.evidenceSources])
         ],
         securityIssueRefs,
+        securityScmRefs,
         securityGithubRefs
       ),
       artifactKind: "security-report",
@@ -2539,6 +2652,7 @@ const qaEvidenceNormalizationAgent: RuntimeAgent = {
     const allowlistedCommands = new Set(allowedValidationCommands.map((entry) => entry.command));
     const normalizedExecutedChecks = qaRequest.executedChecks.map(normalizeRequestedCommand);
     const unrecognizedExecutedChecks = normalizedExecutedChecks.filter((command) => !allowlistedCommands.has(command));
+    const ciEvidence = normalizeGitLabCiEvidence(repoRoot, normalizedEvidenceSources);
     const githubActions = normalizeGitHubActionsEvidence(repoRoot, normalizedEvidenceSources);
     const normalization = qaEvidenceNormalizationSchema.parse({
       targetRef: qaRequest.targetRef,
@@ -2550,11 +2664,12 @@ const qaEvidenceNormalizationAgent: RuntimeAgent = {
       unrecognizedExecutedChecks,
       affectedPackages,
       allowedValidationCommands,
+      ciEvidence,
       githubActions
     });
 
     return agentOutputSchema.parse({
-      summary: `Normalized QA evidence across ${normalization.normalizedEvidenceSources.length} source(s), ${normalization.allowedValidationCommands.length} allowlisted validation command(s), and ${normalization.githubActions.evidence.length} GitHub Actions evidence export(s).`,
+      summary: `Normalized QA evidence across ${normalization.normalizedEvidenceSources.length} source(s), ${normalization.allowedValidationCommands.length} allowlisted validation command(s), ${normalization.githubActions.evidence.length} GitHub Actions export(s), and ${normalization.ciEvidence.length} generic CI evidence export(s).`,
       findings: [],
       proposedActions: [],
       lifecycleArtifacts: [],
@@ -2604,6 +2719,7 @@ const qaAnalystAgent: RuntimeAgent = {
   async execute({ state, stateSlice }) {
     const qaRequest = getWorkflowInput<QaRequest>(stateSlice, "qaRequest");
     const qaIssueRefs = getWorkflowInput<string[]>(stateSlice, "qaIssueRefs") ?? [];
+    const qaScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "qaScmRefs") ?? [];
     const qaGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "qaGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
     if (!qaRequest) {
@@ -2627,6 +2743,9 @@ const qaAnalystAgent: RuntimeAgent = {
           failingChecks: [],
           provenanceRefs: []
         };
+    const normalizedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
+    const normalizedCiWorkflowNames = [...new Set(normalizedCiEvidence.map((entry) => entry.pipelineName))];
+    const normalizedCiFailingChecks = [...new Set(normalizedCiEvidence.flatMap((entry) => summarizeCiEvidenceFailures(entry)))];
     const targetType =
       normalizedEvidence?.targetType
         ? normalizedEvidence.targetType
@@ -2671,6 +2790,9 @@ const qaAnalystAgent: RuntimeAgent = {
       ...unrecognizedExecutedChecks.map((command) => `Executed check is outside the bounded allowlist and still needs manual interpretation: ${command}`),
       ...normalizedGithubActions.failingChecks.map(
         (checkName) => `GitHub Actions evidence still reports a failing check that needs manual review: ${checkName}`
+      ),
+      ...normalizedCiFailingChecks.map(
+        (checkName) => `Imported CI evidence still reports a failing check that needs manual review: ${checkName}`
       )
     ];
     const recommendedNextChecks = [
@@ -2678,6 +2800,9 @@ const qaAnalystAgent: RuntimeAgent = {
       ...focusAreas.map((focusArea) => `Confirm whether ${focusArea} needs additional deterministic QA evidence.`),
       ...normalizedGithubActions.workflowNames.map(
         (workflowName) => `Review the exported GitHub Actions evidence for workflow \`${workflowName}\` before promotion.`
+      ),
+      ...normalizedCiWorkflowNames.map(
+        (workflowName) => `Review the imported CI evidence for pipeline \`${workflowName}\` before promotion.`
       ),
       ...(normalizedConstraints.length > 0 ? [`Keep QA follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
     ];
@@ -2694,6 +2819,7 @@ const qaAnalystAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/qa.yaml", qaRequest.targetRef, ...qaRequest.evidenceSources],
         qaIssueRefs,
+        qaScmRefs,
         qaGithubRefs
       ),
       artifactKind: "qa-report",
@@ -2713,8 +2839,15 @@ const qaAnalystAgent: RuntimeAgent = {
             ? recommendedNextChecks
             : ["Capture additional bounded QA evidence before promotion."],
         releaseImpact:
-          normalizedGithubActions.failingChecks.length > 0
-            ? `${releaseImpactBase} GitHub Actions evidence still shows failing checks: ${normalizedGithubActions.failingChecks.join(", ")}.`
+          normalizedGithubActions.failingChecks.length > 0 || normalizedCiFailingChecks.length > 0
+            ? `${releaseImpactBase} ${[
+                normalizedGithubActions.failingChecks.length > 0
+                  ? `GitHub Actions evidence still shows failing checks: ${normalizedGithubActions.failingChecks.join(", ")}.`
+                  : undefined,
+                normalizedCiFailingChecks.length > 0
+                  ? `Imported CI evidence still shows failing checks: ${normalizedCiFailingChecks.join(", ")}.`
+                  : undefined
+              ].filter((value): value is string => Boolean(value)).join(" ")}`
             : releaseImpactBase
       }
     });
@@ -2735,6 +2868,7 @@ const qaAnalystAgent: RuntimeAgent = {
           executedChecks,
           focusAreas,
           constraints: normalizedConstraints,
+          ciEvidence: normalizedCiEvidence,
           githubActions: normalizedGithubActions
         },
         synthesizedAssessment: {
@@ -2977,6 +3111,7 @@ const implementationPlannerAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/implementation.yaml", implementationRequest.designRecordRef],
         designRecord.source.issueRefs,
+        designRecord.source.scmRefs,
         designRecord.source.githubRefs
       ),
       artifactKind: "implementation-proposal",
@@ -3100,6 +3235,7 @@ const designAnalystAgent: RuntimeAgent = {
         summary,
         [requestFile ?? ".agentops/requests/design.yaml", designRequest.planningBriefRef],
         planningBrief.source.issueRefs,
+        planningBrief.source.scmRefs,
         planningBrief.source.githubRefs
       ),
       artifactKind: "design-record",
