@@ -2,13 +2,18 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
+import { registryPluginCatalogEntrySchema, schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { RegistryPluginCatalogEntry } from "@h9-foundry/agentforge-shared-types";
 import { RegistryClient } from "./index.js";
 
 function writeJson(filePath: string, value: unknown): void {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function createCatalogEntryFixture(): RegistryPluginCatalogEntry {
+  return registryPluginCatalogEntrySchema.parse(JSON.parse(JSON.stringify(schemaFixtures.registryPluginCatalogEntry)));
 }
 
 function createRepoFixture(): string {
@@ -116,5 +121,76 @@ describe("RegistryClient read-only catalog discovery", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]?.compatible).toBe(true);
+  });
+
+  it("prepares approval-gated activation decisions with audit-ready output", () => {
+    const repoRoot = createRepoFixture();
+    repoRoots.push(repoRoot);
+    const client = new RegistryClient(repoRoot);
+
+    const decision = client.prepareCatalogAgentActivation(
+      createCatalogEntryFixture(),
+      {
+        evaluatePluginActivation: (_name, _trust, options) => ({
+          allowed: true,
+          effect: options.approvalGranted ? "allow" : "approval_required",
+          requiresApproval: !options.approvalGranted,
+          reason: options.approvalGranted ? undefined : "Plugin activation requires approval for Local Review Plugin"
+        })
+      },
+      { approvalGranted: false, workflowDomain: "review" }
+    );
+
+    expect(decision.activated).toBe(false);
+    expect(decision.policyDecision.effect).toBe("approval_required");
+    expect(decision.auditEntry.status).toBe("blocked");
+    expect(decision.auditEntry.blockedActions).toEqual(["Plugin activation requires approval for Local Review Plugin"]);
+  });
+
+  it("loads the local agent only when activation is approved", async () => {
+    const client = new RegistryClient("/Users/ethan/Repo/AgentOps");
+    const { decision, agent } = await client.activateCatalogAgentPlugin(
+      {
+        ...createCatalogEntryFixture(),
+        distribution: {
+          ...createCatalogEntryFixture().distribution,
+          packageName: "@h9-foundry/agentforge-agent-code-review"
+        }
+      },
+      {
+        evaluatePluginActivation: () => ({
+          allowed: true,
+          effect: "allow",
+          requiresApproval: false
+        })
+      },
+      { approvalGranted: true, workflowDomain: "review", agentforgeVersion: "0.8.0" }
+    );
+
+    expect(decision.activated).toBe(true);
+    expect(agent?.manifest.name).toBe("code-review");
+  });
+
+  it("returns no agent when activation is denied by compatibility or policy", async () => {
+    const repoRoot = createRepoFixture();
+    repoRoots.push(repoRoot);
+    const client = new RegistryClient(repoRoot);
+
+    const { decision, agent } = await client.activateCatalogAgentPlugin(
+      createCatalogEntryFixture(),
+      {
+        evaluatePluginActivation: () => ({
+          allowed: false,
+          effect: "deny",
+          requiresApproval: false,
+          reason: "Plugin compatibility check failed for Local Review Plugin"
+        })
+      },
+      { approvalGranted: true, workflowDomain: "review", agentforgeVersion: "0.8.0" }
+    );
+
+    expect(decision.activated).toBe(false);
+    expect(agent).toBeUndefined();
+    expect(decision.auditEntry.status).toBe("blocked");
   });
 });
