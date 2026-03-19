@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.9.0
+
+### Minor Changes
+
+- 203d736: Add a read-only registry metadata contract, including catalog entry and catalog schemas plus inferred shared types for plugin identity, compatibility, trust, and distribution support boundaries.
+
 ## 0.8.0
 
 ### Minor Changes
