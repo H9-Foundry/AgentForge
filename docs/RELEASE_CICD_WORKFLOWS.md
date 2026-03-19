@@ -4,7 +4,7 @@ This document defines the design target for issue [#59](https://github.com/H9-Fo
 
 It describes how AgentForge should grow from the current release/readiness tooling into a broader release and CI/CD workflow family.
 
-It does **not** claim that a broader CI/CD workflow family is implemented or officially shipped today.
+It does **not** claim that a broader CI/CD workflow family is fully implemented today beyond the first official `release-readiness` wedge.
 
 ## Why This Exists
 
@@ -34,7 +34,7 @@ Available now:
 - release validation and publish automation
 - package/version verification
 - audit and lifecycle artifact infrastructure
-- bounded `release-readiness` request validation and workflow asset scaffolding
+- official `release-readiness` workflow asset and request validation
 - bounded `release-report` artifact emission from the local `release-readiness` workflow
 - deterministic release-state normalization across bounded local evidence, QA/security report refs, and workspace version targets
 - approval-classified publish or promotion follow-on recommendations that remain read-only by default
@@ -46,7 +46,7 @@ Not yet available:
 
 ## Recommended Initial Workflow Family
 
-Phase 2 should define one first official wedge:
+Phase 2 should build on the current first official wedge:
 
 - `release-readiness`
 
@@ -56,7 +56,7 @@ Later planned variants can include:
 - `deployment-gate-review`
 - `promotion-approval`
 
-Only `release-readiness` should be targeted for first implementation planning.
+`release-readiness` is already implemented on current `main`; later release-family work should extend it rather than reopening first-wedge planning.
 
 ## User Jobs
 
@@ -83,9 +83,8 @@ This expansion should not:
 - workflow name: `release-readiness`
 - trigger: `manual`
 - primary lifecycle domain: `release`
-- support level at the intake-only implementation slice: `partial`
-- official promotion only after the evaluator path is stable and the workflow is documented against the published npm surface
-- maturity at first implementation: `mvp`
+- support level at the current implementation slice: `official`
+- current maturity: `mvp`
 
 ### Entry Model
 
@@ -161,9 +160,14 @@ Adapter expectations:
 
 ## Follow-On Implementation Slices
 
-This epic should be decomposed into at least:
+Implemented on current `main`:
 
 1. release request schema and official `release-readiness` workflow asset
 2. `release-analyst` starter agent and `release-report` artifact emission
-3. deterministic CI evidence ingestion and release-state normalization
-4. approval-gated publish/promotion orchestration aligned to release-trust controls
+3. deterministic CI evidence ingestion and release-state normalization across bounded local evidence
+
+Next release-family follow-ons:
+
+1. richer host-agnostic CI evidence consumption in `release-readiness`
+2. additional release and deployment-gate variants built on the bounded release wedge
+3. approval-gated publish/promotion orchestration aligned to release-trust controls

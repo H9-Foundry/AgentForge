@@ -4,7 +4,9 @@ This document defines how maintainers should work through the AgentForge backlog
 
 It is a **maintainer operating flow**, not a shipped product workflow. Official runtime workflow support is tracked in [docs/SUPPORT_MATRIX.md](SUPPORT_MATRIX.md); this document exists to sequence backlog work and maintain truthful queue state.
 
-The live execution tracker for this process is [#83](https://github.com/H9-Foundry/AgentForge/issues/83).
+The live execution tracker for this process is [#245](https://github.com/H9-Foundry/AgentForge/issues/245).
+
+The original Phase 1 foundation tracker is [#83](https://github.com/H9-Foundry/AgentForge/issues/83) and should now be treated as a completed baseline record rather than the live next-work queue.
 
 ## Operating Posture
 
@@ -47,7 +49,9 @@ Rules:
 
 Current active lane:
 
-1. [#63](https://github.com/H9-Foundry/AgentForge/issues/63) evals and benchmarks framework
+1. [#245](https://github.com/H9-Foundry/AgentForge/issues/245) Phase 2 provider and integration expansion tracker
+2. [#246](https://github.com/H9-Foundry/AgentForge/issues/246) Buildkite CI evidence adapter wedge
+3. [#247](https://github.com/H9-Foundry/AgentForge/issues/247) host-agnostic CI evidence consumption in `release-readiness`
 
 ### Ready Lane
 
@@ -55,10 +59,9 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-2. [#62](https://github.com/H9-Foundry/AgentForge/issues/62) plugin and registry roadmap
-3. [#64](https://github.com/H9-Foundry/AgentForge/issues/64) additional SCM and CI integrations roadmap
-4. [#65](https://github.com/H9-Foundry/AgentForge/issues/65) supply-chain and release trust hardening
-5. the plug-and-play external adoption and less-technical user readiness umbrella plus its child issues for preset startup, external agent packaging, quick-path onboarding, local-only readiness criteria, and published CLI parity
+4. [#248](https://github.com/H9-Foundry/AgentForge/issues/248) host-agnostic SCM and CI handoff summary rendering across lifecycle artifacts
+5. additional provider-specific SCM and CI wedges after the first Phase 2 CI follow-ons land
+6. deeper supply-chain and enterprise trust work reopened only after the next provider/integration family is defined explicitly
 
 ### Parallel Safe Lane
 
@@ -90,9 +93,9 @@ Work that is part of the roadmap and ordered relative to dependencies, but not y
 
 Current mapped lane:
 
-- Phase 2 workflow implementation follow-ons under [#139](https://github.com/H9-Foundry/AgentForge/issues/139) through [#159](https://github.com/H9-Foundry/AgentForge/issues/159) (substantially implemented)
-- eval runner / benchmark completion under [#165](https://github.com/H9-Foundry/AgentForge/issues/165) and [#166](https://github.com/H9-Foundry/AgentForge/issues/166)
-- the external adoption/readiness umbrella tracks cross-cutting productization work that depends on these slices but is not satisfied by workflow breadth alone
+- Phase 1 workflow implementation follow-ons under [#139](https://github.com/H9-Foundry/AgentForge/issues/139) through [#159](https://github.com/H9-Foundry/AgentForge/issues/159) are implemented on `main`
+- eval runner / benchmark completion under [#165](https://github.com/H9-Foundry/AgentForge/issues/165) and [#166](https://github.com/H9-Foundry/AgentForge/issues/166) is implemented on `main`
+- the external adoption/readiness umbrella is implemented in its first bounded form and now informs Phase 2 acceptance rather than acting as the active queue
 
 ### Deferred Lane
 
@@ -107,6 +110,7 @@ Current deferred lane:
 - Do not start broader workflow MVP work before the Phase 1 contract docs exist.
 - Do not start build, QA, security, release, maintenance, or operations workflow design until the planning/discovery and architecture/design MVP specs are written.
 - Do not start Phase 3 ecosystem and Phase 4 governance work as active implementation unless the earlier workflow contracts and MVP specs are stable enough to support them.
+- Do not start a new broad implementation family until the live queue tracker reflects the actual completed baseline on `main`.
 
 ## Maintainer Loop
 
@@ -197,4 +201,4 @@ A slice is done when:
 - newcomer usability impact was assessed for user-visible or public-contract changes
 - residual risks are called out explicitly
 
-The queue tracker stays open until the current dependency chain and active execution rules change materially.
+The live queue tracker should be rolled forward when a dependency family is complete; completed trackers should remain as phase-baseline records rather than continuing to list already-merged work as upcoming.

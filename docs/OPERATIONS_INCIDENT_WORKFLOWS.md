@@ -4,7 +4,7 @@ This document defines the design target for issue [#60](https://github.com/H9-Fo
 
 It now records the implemented `incident-handoff` intake wedge and the remaining planned expansion beyond that first operations entry point.
 
-It does **not** claim that the broader operations or incident workflow family is fully implemented or officially promoted today.
+It does **not** claim that the broader operations or incident workflow family is fully implemented today beyond the first official `incident-handoff` wedge.
 
 ## Why This Exists
 
@@ -41,11 +41,11 @@ Available now:
 Not yet available:
 
 - broader operations or observability adapter support
-- official promotion of `incident-handoff` while the evaluator-path bug remains open
+- broader incident and operations variants beyond `incident-handoff`
 
 ## Recommended Initial Workflow Family
 
-Phase 2 should define one first official wedge:
+Phase 2 should build on the current first official wedge:
 
 - `incident-handoff`
 
@@ -81,9 +81,8 @@ This expansion should not:
 - workflow name: `incident-handoff`
 - trigger: `manual`
 - primary lifecycle domain: `operate`
-- support level at the intake-only implementation slice: `partial`
-- official promotion only after `incident-analyst`, `incident-brief`, deterministic evidence normalization, and the evaluator path are all implemented and validated
-- maturity at first implementation: `mvp`
+- support level at the current implementation slice: `official`
+- current maturity: `mvp`
 
 ### Entry Model
 
@@ -168,5 +167,5 @@ Implemented on current `main`:
 
 Next incident family follow-ons:
 
-1. resolve the evaluator-path bug before official promotion of `incident-handoff`
-2. add broader operations and observability integrations only through explicit, approval-aware adapters
+1. add broader operations and observability integrations only through explicit, approval-aware adapters
+2. add additional incident variants such as postmortem review and alert triage without weakening the local-first posture
