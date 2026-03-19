@@ -6,6 +6,8 @@ This document describes lifecycle coverage across AgentForge using three honest 
 - **In progress**: explicitly targeted in the near-term backlog
 - **Planned**: not implemented yet, but intentionally on the roadmap
 
+Workflow coverage is not the same thing as plug-and-play external usability. A lifecycle domain can be implemented and still require technical early-adopter setup; less-technical external adoption is tracked separately as a productization/readiness target.
+
 ## Coverage Map
 
 | Lifecycle Domain | Status | Current Reality | Next Target |
