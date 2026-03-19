@@ -1,5 +1,20 @@
 # @h9-foundry/agentforge-cli
 
+## 0.9.0
+
+### Patch Changes
+
+- edd8435: Improve the planning preset quick path by making `init --preset planning-discovery` print explicit next-step guidance and by documenting the source-build-only canonical quick path until the next published release.
+- Updated dependencies [9c6c099]
+- Updated dependencies [203d736]
+  - @h9-foundry/agentforge-policy-engine@0.9.0
+  - @h9-foundry/agentforge-schemas@0.9.0
+  - @h9-foundry/agentforge-shared-types@0.9.0
+  - @h9-foundry/agentforge-runtime@0.9.0
+  - @h9-foundry/agentforge-context-engine@0.9.0
+  - @h9-foundry/agentforge-audit@0.9.0
+  - @h9-foundry/agentforge-sdk@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes

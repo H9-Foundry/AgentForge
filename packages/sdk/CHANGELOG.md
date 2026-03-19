@@ -1,5 +1,12 @@
 # @h9-foundry/agentforge-sdk
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies [203d736]
+  - @h9-foundry/agentforge-shared-types@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes

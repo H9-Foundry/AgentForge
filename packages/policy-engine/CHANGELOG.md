@@ -1,5 +1,17 @@
 # @h9-foundry/agentforge-policy-engine
 
+## 0.9.0
+
+### Minor Changes
+
+- 9c6c099: Add approval-gated registry activation decisions for verified catalog plugins and expose audit-ready activation outcomes through the internal registry client.
+
+### Patch Changes
+
+- Updated dependencies [203d736]
+  - @h9-foundry/agentforge-schemas@0.9.0
+  - @h9-foundry/agentforge-shared-types@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes
