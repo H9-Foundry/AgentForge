@@ -97,7 +97,7 @@ Adapter expectations:
 
 GitHub is the first mature integration target because it already anchors planning and release.
 
-The host-agnostic SCM/CI contract layer now exists, so GitHub-specific references and Actions evidence should remain a host-specific baseline built on top of shared shapes rather than the shared model itself becoming GitHub-shaped.
+The host-agnostic SCM/CI contract layer now exists and the first non-GitHub host pair is validated through the bounded GitLab wedge, so GitHub-specific references and Actions evidence should remain a host-specific baseline built on top of shared shapes rather than the shared model itself becoming GitHub-shaped.
 
 It should remain:
 
@@ -112,4 +112,4 @@ This epic is now decomposed into:
 1. implemented: GitHub issue/PR reference and status normalization shared across lifecycle workflows
 2. implemented in part: bounded GitHub handoff rendering for planning, design, QA, and release artifacts
 3. implemented in part: deterministic GitHub Actions evidence ingestion for QA plus a shared normalization contract for later release workflows
-4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior
+4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior now that GitLab normalization also exists

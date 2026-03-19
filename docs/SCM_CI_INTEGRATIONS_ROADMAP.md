@@ -4,7 +4,7 @@ This document defines the design target for issue [#64](https://github.com/H9-Fo
 
 It describes how AgentForge should expand beyond the current GitHub-centric baseline without promising broad integration support prematurely.
 
-It does **not** claim that additional SCM or CI integrations are implemented today.
+It does **not** claim that broad cross-platform SCM or CI support is implemented today.
 
 ## Why This Exists
 
@@ -29,17 +29,19 @@ Available now:
 - narrow GitHub integration for planning/release/process work
 - GitHub-hosted validation and release automation
 
-Not yet available:
-
-- additional SCM host adapters
-- additional CI evidence adapters
-- host-agnostic workflow surfaces across multiple providers
-
 Implemented now:
 
 - host-agnostic SCM reference contracts
 - host-agnostic CI evidence contracts
 - adapter capability metadata for bounded host behavior
+- bounded GitLab issue and merge-request normalization into the shared SCM contract
+- bounded local GitLab CI evidence normalization into the shared CI contract
+
+Not yet available:
+
+- additional generic CI evidence adapters beyond the GitHub and GitLab wedges
+- broad host-agnostic workflow surfaces across multiple providers
+- live remote SCM or CI reads on the default local path
 
 ## Recommended Priority Order
 
@@ -57,7 +59,9 @@ This keeps future adapters from inventing incompatible contracts.
 
 ### Priority 2: One Additional SCM/CI Pair
 
-The first additional target should validate the host-agnostic model with one concrete ecosystem, likely:
+Status: implemented as the first concrete non-GitHub host pair.
+
+The first additional target validates the host-agnostic model with one concrete ecosystem:
 
 - GitLab SCM plus GitLab CI
 
@@ -109,5 +113,5 @@ Additional SCM/CI work should:
 This epic should be decomposed into at least:
 
 1. host-agnostic SCM and CI reference contracts plus adapter capability metadata
-2. GitLab issue/MR and CI evidence integration wedge as the first additional concrete host
-3. generic CI evidence adapter surface for bounded pipeline status and artifact ingestion
+2. implemented: GitLab issue/MR and CI evidence integration wedge as the first additional concrete host pair
+3. next: generic CI evidence adapter surface for bounded pipeline status and artifact ingestion

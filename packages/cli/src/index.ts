@@ -49,6 +49,7 @@ import type {
   PlanningRequest,
   QaRequest,
   ReleaseRequest,
+  ScmReference,
   SecurityRequest,
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
@@ -398,6 +399,17 @@ interface GitHubRepoContext {
   repo: string;
 }
 
+interface GitLabRepoContext {
+  host: string;
+  namespace: string;
+  repo: string;
+}
+
+type ScmRepoContext =
+  | ({ platform: "github" } & GitHubRepoContext)
+  | ({ platform: "gitlab" } & GitLabRepoContext)
+  | { platform: "generic"; host: string; namespace: string; repo: string };
+
 function runGit(root: string, args: string[]): string {
   try {
     return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -406,26 +418,103 @@ function runGit(root: string, args: string[]): string {
   }
 }
 
-function parseGitHubRepositoryUrl(value: string): GitHubRepoContext | undefined {
+function inferScmPlatform(host: string): "github" | "gitlab" | "generic" {
+  const normalizedHost = host.toLowerCase();
+  if (normalizedHost.includes("github")) {
+    return "github";
+  }
+
+  if (normalizedHost.includes("gitlab")) {
+    return "gitlab";
+  }
+
+  return "generic";
+}
+
+function parseScmRepositoryUrl(value: string): ScmRepoContext | undefined {
   const trimmed = value.trim();
-  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  const sshMatch = trimmed.match(/^git@([^:]+):(.+?)(?:\.git)?$/i);
   if (sshMatch) {
+    const host = sshMatch[1].toLowerCase();
+    const pathSegments = sshMatch[2].split("/").filter(Boolean);
+    if (pathSegments.length < 2) {
+      return undefined;
+    }
+
+    const repo = pathSegments[pathSegments.length - 1] ?? "";
+    const namespace = pathSegments.slice(0, -1).join("/");
+    const platform = inferScmPlatform(host);
+    if (platform === "github") {
+      return {
+        platform,
+        host,
+        owner: namespace,
+        repo
+      };
+    }
+
     return {
-      host: sshMatch[1].toLowerCase(),
-      owner: sshMatch[2],
-      repo: sshMatch[3]
+      platform,
+      host,
+      namespace,
+      repo
     };
   }
 
-  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/)?$/i);
+  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/(.+?)(?:\.git)?(?:\/)?$/i);
   if (!httpsMatch) {
     return undefined;
   }
 
+  const host = httpsMatch[1].toLowerCase();
+  const pathSegments = httpsMatch[2].split("/").filter(Boolean);
+  if (pathSegments.length < 2) {
+    return undefined;
+  }
+
+  const repo = pathSegments[pathSegments.length - 1] ?? "";
+  const namespace = pathSegments.slice(0, -1).join("/");
+  const platform = inferScmPlatform(host);
+  if (platform === "github") {
+    return {
+      platform,
+      host,
+      owner: namespace,
+      repo
+    };
+  }
+
   return {
-    host: httpsMatch[1].toLowerCase(),
-    owner: httpsMatch[2],
-    repo: httpsMatch[3]
+    platform,
+    host,
+    namespace,
+    repo
+  };
+}
+
+function parseGitHubRepositoryUrl(value: string): GitHubRepoContext | undefined {
+  const parsed = parseScmRepositoryUrl(value);
+  if (!parsed || parsed.platform !== "github") {
+    return undefined;
+  }
+
+  return {
+    host: parsed.host,
+    owner: parsed.owner,
+    repo: parsed.repo
+  };
+}
+
+function parseGitLabRepositoryUrl(value: string): GitLabRepoContext | undefined {
+  const parsed = parseScmRepositoryUrl(value);
+  if (!parsed || parsed.platform !== "gitlab") {
+    return undefined;
+  }
+
+  return {
+    host: parsed.host,
+    namespace: parsed.namespace,
+    repo: parsed.repo
   };
 }
 
@@ -453,6 +542,68 @@ function inferGitHubRepoContext(root: string): GitHubRepoContext | undefined {
 
   const remoteUrl = runGit(root, ["config", "--get", "remote.origin.url"]);
   return remoteUrl ? parseGitHubRepositoryUrl(remoteUrl) : undefined;
+}
+
+function inferGitLabRepoContext(root: string): GitLabRepoContext | undefined {
+  const packageJsonPath = join(root, "package.json");
+  if (existsSync(packageJsonPath)) {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+    if (isRecord(parsed)) {
+      const repository = parsed.repository;
+      if (typeof repository === "string") {
+        const context = parseGitLabRepositoryUrl(repository);
+        if (context) {
+          return context;
+        }
+      }
+
+      if (isRecord(repository) && typeof repository.url === "string") {
+        const context = parseGitLabRepositoryUrl(repository.url);
+        if (context) {
+          return context;
+        }
+      }
+    }
+  }
+
+  const remoteUrl = runGit(root, ["config", "--get", "remote.origin.url"]);
+  return remoteUrl ? parseGitLabRepositoryUrl(remoteUrl) : undefined;
+}
+
+function inferScmRepoContext(root: string): ScmRepoContext | undefined {
+  const gitHubContext = inferGitHubRepoContext(root);
+  if (gitHubContext) {
+    return { platform: "github", ...gitHubContext };
+  }
+
+  const gitLabContext = inferGitLabRepoContext(root);
+  if (gitLabContext) {
+    return { platform: "gitlab", ...gitLabContext };
+  }
+
+  const packageJsonPath = join(root, "package.json");
+  if (existsSync(packageJsonPath)) {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+    if (isRecord(parsed)) {
+      const repository = parsed.repository;
+      if (typeof repository === "string") {
+        const context = parseScmRepositoryUrl(repository);
+        if (context) {
+          return context;
+        }
+      }
+
+      if (isRecord(repository) && typeof repository.url === "string") {
+        const context = parseScmRepositoryUrl(repository.url);
+        if (context) {
+          return context;
+        }
+      }
+    }
+  }
+
+  const remoteUrl = runGit(root, ["config", "--get", "remote.origin.url"]);
+  return remoteUrl ? parseScmRepositoryUrl(remoteUrl) : undefined;
 }
 
 function normalizeGitHubReference(rawValue: string, repoContext?: GitHubRepoContext): GithubReference | undefined {
@@ -529,6 +680,110 @@ function normalizeGitHubReferences(rawValues: readonly string[], repoContext?: G
 
     seen.add(githubRef.canonical);
     normalized.push(githubRef);
+  }
+
+  return normalized;
+}
+
+function normalizeGitLabReference(rawValue: string, repoContext?: GitLabRepoContext): ScmReference | undefined {
+  const raw = rawValue.trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  const fromParts = (context: GitLabRepoContext, kind: "issue" | "merge_request", number: number): ScmReference => ({
+    platform: "gitlab",
+    host: context.host,
+    namespace: context.namespace,
+    repo: context.repo,
+    kind,
+    identifier: `${number}`,
+    number,
+    canonical: kind === "issue"
+      ? `${context.host}/${context.namespace}/${context.repo}#${number}`
+      : `${context.host}/${context.namespace}/${context.repo}!${number}`,
+    url: kind === "issue"
+      ? `https://${context.host}/${context.namespace}/${context.repo}/-/issues/${number}`
+      : `https://${context.host}/${context.namespace}/${context.repo}/-/merge_requests/${number}`,
+    source: raw
+  });
+
+  const urlMatch = raw.match(/^https?:\/\/([^/]+)\/(.+?)\/-\/(issues|merge_requests)\/(\d+)(?:\/)?$/i);
+  if (urlMatch) {
+    const pathSegments = urlMatch[2].split("/").filter(Boolean);
+    if (pathSegments.length < 2) {
+      return undefined;
+    }
+
+    const repo = pathSegments[pathSegments.length - 1] ?? "";
+    const namespace = pathSegments.slice(0, -1).join("/");
+    return fromParts(
+      { host: urlMatch[1].toLowerCase(), namespace, repo },
+      urlMatch[3].toLowerCase() === "merge_requests" ? "merge_request" : "issue",
+      Number.parseInt(urlMatch[4], 10)
+    );
+  }
+
+  const shortIssueMatch = raw.match(/^#(\d+)$/);
+  if (shortIssueMatch && repoContext) {
+    return fromParts(repoContext, "issue", Number.parseInt(shortIssueMatch[1], 10));
+  }
+
+  const shortMergeRequestMatch = raw.match(/^!(\d+)$/);
+  if (shortMergeRequestMatch && repoContext) {
+    return fromParts(repoContext, "merge_request", Number.parseInt(shortMergeRequestMatch[1], 10));
+  }
+
+  return undefined;
+}
+
+function normalizeScmReference(rawValue: string, repoContext?: ScmRepoContext): ScmReference | undefined {
+  const raw = rawValue.trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  const gitHubRef = normalizeGitHubReference(
+    raw,
+    repoContext?.platform === "github"
+      ? { host: repoContext.host, owner: repoContext.owner, repo: repoContext.repo }
+      : undefined
+  );
+  if (gitHubRef) {
+    return {
+      platform: "github",
+      host: gitHubRef.host,
+      namespace: gitHubRef.owner,
+      repo: gitHubRef.repo,
+      kind: gitHubRef.kind,
+      identifier: `${gitHubRef.number}`,
+      number: gitHubRef.number,
+      canonical: `${gitHubRef.host}/${gitHubRef.owner}/${gitHubRef.repo}${gitHubRef.kind === "issue" ? `#${gitHubRef.number}` : `/pull/${gitHubRef.number}`}`,
+      url: gitHubRef.url,
+      source: gitHubRef.source
+    };
+  }
+
+  return normalizeGitLabReference(
+    raw,
+    repoContext?.platform === "gitlab"
+      ? { host: repoContext.host, namespace: repoContext.namespace, repo: repoContext.repo }
+      : undefined
+  );
+}
+
+function normalizeScmReferences(rawValues: readonly string[], repoContext?: ScmRepoContext): ScmReference[] {
+  const seen = new Set<string>();
+  const normalized: ScmReference[] = [];
+
+  for (const rawValue of rawValues) {
+    const scmRef = normalizeScmReference(rawValue, repoContext);
+    if (!scmRef || seen.has(scmRef.canonical)) {
+      continue;
+    }
+
+    seen.add(scmRef.canonical);
+    normalized.push(scmRef);
   }
 
   return normalized;
@@ -718,15 +973,17 @@ function loadLifecycleArtifactKinds(root: string, bundleRef: string): string[] {
 function loadLifecycleArtifactSourceReferences(
   root: string,
   bundleRef: string
-): { issueRefs: string[]; githubRefs: GithubReference[] } {
+): { issueRefs: string[]; scmRefs: ScmReference[]; githubRefs: GithubReference[] } {
   const bundlePath = join(root, bundleRef);
   if (!existsSync(bundlePath)) {
     throw new Error(`Referenced bundle not found: ${bundleRef}`);
   }
 
   const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
-  const repoContext = inferGitHubRepoContext(root);
+  const scmRepoContext = inferScmRepoContext(root);
+  const gitHubRepoContext = inferGitHubRepoContext(root);
   const issueRefs = new Set<string>();
+  const scmRefs = new Map<string, ScmReference>();
   const githubRefs = new Map<string, GithubReference>();
 
   for (const artifact of bundle.lifecycleArtifacts) {
@@ -734,17 +991,26 @@ function loadLifecycleArtifactSourceReferences(
       issueRefs.add(issueRef);
     }
 
+    for (const scmRef of artifact.source.scmRefs ?? []) {
+      scmRefs.set(scmRef.canonical, scmRef);
+    }
+
     for (const githubRef of artifact.source.githubRefs ?? []) {
       githubRefs.set(githubRef.canonical, githubRef);
     }
 
-    for (const githubRef of normalizeGitHubReferences(artifact.source.issueRefs, repoContext)) {
+    for (const scmRef of normalizeScmReferences(artifact.source.issueRefs, scmRepoContext)) {
+      scmRefs.set(scmRef.canonical, scmRef);
+    }
+
+    for (const githubRef of normalizeGitHubReferences(artifact.source.issueRefs, gitHubRepoContext)) {
       githubRefs.set(githubRef.canonical, githubRef);
     }
   }
 
   return {
     issueRefs: [...issueRefs],
+    scmRefs: [...scmRefs.values()],
     githubRefs: [...githubRefs.values()]
   };
 }
@@ -763,10 +1029,12 @@ function prepareWorkflowInputs(
     const planningRequest = validatePlanningRequestCompleteness(
       readYamlFile(join(root, requestPath), planningRequestSchema, "planning request")
     );
+    const planningScmRefs = normalizeScmReferences(planningRequest.issueRefs, inferScmRepoContext(root));
     const planningGithubRefs = normalizeGitHubReferences(planningRequest.issueRefs, inferGitHubRepoContext(root));
 
     return {
       planningRequest,
+      planningScmRefs,
       planningGithubRefs,
       requestFile: requestPath
     };
@@ -814,11 +1082,12 @@ function prepareWorkflowInputs(
 
     const referencedSourceRefs = qaRequest.targetRef.endsWith("bundle.json")
       ? loadLifecycleArtifactSourceReferences(root, qaRequest.targetRef)
-      : { issueRefs: [], githubRefs: [] };
+      : { issueRefs: [], scmRefs: [], githubRefs: [] };
 
     return {
       qaRequest: qaRequest satisfies QaRequest,
       qaIssueRefs: referencedSourceRefs.issueRefs,
+      qaScmRefs: referencedSourceRefs.scmRefs,
       qaGithubRefs: referencedSourceRefs.githubRefs,
       requestFile: requestPath
     };
@@ -848,12 +1117,13 @@ function prepareWorkflowInputs(
 
     const referencedSourceRefs = securityRequest.targetRef.endsWith("bundle.json")
       ? loadLifecycleArtifactSourceReferences(root, securityRequest.targetRef)
-      : { issueRefs: [], githubRefs: [] };
+      : { issueRefs: [], scmRefs: [], githubRefs: [] };
 
     return {
       securityRequest: securityRequest satisfies SecurityRequest,
       securityTargetArtifactKinds: referencedArtifactKinds,
       securityIssueRefs: referencedSourceRefs.issueRefs,
+      securityScmRefs: referencedSourceRefs.scmRefs,
       securityGithubRefs: referencedSourceRefs.githubRefs,
       requestFile: requestPath
     };
@@ -867,6 +1137,7 @@ function prepareWorkflowInputs(
     );
 
     const releaseIssueRefs = new Set<string>();
+    const releaseScmRefMap = new Map<string, ScmReference>();
     const releaseGithubRefMap = new Map<string, GithubReference>();
     for (const qaReportRef of releaseRequest.qaReportRefs) {
       ensureReadablePath(policyEngine, qaReportRef, "QA report reference");
@@ -874,6 +1145,9 @@ function prepareWorkflowInputs(
       const refs = loadLifecycleArtifactSourceReferences(root, qaReportRef);
       for (const issueRef of refs.issueRefs) {
         releaseIssueRefs.add(issueRef);
+      }
+      for (const scmRef of refs.scmRefs) {
+        releaseScmRefMap.set(scmRef.canonical, scmRef);
       }
       for (const githubRef of refs.githubRefs) {
         releaseGithubRefMap.set(githubRef.canonical, githubRef);
@@ -886,6 +1160,9 @@ function prepareWorkflowInputs(
       const refs = loadLifecycleArtifactSourceReferences(root, securityReportRef);
       for (const issueRef of refs.issueRefs) {
         releaseIssueRefs.add(issueRef);
+      }
+      for (const scmRef of refs.scmRefs) {
+        releaseScmRefMap.set(scmRef.canonical, scmRef);
       }
       for (const githubRef of refs.githubRefs) {
         releaseGithubRefMap.set(githubRef.canonical, githubRef);
@@ -902,6 +1179,7 @@ function prepareWorkflowInputs(
     return {
       releaseRequest: releaseRequest satisfies ReleaseRequest,
       releaseIssueRefs: [...releaseIssueRefs],
+      releaseScmRefs: [...releaseScmRefMap.values()],
       releaseGithubRefs: [...releaseGithubRefMap.values()],
       requestFile: requestPath
     };
@@ -914,10 +1192,15 @@ function prepareWorkflowInputs(
       readYamlFile(join(root, requestPath), incidentRequestSchema, "incident request")
     );
 
-    const repoContext = inferGitHubRepoContext(root);
+    const scmRepoContext = inferScmRepoContext(root);
+    const gitHubRepoContext = inferGitHubRepoContext(root);
     const incidentIssueRefs = new Set<string>(incidentRequest.issueRefs);
+    const incidentScmRefMap = new Map<string, ScmReference>();
     const incidentGithubRefMap = new Map<string, GithubReference>();
-    for (const githubRef of normalizeGitHubReferences(incidentRequest.issueRefs, repoContext)) {
+    for (const scmRef of normalizeScmReferences(incidentRequest.issueRefs, scmRepoContext)) {
+      incidentScmRefMap.set(scmRef.canonical, scmRef);
+    }
+    for (const githubRef of normalizeGitHubReferences(incidentRequest.issueRefs, gitHubRepoContext)) {
       incidentGithubRefMap.set(githubRef.canonical, githubRef);
     }
 
@@ -927,6 +1210,9 @@ function prepareWorkflowInputs(
       const refs = loadLifecycleArtifactSourceReferences(root, releaseReportRef);
       for (const issueRef of refs.issueRefs) {
         incidentIssueRefs.add(issueRef);
+      }
+      for (const scmRef of refs.scmRefs) {
+        incidentScmRefMap.set(scmRef.canonical, scmRef);
       }
       for (const githubRef of refs.githubRefs) {
         incidentGithubRefMap.set(githubRef.canonical, githubRef);
@@ -943,6 +1229,7 @@ function prepareWorkflowInputs(
     return {
       incidentRequest: incidentRequest satisfies IncidentRequest,
       incidentIssueRefs: [...incidentIssueRefs],
+      incidentScmRefs: [...incidentScmRefMap.values()],
       incidentGithubRefs: [...incidentGithubRefMap.values()],
       requestFile: requestPath
     };
@@ -955,10 +1242,15 @@ function prepareWorkflowInputs(
       readYamlFile(join(root, requestPath), maintenanceRequestSchema, "maintenance request")
     );
 
-    const repoContext = inferGitHubRepoContext(root);
+    const scmRepoContext = inferScmRepoContext(root);
+    const gitHubRepoContext = inferGitHubRepoContext(root);
     const maintenanceIssueRefs = new Set<string>(maintenanceRequest.issueRefs);
+    const maintenanceScmRefMap = new Map<string, ScmReference>();
     const maintenanceGithubRefMap = new Map<string, GithubReference>();
-    for (const githubRef of normalizeGitHubReferences(maintenanceRequest.issueRefs, repoContext)) {
+    for (const scmRef of normalizeScmReferences(maintenanceRequest.issueRefs, scmRepoContext)) {
+      maintenanceScmRefMap.set(scmRef.canonical, scmRef);
+    }
+    for (const githubRef of normalizeGitHubReferences(maintenanceRequest.issueRefs, gitHubRepoContext)) {
       maintenanceGithubRefMap.set(githubRef.canonical, githubRef);
     }
 
@@ -968,6 +1260,9 @@ function prepareWorkflowInputs(
       const refs = loadLifecycleArtifactSourceReferences(root, releaseReportRef);
       for (const issueRef of refs.issueRefs) {
         maintenanceIssueRefs.add(issueRef);
+      }
+      for (const scmRef of refs.scmRefs) {
+        maintenanceScmRefMap.set(scmRef.canonical, scmRef);
       }
       for (const githubRef of refs.githubRefs) {
         maintenanceGithubRefMap.set(githubRef.canonical, githubRef);
@@ -991,6 +1286,7 @@ function prepareWorkflowInputs(
     return {
       maintenanceRequest: maintenanceRequest satisfies MaintenanceRequest,
       maintenanceIssueRefs: [...maintenanceIssueRefs],
+      maintenanceScmRefs: [...maintenanceScmRefMap.values()],
       maintenanceGithubRefs: [...maintenanceGithubRefMap.values()],
       requestFile: requestPath
     };
