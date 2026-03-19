@@ -26,32 +26,29 @@ That flow creates `.agentops/` locally and writes run artifacts under `.agentops
 
 ## Canonical Quick Path
 
-The canonical quick path for the first request-driven workflow is source-build only until the next npm release includes `init --preset planning-discovery`.
-
-From a fresh checkout of this repository:
+The canonical quick path for the first request-driven workflow is now available in the published CLI.
 
 ```bash
-git clone https://github.com/H9-Foundry/AgentForge.git
-cd AgentForge
-pnpm install
-pnpm build
-node packages/cli/dist/bin.js init --preset planning-discovery
-node packages/cli/dist/bin.js run planning-discovery --json
-node packages/cli/dist/bin.js explain last-run --json
+mkdir agentforge-demo
+cd agentforge-demo
+git init
+npx @h9-foundry/agentforge-cli init --preset planning-discovery
+npx @h9-foundry/agentforge-cli run planning-discovery --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 That path is intentionally four steps only:
-1. clone, install, and build
+1. create a local repo
 2. start the preset
 3. run the planning workflow
 4. inspect the latest run through `agentforge explain last-run`
 
 ## Start A Request-Driven Workflow From A Preset
 
-If you want the first request-driven success path without hand-writing YAML, current `main` now supports one bounded startup preset. This is source-build only until the next npm release.
+If you want the first request-driven success path without hand-writing YAML, the published CLI now supports one bounded startup preset.
 
 ```bash
-node packages/cli/dist/bin.js init --preset planning-discovery
+npx @h9-foundry/agentforge-cli init --preset planning-discovery
 ```
 
 That command keeps the normal local-first init behavior and also writes `.agentops/requests/planning.yaml` if it does not already exist. It never auto-runs a workflow and it will not overwrite an existing request file.
@@ -154,7 +151,7 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 The implementation bundle should include one `implementation-proposal` lifecycle artifact with deterministic affected-path inventory plus approval-required validation guidance. The default path remains read-only and proposal-only.
 
-If the published CLI reports `packageManager: "unknown"` in a generic repo, omit `validationCommands` from the request and let the workflow emit proposal-only validation guidance from the referenced design record and target paths. Add explicit commands only after package-manager detection is available for that repo.
+If `scan --json` still reports `packageManager: "unknown"` in a generic repo, `implementation-proposal` will still accept bounded root-package validation commands such as `pnpm test`, `npm test`, or `yarn test` when they match discovered allowlisted scripts in `package.json`.
 
 ## Run The Official QA Workflow
 
@@ -182,7 +179,7 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 The QA bundle should include one `qa-report` lifecycle artifact with normalized evidence sources, normalized executed checks, coverage gaps, findings, and recommended next checks. The default path remains read-only and bounded to local evidence.
 
-If package-manager detection is unavailable in the published generic-repo path, omit `executedChecks` and rely on bounded evidence references such as the implementation bundle and summary. Add explicit executed checks only when the repo’s package manager is known and the commands are allowlisted for that repo.
+If `scan --json` still reports `packageManager: "unknown"` in a generic repo, `qa-review` will still accept bounded root-package executed checks such as `pnpm test`, `npm test`, or `yarn test` when they match discovered allowlisted scripts in `package.json`.
 
 ## Run The Official Security Workflow
 

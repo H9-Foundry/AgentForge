@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename } from "node:path";
 import { execFileSync } from "node:child_process";
 
@@ -36,6 +36,19 @@ export function detectPackageManager(root: string): string {
   if (existsSync(`${root}/pnpm-lock.yaml`)) return "pnpm";
   if (existsSync(`${root}/package-lock.json`)) return "npm";
   if (existsSync(`${root}/yarn.lock`)) return "yarn";
+  if (existsSync(`${root}/package.json`)) {
+    try {
+      const parsed = JSON.parse(readFileSync(`${root}/package.json`, "utf8")) as { packageManager?: unknown };
+      if (typeof parsed.packageManager === "string") {
+        const normalized = parsed.packageManager.split("@")[0]?.trim();
+        if (normalized === "pnpm" || normalized === "npm" || normalized === "yarn") {
+          return normalized;
+        }
+      }
+    } catch {
+      // Fall through to the bounded unknown fallback when package.json is absent or malformed.
+    }
+  }
   return "unknown";
 }
 
