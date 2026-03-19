@@ -41,6 +41,37 @@ function createGitFixture(prefix: string): string {
   return root;
 }
 
+function createGitFixtureWithoutLockfile(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  execFileSync("git", ["init"], { cwd: root });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify(
+      {
+        name: "fixture",
+        repository: {
+          type: "git",
+          url: "https://github.com/H9-Foundry/fixture.git"
+        },
+        scripts: {
+          test: "echo test",
+          lint: "echo lint",
+          typecheck: "echo typecheck"
+        }
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
+  execFileSync("git", ["add", "."], { cwd: root });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
+  writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
+  return root;
+}
+
 function createFixtureRepo(): string {
   return createGitFixture("agentops-cli-");
 }
@@ -853,6 +884,51 @@ describe("cli smoke flows", () => {
     expect(explanation.artifactKinds).toContain("implementation-proposal");
   });
 
+  it("allows bounded implementation validation commands in a generic repo when the package manager is unknown", async () => {
+    const root = createGitFixtureWithoutLockfile("agentops-cli-implementation-generic-");
+    initProject(root);
+    expect(scanProject(root).packageManager).toBe("unknown");
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first design workflow implementation shape",
+        "pathHints:",
+        "  - package.json",
+        "  - .agentops/policy.yaml",
+        "alternatives:",
+        "  - single-workflow-pass"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "validationCommands:",
+        "  - pnpm test"
+      ].join("\n")
+    );
+
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    expect(implementationRun.status).toBe("success");
+    expect(implementationRun.artifactKinds).toContain("implementation-proposal");
+  });
+
   it("runs qa-review after a valid implementation-proposal handoff", async () => {
     const root = createGitFixture("agentops-qa-");
 
@@ -1041,6 +1117,67 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.payload?.releaseImpact).toContain(
       "GitHub Actions evidence still shows failing checks: CI / lint."
     );
+  });
+
+  it("allows bounded QA executed checks in a generic repo when the package manager is unknown", async () => {
+    const root = createGitFixtureWithoutLockfile("agentops-qa-generic-");
+    initProject(root);
+    expect(scanProject(root).packageManager).toBe("unknown");
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan a bounded QA workflow handoff",
+        "goals:",
+        "  - Produce a planning brief for the QA workflow",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "  - Keep the workflow read-only by default"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first QA workflow implementation shape",
+        "pathHints:",
+        "  - package.json",
+        "  - .agentops/policy.yaml",
+        "alternatives:",
+        "  - single-pass-qa"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "validationCommands:",
+        "  - pnpm test"
+      ].join("\n")
+    );
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        `targetRef: .agentops/runs/${implementationRun.runId}/bundle.json`,
+        "evidenceSources:",
+        `  - .agentops/runs/${implementationRun.runId}/summary.md`,
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - coverage",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    expect(qaRun.status).toBe("success");
+    expect(qaRun.artifactKinds).toContain("qa-report");
   });
 
   it("rejects underspecified qa-review requests before reasoning", async () => {

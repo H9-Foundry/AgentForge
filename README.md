@@ -8,7 +8,7 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 
 - try the current official workflow wedge with the published CLI, without cloning this monorepo
 - initialize a repository, scan it, and run `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, and `maintenance-triage` with the latest published CLI
-- use the published CLI today for the current official workflow surface, and use the source build on `main` for newer startup UX that has not reached npm yet
+- use the published CLI today for the current official workflow surface, the bounded planning preset startup path, and the local eval runner and compare flow
 - inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, `implementation-proposal`, `qa-report`, `security-report`, and `maintenance-report`
 - run `agentforge eval run` and `agentforge eval compare` locally against the deterministic workflow fixture corpus in the latest published CLI
 - evaluate the secure-by-default runtime model before broader SDLC workflow support lands
@@ -27,27 +27,24 @@ Published CLI wording rule:
 
 ## Quick Path
 
-The current canonical quick path for the first request-driven workflow is source-build only until the next npm release includes `init --preset planning-discovery`.
+The current canonical quick path for the first request-driven workflow is available in the published CLI.
 
 ```bash
-git clone https://github.com/H9-Foundry/AgentForge.git
-cd AgentForge
-pnpm install
-pnpm build
-node packages/cli/dist/bin.js init --preset planning-discovery
-node packages/cli/dist/bin.js run planning-discovery --json
-node packages/cli/dist/bin.js explain last-run --json
+mkdir agentforge-demo
+cd agentforge-demo
+git init
+npx @h9-foundry/agentforge-cli init --preset planning-discovery
+npx @h9-foundry/agentforge-cli run planning-discovery --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 That path is intentionally four steps only:
-1. clone, install, and build
+1. create a local repo
 2. start the preset
 3. run the planning workflow
 4. inspect the latest run through `agentforge explain last-run`
 
 The preset writes an explicit starter request to `.agentops/requests/planning.yaml`, never auto-runs the workflow, and never overwrites an existing request file.
-
-If you want the fastest published CLI evaluator path today, keep using `init`, `scan`, and `run pr-review` until the next npm release includes the preset startup surface.
 
 If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
 

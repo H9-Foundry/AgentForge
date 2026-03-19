@@ -39,6 +39,12 @@ describe("context engine", () => {
     expect(detectPackageManager(root)).toBe("pnpm");
   });
 
+  it("detects the package manager from package.json metadata when lockfiles are absent", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentops-context-package-manager-"));
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "fixture", packageManager: "pnpm@9.1.0" }));
+    expect(detectPackageManager(root)).toBe("pnpm");
+  });
+
   it("creates workflow state from a git repo", () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-state-"));
     execFileSync("git", ["init"], { cwd: root });
