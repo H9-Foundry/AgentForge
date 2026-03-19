@@ -33,6 +33,10 @@ import {
   evalRedactionExpectationSchema,
   evalSetupRunSchema,
   evalSpecSchema,
+  benchmarkArtifactPayloadSchema,
+  benchmarkArtifactSchema,
+  benchmarkComparedRunSchema,
+  benchmarkDeterministicDeltaSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
   githubActionsCheckRunEvidenceSchema,
@@ -129,6 +133,10 @@ export type EvalPolicyExpectation = Infer<typeof evalPolicyExpectationSchema>;
 export type EvalRedactionExpectation = Infer<typeof evalRedactionExpectationSchema>;
 export type EvalSpec = Infer<typeof evalSpecSchema>;
 export type EvalFixtureCorpus = Infer<typeof evalFixtureCorpusSchema>;
+export type BenchmarkDeterministicDelta = Infer<typeof benchmarkDeterministicDeltaSchema>;
+export type BenchmarkComparedRun = Infer<typeof benchmarkComparedRunSchema>;
+export type BenchmarkArtifactPayload = Infer<typeof benchmarkArtifactPayloadSchema>;
+export type BenchmarkArtifact = Infer<typeof benchmarkArtifactSchema>;
 export type ImplementationArtifactPayload = Infer<typeof implementationArtifactPayloadSchema>;
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
 export type ImplementationInventory = Infer<typeof implementationInventorySchema>;

@@ -21,6 +21,7 @@ export const lifecycleArtifactKindSchema = z.enum([
   "qa-report",
   "security-report",
   "eval-result",
+  "benchmark-summary",
   "review-report",
   "release-report",
   "maintenance-report"
@@ -942,6 +943,44 @@ export const evalArtifactPayloadSchema = z.object({
   warningCount: z.number().int().nonnegative().default(0)
 });
 
+export const benchmarkComparisonClassificationSchema = z.enum(["regression", "improvement", "unchanged", "non_comparable"]);
+
+export const benchmarkDeterministicDeltaSchema = z.object({
+  name: z.string().min(1),
+  classification: benchmarkComparisonClassificationSchema,
+  baselineStatus: evalCheckStatusSchema.optional(),
+  candidateStatus: evalCheckStatusSchema.optional(),
+  details: z.string().min(1).optional()
+});
+
+export const benchmarkComparedRunSchema = z.object({
+  runId: z.string().min(1),
+  bundlePath: z.string().min(1),
+  specId: z.string().min(1).optional(),
+  workflow: evalWorkflowSchema.optional(),
+  comparable: z.boolean(),
+  passed: z.boolean().optional(),
+  failureCount: z.number().int().nonnegative().optional(),
+  deterministicCheckCount: z.number().int().nonnegative().default(0),
+  regressions: z.array(benchmarkDeterministicDeltaSchema).default([]),
+  improvements: z.array(benchmarkDeterministicDeltaSchema).default([]),
+  unchangedCount: z.number().int().nonnegative().default(0),
+  nonComparableFindings: z.array(z.string().min(1)).default([])
+});
+
+export const benchmarkArtifactPayloadSchema = z.object({
+  baselineRunId: z.string().min(1),
+  baselineBundlePath: z.string().min(1),
+  baselineSpecId: z.string().min(1).optional(),
+  baselineWorkflow: evalWorkflowSchema.optional(),
+  comparedRuns: z.array(benchmarkComparedRunSchema).min(1),
+  regressionCount: z.number().int().nonnegative(),
+  improvementCount: z.number().int().nonnegative(),
+  unchangedCount: z.number().int().nonnegative(),
+  nonComparableCount: z.number().int().nonnegative(),
+  summaryConclusion: z.string().min(1)
+});
+
 export const planningArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("planning-brief"),
   lifecycleDomain: z.literal("plan"),
@@ -984,6 +1023,12 @@ export const evalArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   payload: evalArtifactPayloadSchema
 });
 
+export const benchmarkArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("benchmark-summary"),
+  lifecycleDomain: z.literal("evaluate"),
+  payload: benchmarkArtifactPayloadSchema
+});
+
 export const reviewArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("review-report"),
   lifecycleDomain: z.literal("review"),
@@ -1010,6 +1055,7 @@ export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   qaArtifactSchema,
   securityArtifactSchema,
   evalArtifactSchema,
+  benchmarkArtifactSchema,
   reviewArtifactSchema,
   releaseArtifactSchema,
   maintenanceArtifactSchema
@@ -1073,6 +1119,9 @@ export const schemaRegistry = {
   evalModelDependentCheck: evalModelDependentCheckSchema,
   evalSetupRun: evalSetupRunSchema,
   evalArtifactPayload: evalArtifactPayloadSchema,
+  benchmarkDeterministicDelta: benchmarkDeterministicDeltaSchema,
+  benchmarkComparedRun: benchmarkComparedRunSchema,
+  benchmarkArtifactPayload: benchmarkArtifactPayloadSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
@@ -1088,6 +1137,7 @@ export const schemaRegistry = {
   qaArtifact: qaArtifactSchema,
   securityArtifact: securityArtifactSchema,
   evalArtifact: evalArtifactSchema,
+  benchmarkArtifact: benchmarkArtifactSchema,
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
@@ -1449,6 +1499,48 @@ const evalArtifactFixture = {
     passed: true,
     failureCount: 0,
     warningCount: 0
+  }
+} as const;
+
+const benchmarkArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "benchmark-summary",
+  lifecycleDomain: "evaluate",
+  summary: "Benchmark summary found 1 deterministic regression across local eval candidates.",
+  payload: {
+    baselineRunId: "run-100",
+    baselineBundlePath: ".agentops/runs/run-100/bundle.json",
+    baselineSpecId: "planning-discovery-local-brief",
+    baselineWorkflow: "planning-discovery",
+    comparedRuns: [
+      {
+        runId: "run-101",
+        bundlePath: ".agentops/runs/run-101/bundle.json",
+        specId: "planning-discovery-local-brief",
+        workflow: "planning-discovery",
+        comparable: true,
+        passed: false,
+        failureCount: 1,
+        deterministicCheckCount: 2,
+        regressions: [
+          {
+            name: "run-status",
+            classification: "regression",
+            baselineStatus: "passed",
+            candidateStatus: "failed",
+            details: "Candidate failed a deterministic status expectation that the baseline passed."
+          }
+        ],
+        improvements: [],
+        unchangedCount: 1,
+        nonComparableFindings: []
+      }
+    ],
+    regressionCount: 1,
+    improvementCount: 0,
+    unchangedCount: 1,
+    nonComparableCount: 0,
+    summaryConclusion: "Detected 1 deterministic regression compared with the baseline eval result."
   }
 } as const;
 
@@ -2122,6 +2214,7 @@ export const schemaFixtures = {
   qaArtifact: qaArtifactFixture,
   securityArtifact: securityArtifactFixture,
   evalArtifact: evalArtifactFixture,
+  benchmarkArtifact: benchmarkArtifactFixture,
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   maintenanceArtifact: maintenanceArtifactFixture,

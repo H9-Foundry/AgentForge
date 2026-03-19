@@ -241,6 +241,30 @@ node packages/cli/dist/bin.js run maintenance-triage
 node packages/cli/dist/bin.js explain last-run
 ```
 
+## Dogfood The Official Workflows With Local Evals
+
+Use the source-built CLI to execute the deterministic eval corpus against the official workflow surface:
+
+```bash
+node packages/cli/dist/bin.js eval run planning-discovery-local-brief --json
+node packages/cli/dist/bin.js eval run maintenance-triage-local-report --json
+```
+
+Each eval writes a normal run bundle under `.agentops/runs/<eval-run-id>/` and emits one `eval-result` lifecycle artifact.
+
+To compare two eval runs deterministically and emit a benchmark artifact:
+
+```bash
+node packages/cli/dist/bin.js eval compare <baseline-eval-run-id> <candidate-eval-run-id> --json
+node packages/cli/dist/bin.js explain last-run --json
+```
+
+The benchmark compare path remains local-first and deterministic. It distinguishes:
+
+- deterministic regressions
+- deterministic improvements
+- non-comparable changes such as spec or workflow mismatches
+
 Run artifacts are written under `.agentops/runs/<run-id>/`.
 
 ## Validate The Public Package Set

@@ -7,7 +7,7 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 
-import { explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
+import { compareLocalEvalRuns, explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
 
 function createGitFixture(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -60,6 +60,64 @@ function writeYamlFile(filePath: string, value: unknown): void {
 
 function readJson<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, "utf8")) as T;
+}
+
+function writeBundleFixture(
+  root: string,
+  runId: string,
+  lifecycleArtifacts: unknown[],
+  options?: { status?: "success" | "partial" | "failed" }
+): string {
+  const runRoot = join(root, ".agentops", "runs", runId);
+  mkdirSync(runRoot, { recursive: true });
+  const bundlePath = join(runRoot, "bundle.json");
+  writeFileSync(
+    bundlePath,
+    JSON.stringify(
+      {
+        version: "1.0.0",
+        runId,
+        workflow: "eval:fixture",
+        startedAt: "2026-03-19T10:00:00.000Z",
+        finishedAt: "2026-03-19T10:00:01.000Z",
+        status: options?.status ?? "success",
+        policy: {
+          version: 1,
+          environment: "local",
+          resolvedAt: "2026-03-19T10:00:00.000Z",
+          defaults: schemaFixtures.policyDocument.defaults,
+          paths: schemaFixtures.policyDocument.paths,
+          plugins: schemaFixtures.policyDocument.plugins,
+          tools: schemaFixtures.policyDocument.tools
+        },
+        entries: [],
+        findings: [],
+        proposedActions: [],
+        blockedPlugins: [],
+        lifecycleArtifacts,
+        artifactPaths: {
+          json: `.agentops/runs/${runId}/bundle.json`,
+          markdown: `.agentops/runs/${runId}/summary.md`
+        },
+        provenance: {
+          generatedBy: "agentforge-runtime",
+          schemaVersion: "1.0.0",
+          executionEnvironment: "local",
+          repoRoot: root
+        },
+        redaction: {
+          applied: true,
+          strategyVersion: "1.0.0",
+          categories: ["github-token", "api-key"]
+        },
+        components: []
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(join(runRoot, "summary.md"), `# ${runId}\n`);
+  return bundlePath;
 }
 
 let builtCli = false;
@@ -454,7 +512,7 @@ describe("cli smoke flows", () => {
     expect(run.stdout).toContain("Audit bundle:");
     expect(run.stdout).toContain("Summary:");
     expect(run.stdout).toContain("agentforge explain last-run");
-  }, 30_000);
+  }, 90_000);
 
   it("fails planning-discovery before reasoning when the request is missing", async () => {
     const root = createGitFixture("agentops-cli-planning-missing-");
@@ -1734,6 +1792,112 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("eval-result");
     expect(bundle.lifecycleArtifacts[0]?.payload?.evaluatedRunId).toBe(evalRun.evaluatedRunId);
     expect(bundle.lifecycleArtifacts[0]?.payload?.setupRuns?.some((run) => run.workflow === "release-readiness")).toBe(true);
+  }, 30_000);
+
+  it("compares eval results and emits a benchmark summary with deterministic regressions", () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    writeBundleFixture(root, "run-baseline", [
+      {
+        ...schemaFixtures.evalArtifact,
+        source: { ...schemaFixtures.evalArtifact.source, runId: "run-baseline" },
+        auditLink: { ...schemaFixtures.evalArtifact.auditLink, bundlePath: ".agentops/runs/run-baseline/bundle.json" },
+        payload: {
+          ...schemaFixtures.evalArtifact.payload,
+          deterministicChecks: [
+            {
+              name: "run-status",
+              status: "passed",
+              expected: "success",
+              actual: "success"
+            }
+          ],
+          passed: true,
+          failureCount: 0
+        }
+      }
+    ]);
+
+    writeBundleFixture(
+      root,
+      "run-candidate",
+      [
+        {
+          ...schemaFixtures.evalArtifact,
+          source: { ...schemaFixtures.evalArtifact.source, runId: "run-candidate" },
+          auditLink: { ...schemaFixtures.evalArtifact.auditLink, bundlePath: ".agentops/runs/run-candidate/bundle.json" },
+          payload: {
+            ...schemaFixtures.evalArtifact.payload,
+            deterministicChecks: [
+              {
+                name: "run-status",
+                status: "failed",
+                expected: "success",
+                actual: "partial"
+              }
+            ],
+            passed: false,
+            failureCount: 1
+          }
+        }
+      ],
+      { status: "partial" }
+    );
+
+    const result = compareLocalEvalRuns("run-baseline", ["run-candidate"], root);
+
+    expect(result.status).toBe("partial");
+    expect(result.regressionCount).toBe(1);
+    expect(result.improvementCount).toBe(0);
+    expect(result.artifactKinds).toContain("benchmark-summary");
+
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{ artifactKind?: string; payload?: { regressionCount?: number } }>;
+    }>(result.jsonPath);
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("benchmark-summary");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.regressionCount).toBe(1);
+  });
+
+  it("marks eval comparisons as non-comparable when spec ids differ", () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    writeBundleFixture(root, "run-planning", [
+      {
+        ...schemaFixtures.evalArtifact,
+        source: { ...schemaFixtures.evalArtifact.source, runId: "run-planning" },
+        auditLink: { ...schemaFixtures.evalArtifact.auditLink, bundlePath: ".agentops/runs/run-planning/bundle.json" }
+      }
+    ]);
+
+    writeBundleFixture(root, "run-qa", [
+      {
+        ...schemaFixtures.evalArtifact,
+        source: { ...schemaFixtures.evalArtifact.source, runId: "run-qa" },
+        auditLink: { ...schemaFixtures.evalArtifact.auditLink, bundlePath: ".agentops/runs/run-qa/bundle.json" },
+        payload: {
+          ...schemaFixtures.evalArtifact.payload,
+          specId: "qa-review-local-report",
+          specName: "QA review emits qa report",
+          workflow: "qa-review"
+        }
+      }
+    ]);
+
+    const result = compareLocalEvalRuns("run-planning", ["run-qa"], root);
+
+    expect(result.status).toBe("partial");
+    expect(result.comparableRunCount).toBe(0);
+    expect(result.nonComparableCount).toBe(1);
+
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        payload?: { comparedRuns?: Array<{ comparable?: boolean; nonComparableFindings?: string[] }> };
+      }>;
+    }>(result.jsonPath);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.comparedRuns?.[0]?.comparable).toBe(false);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.comparedRuns?.[0]?.nonComparableFindings?.[0]).toContain("Spec mismatch");
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

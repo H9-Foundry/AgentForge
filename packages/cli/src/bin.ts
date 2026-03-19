@@ -3,6 +3,7 @@ import { Command } from "commander";
 
 import {
   checkReleaseReadiness,
+  compareLocalEvalRuns,
   runLocalEval,
   explainLastRun,
   initProject,
@@ -92,6 +93,31 @@ evalCommand
       console.log(`Evaluated run: ${result.evaluatedRunId}`);
     }
     console.log("Next: run `agentforge explain last-run` for a compact summary of this eval run.");
+  });
+
+evalCommand
+  .command("compare")
+  .description("Compare one baseline eval result against one or more candidate eval results and emit a benchmark-summary artifact.")
+  .argument("<baseline-run>", "Baseline eval run id or bundle path.")
+  .argument("<candidate-runs...>", "Candidate eval run ids or bundle paths.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action((baselineRun, candidateRuns: string[], options: { json?: boolean }) => {
+    const result = compareLocalEvalRuns(baselineRun, candidateRuns);
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`Completed benchmark compare ${result.runId}`);
+    console.log(`Baseline eval run: ${result.baselineRunId}`);
+    console.log(`Compared runs: ${result.comparedRunIds.join(", ")}`);
+    console.log(`Artifacts: ${result.outputDir}`);
+    console.log(`Audit bundle: ${result.jsonPath}`);
+    console.log(`Summary: ${result.markdownPath}`);
+    console.log(`Comparable runs: ${result.comparableRunCount}`);
+    console.log(`Regressions: ${result.regressionCount}`);
+    console.log(`Improvements: ${result.improvementCount}`);
+    console.log(`Non-comparable differences: ${result.nonComparableCount}`);
+    console.log("Next: run `agentforge explain last-run` for a compact summary of this benchmark compare.");
   });
 
 program
