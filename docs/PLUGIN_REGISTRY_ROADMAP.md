@@ -34,6 +34,7 @@ Available now:
 - blocked-plugin reporting in audit output
 - internal `packages/registry-client` placeholder package
 - registry metadata contract for read-only catalog records
+- internal read-only catalog validation and compatibility verification in `packages/registry-client`
 
 Not yet available:
 

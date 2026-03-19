@@ -2,8 +2,35 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { agentManifestSchema } from "@h9-foundry/agentforge-schemas";
+import { agentManifestSchema, registryPluginCatalogSchema } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
+import type { RegistryPluginCatalog, RegistryPluginCatalogEntry } from "@h9-foundry/agentforge-shared-types";
+
+const CURRENT_AGENT_MANIFEST_VERSION = 1;
+
+export interface RegistryDiscoveryOptions {
+  readonly agentforgeVersion?: string;
+  readonly manifestVersion?: number;
+  readonly workflowDomain?: RegistryPluginCatalogEntry["catalog"]["domain"];
+  readonly pluginType?: RegistryPluginCatalogEntry["pluginType"];
+  readonly includeIncompatible?: boolean;
+}
+
+export interface RegistryCompatibilityIssue {
+  readonly code:
+    | "agentforge_version_range_unsupported"
+    | "agentforge_version_incompatible"
+    | "manifest_version_incompatible"
+    | "workflow_domain_not_supported"
+    | "plugin_type_mismatch";
+  readonly message: string;
+}
+
+export interface RegistryDiscoveryResult {
+  readonly entry: RegistryPluginCatalogEntry;
+  readonly compatible: boolean;
+  readonly issues: RegistryCompatibilityIssue[];
+}
 
 interface WorkspacePackageRecord {
   readonly name: string;
@@ -17,6 +44,78 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readJson(filePath: string): Record<string, unknown> {
   return JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+}
+
+function parseVersion(value: string): [number, number, number] | undefined {
+  const match = /^v?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/.exec(value.trim());
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  return [Number(match.groups.major), Number(match.groups.minor), Number(match.groups.patch)];
+}
+
+function compareVersions(left: [number, number, number], right: [number, number, number]): number {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] > right[index]) {
+      return 1;
+    }
+
+    if (left[index] < right[index]) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+function matchesVersionRange(version: string, range: string): { supported: boolean; matches: boolean } {
+  const normalizedRange = range.trim();
+  if (normalizedRange === "*" || normalizedRange === "") {
+    return { supported: true, matches: true };
+  }
+
+  if (normalizedRange.includes(" ") || normalizedRange.includes("||")) {
+    return { supported: false, matches: false };
+  }
+
+  const versionParts = parseVersion(version);
+  if (!versionParts) {
+    return { supported: false, matches: false };
+  }
+
+  const operatorMatch = /^(?<operator>\^|~|>=|<=|>|<)?(?<target>v?\d+\.\d+\.\d+)$/.exec(normalizedRange);
+  if (!operatorMatch?.groups) {
+    return { supported: false, matches: false };
+  }
+
+  const targetParts = parseVersion(operatorMatch.groups.target);
+  if (!targetParts) {
+    return { supported: false, matches: false };
+  }
+
+  const comparison = compareVersions(versionParts, targetParts);
+  switch (operatorMatch.groups.operator ?? "=") {
+    case "=":
+      return { supported: true, matches: comparison === 0 };
+    case ">":
+      return { supported: true, matches: comparison > 0 };
+    case ">=":
+      return { supported: true, matches: comparison >= 0 };
+    case "<":
+      return { supported: true, matches: comparison < 0 };
+    case "<=":
+      return { supported: true, matches: comparison <= 0 };
+    case "^":
+      return { supported: true, matches: versionParts[0] === targetParts[0] && comparison >= 0 };
+    case "~":
+      return {
+        supported: true,
+        matches: versionParts[0] === targetParts[0] && versionParts[1] === targetParts[1] && comparison >= 0
+      };
+    default:
+      return { supported: false, matches: false };
+  }
 }
 
 function findWorkspacePackages(repoRoot: string): WorkspacePackageRecord[] {
@@ -79,6 +178,72 @@ function resolveModuleEntrypoint(workspacePackage: WorkspacePackageRecord): stri
   throw new Error(`No loadable entrypoint found for ${workspacePackage.name}`);
 }
 
+function readAgentForgeVersion(repoRoot: string): string {
+  const cliManifestPath = join(repoRoot, "packages", "cli", "package.json");
+  if (existsSync(cliManifestPath)) {
+    const cliManifest = readJson(cliManifestPath);
+    if (typeof cliManifest.version === "string" && cliManifest.version.length > 0) {
+      return cliManifest.version;
+    }
+  }
+
+  const rootManifestPath = join(repoRoot, "package.json");
+  const rootManifest = readJson(rootManifestPath);
+  if (typeof rootManifest.version === "string" && rootManifest.version.length > 0) {
+    return rootManifest.version;
+  }
+
+  throw new Error(`Unable to resolve the local AgentForge version from ${repoRoot}`);
+}
+
+function evaluateCatalogEntryCompatibility(
+  entry: RegistryPluginCatalogEntry,
+  options: Required<Pick<RegistryDiscoveryOptions, "agentforgeVersion" | "manifestVersion">> &
+    Pick<RegistryDiscoveryOptions, "workflowDomain" | "pluginType">
+): RegistryDiscoveryResult {
+  const issues: RegistryCompatibilityIssue[] = [];
+  const versionCheck = matchesVersionRange(options.agentforgeVersion, entry.compatibility.agentforgeVersionRange);
+
+  if (!versionCheck.supported) {
+    issues.push({
+      code: "agentforge_version_range_unsupported",
+      message: `Unsupported AgentForge version range syntax: ${entry.compatibility.agentforgeVersionRange}`
+    });
+  } else if (!versionCheck.matches) {
+    issues.push({
+      code: "agentforge_version_incompatible",
+      message: `AgentForge ${options.agentforgeVersion} does not satisfy ${entry.compatibility.agentforgeVersionRange}`
+    });
+  }
+
+  if (entry.compatibility.manifestVersion !== options.manifestVersion) {
+    issues.push({
+      code: "manifest_version_incompatible",
+      message: `Manifest version ${entry.compatibility.manifestVersion} does not match expected ${options.manifestVersion}`
+    });
+  }
+
+  if (options.workflowDomain && !entry.compatibility.supportedWorkflowDomains.includes(options.workflowDomain)) {
+    issues.push({
+      code: "workflow_domain_not_supported",
+      message: `Plugin does not declare support for the ${options.workflowDomain} workflow domain`
+    });
+  }
+
+  if (options.pluginType && entry.pluginType !== options.pluginType) {
+    issues.push({
+      code: "plugin_type_mismatch",
+      message: `Plugin type ${entry.pluginType} does not match requested ${options.pluginType}`
+    });
+  }
+
+  return {
+    entry,
+    compatible: issues.length === 0,
+    issues
+  };
+}
+
 function isRuntimeAgent(value: unknown): value is RuntimeAgent {
   if (!isRecord(value)) {
     return false;
@@ -112,6 +277,35 @@ export class RegistryClient {
 
   async listOfficialAgents(): Promise<string[]> {
     return ["context-collector", "code-review", "security-audit", "test-generation"];
+  }
+
+  validateCatalog(catalog: unknown): RegistryPluginCatalog {
+    return registryPluginCatalogSchema.parse(catalog);
+  }
+
+  loadCatalogFromFile(catalogPath: string): RegistryPluginCatalog {
+    return this.validateCatalog(readJson(resolve(this.repoRoot, catalogPath)));
+  }
+
+  discoverCatalogEntries(catalog: unknown, options: RegistryDiscoveryOptions = {}): RegistryDiscoveryResult[] {
+    const parsedCatalog = this.validateCatalog(catalog);
+    const resolvedOptions = {
+      agentforgeVersion: options.agentforgeVersion ?? readAgentForgeVersion(this.repoRoot),
+      manifestVersion: options.manifestVersion ?? CURRENT_AGENT_MANIFEST_VERSION,
+      workflowDomain: options.workflowDomain,
+      pluginType: options.pluginType
+    };
+    const results = parsedCatalog.entries.map((entry) => evaluateCatalogEntryCompatibility(entry, resolvedOptions));
+
+    if (options.includeIncompatible) {
+      return results;
+    }
+
+    return results.filter((entry) => entry.compatible);
+  }
+
+  discoverCatalogEntriesFromFile(catalogPath: string, options: RegistryDiscoveryOptions = {}): RegistryDiscoveryResult[] {
+    return this.discoverCatalogEntries(this.loadCatalogFromFile(catalogPath), options);
   }
 
   listWorkspacePackages(): WorkspacePackageRecord[] {
