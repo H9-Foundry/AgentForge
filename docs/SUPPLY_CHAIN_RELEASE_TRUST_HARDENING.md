@@ -144,4 +144,4 @@ Status:
 
 - item 1 is now partially implemented as a bounded workspace-inventory and dependency-integrity reporting wedge
 - item 2 is now partially implemented as a bounded local attestation-verification and trust-summary wedge
-- item 3 remains next
+- item 3 is now partially implemented through registry distribution verification metadata and non-manual activation hardening

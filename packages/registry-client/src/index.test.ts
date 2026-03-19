@@ -123,6 +123,32 @@ describe("RegistryClient read-only catalog discovery", () => {
     expect(results[0]?.compatible).toBe(true);
   });
 
+  it("derives consumer trust signals for manual and verified-distribution catalog entries", () => {
+    const repoRoot = createRepoFixture();
+    repoRoots.push(repoRoot);
+    const client = new RegistryClient(repoRoot);
+
+    const manualSummary = client.summarizeCatalogEntryTrust(createCatalogEntryFixture());
+    const verifiedSummary = client.summarizeCatalogEntryTrust(
+      registryPluginCatalogEntrySchema.parse(JSON.parse(JSON.stringify(schemaFixtures.verifiedRegistryPluginCatalogEntry)))
+    );
+
+    expect(manualSummary.status).toBe("local-manual");
+    expect(manualSummary.consumerSignals).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("manual-only"),
+        expect.stringContaining("Activation remains approval-gated")
+      ])
+    );
+    expect(verifiedSummary.status).toBe("verification-present");
+    expect(verifiedSummary.consumerSignals).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("attestation verification support"),
+        expect.stringContaining("Verification evidence refs")
+      ])
+    );
+  });
+
   it("prepares approval-gated activation decisions with audit-ready output", () => {
     const repoRoot = createRepoFixture();
     repoRoots.push(repoRoot);
@@ -142,6 +168,7 @@ describe("RegistryClient read-only catalog discovery", () => {
     );
 
     expect(decision.activated).toBe(false);
+    expect(decision.trustSummary.status).toBe("local-manual");
     expect(decision.policyDecision.effect).toBe("approval_required");
     expect(decision.auditEntry.status).toBe("blocked");
     expect(decision.auditEntry.blockedActions).toEqual(["Plugin activation requires approval for Local Review Plugin"]);

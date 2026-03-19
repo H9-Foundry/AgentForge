@@ -44,7 +44,10 @@ export interface RegistryActivationPolicyEvaluator {
     name: string,
     trust: TrustMetadata,
     options: {
+      distributionChannel: RegistryPluginCatalogEntry["distribution"]["channel"];
       activationSupport: RegistryPluginCatalogEntry["distribution"]["activationSupport"];
+      verificationMode: RegistryPluginCatalogEntry["distribution"]["verificationMode"];
+      verificationEvidenceRefs: readonly string[];
       compatibilityIssues?: readonly RegistryCompatibilityIssue[];
       approvalGranted?: boolean;
     }
@@ -61,9 +64,16 @@ export interface RegistryActivationOptions {
 export interface RegistryActivationDecision {
   readonly entry: RegistryPluginCatalogEntry;
   readonly compatibility: RegistryDiscoveryResult;
+  readonly trustSummary: RegistryDistributionTrustSummary;
   readonly policyDecision: RegistryActivationPolicyDecision;
   readonly activated: boolean;
   readonly auditEntry: AuditEntry;
+}
+
+export interface RegistryDistributionTrustSummary {
+  readonly status: "local-manual" | "verification-required" | "verification-present";
+  readonly consumerSignals: string[];
+  readonly verificationEvidenceRefs: string[];
 }
 
 interface WorkspacePackageRecord {
@@ -279,7 +289,7 @@ function evaluateCatalogEntryCompatibility(
 }
 
 function createActivationAuditEntry(
-  decision: Pick<RegistryActivationDecision, "entry" | "policyDecision" | "activated">
+  decision: Pick<RegistryActivationDecision, "entry" | "policyDecision" | "activated" | "trustSummary">
 ): AuditEntry {
   const timestamp = new Date().toISOString();
   const blockedReason = decision.policyDecision.reason ? [decision.policyDecision.reason] : [];
@@ -293,8 +303,8 @@ function createActivationAuditEntry(
     completedAt: timestamp,
     status: decision.activated ? "success" : "blocked",
     summary: decision.activated
-      ? `Activated catalog plugin ${decision.entry.displayName}`
-      : `Did not activate catalog plugin ${decision.entry.displayName}`,
+      ? `Activated catalog plugin ${decision.entry.displayName} with ${decision.trustSummary.status} distribution trust posture`
+      : `Did not activate catalog plugin ${decision.entry.displayName}; distribution trust posture is ${decision.trustSummary.status}`,
     toolsRequested: [],
     toolsExecuted: [],
     blockedActions: blockedReason,
@@ -328,6 +338,53 @@ function pickRuntimeAgent(moduleValue: unknown): RuntimeAgent | undefined {
   }
 
   return Object.values(moduleValue).find((candidate): candidate is RuntimeAgent => isRuntimeAgent(candidate));
+}
+
+function summarizeCatalogEntryTrust(entry: RegistryPluginCatalogEntry): RegistryDistributionTrustSummary {
+  const consumerSignals = [
+    entry.distribution.channel === "manual"
+      ? "Distribution remains manual-only and outside remote registry install flows."
+      : `Distribution channel is ${entry.distribution.channel} and remains approval-gated for activation.`,
+    entry.distribution.activationSupport === "approval-required"
+      ? "Activation remains approval-gated."
+      : "Activation is not currently supported for this distribution path."
+  ];
+
+  if (entry.distribution.verificationMode === "attestation") {
+    consumerSignals.push("Distribution declares attestation verification support.");
+  } else if (entry.distribution.verificationMode === "checksum") {
+    consumerSignals.push("Distribution declares checksum verification support.");
+  } else {
+    consumerSignals.push("Distribution does not yet declare verification support beyond manual trust review.");
+  }
+
+  if (entry.distribution.verificationEvidenceRefs.length > 0) {
+    consumerSignals.push(
+      `Verification evidence refs: ${entry.distribution.verificationEvidenceRefs.join(", ")}.`
+    );
+  }
+
+  if (entry.distribution.channel === "manual") {
+    return {
+      status: "local-manual",
+      consumerSignals,
+      verificationEvidenceRefs: [...entry.distribution.verificationEvidenceRefs]
+    };
+  }
+
+  if (entry.distribution.verificationMode === "none" || entry.distribution.verificationEvidenceRefs.length === 0) {
+    return {
+      status: "verification-required",
+      consumerSignals,
+      verificationEvidenceRefs: [...entry.distribution.verificationEvidenceRefs]
+    };
+  }
+
+  return {
+    status: "verification-present",
+    consumerSignals,
+    verificationEvidenceRefs: [...entry.distribution.verificationEvidenceRefs]
+  };
 }
 
 export class RegistryClient {
@@ -366,11 +423,16 @@ export class RegistryClient {
     return this.discoverCatalogEntries(this.loadCatalogFromFile(catalogPath), options);
   }
 
+  summarizeCatalogEntryTrust(entry: RegistryPluginCatalogEntry): RegistryDistributionTrustSummary {
+    return summarizeCatalogEntryTrust(entry);
+  }
+
   prepareCatalogAgentActivation(
     entry: RegistryPluginCatalogEntry,
     policy: RegistryActivationPolicyEvaluator,
     options: RegistryActivationOptions = {}
   ): RegistryActivationDecision {
+    const trustSummary = summarizeCatalogEntryTrust(entry);
     const compatibility = evaluateCatalogEntryCompatibility(entry, {
       agentforgeVersion: options.agentforgeVersion ?? readAgentForgeVersion(this.repoRoot),
       manifestVersion: options.manifestVersion ?? CURRENT_AGENT_MANIFEST_VERSION,
@@ -378,7 +440,10 @@ export class RegistryClient {
       pluginType: "agent"
     });
     const policyDecision = policy.evaluatePluginActivation(entry.displayName, entry.trust, {
+      distributionChannel: entry.distribution.channel,
       activationSupport: entry.distribution.activationSupport,
+      verificationMode: entry.distribution.verificationMode,
+      verificationEvidenceRefs: entry.distribution.verificationEvidenceRefs,
       compatibilityIssues: compatibility.issues,
       approvalGranted: options.approvalGranted
     });
@@ -386,6 +451,7 @@ export class RegistryClient {
     const decision = {
       entry,
       compatibility,
+      trustSummary,
       policyDecision,
       activated
     };

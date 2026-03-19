@@ -36,6 +36,8 @@ Available now:
 - registry metadata contract for read-only catalog records
 - internal read-only catalog validation and compatibility verification in `packages/registry-client`
 - internal approval-gated catalog activation decisions with audit-ready activation records
+- distribution verification metadata on registry catalog entries
+- consumer trust-summary derivation for manual vs verified-distribution registry entries
 
 Not yet available:
 
@@ -70,7 +72,13 @@ This wedge should not install anything automatically.
 
 ### Wedge 3: Verified Plugin Activation
 
-Define the eventual path for:
+First bounded implementation available now:
+
+- registry metadata can declare distribution verification mode and verification evidence refs
+- activation policy can require distribution verification for non-manual channels
+- registry client can derive maintainer and consumer trust signals from distribution metadata
+
+Still to define or extend:
 
 - verified third-party plugin acquisition
 - signature or provenance checks
@@ -123,3 +131,8 @@ This epic should be decomposed into at least:
 1. registry metadata schema and plugin-catalog contract
 2. read-only registry-client discovery and compatibility verification surface
 3. verified third-party plugin activation flow with explicit approval and trust checks
+
+Status:
+
+- items 1 and 2 are implemented in bounded internal form
+- item 3 is now partially implemented through distribution verification metadata, trust summaries, and non-manual activation hardening

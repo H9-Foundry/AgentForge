@@ -22,7 +22,10 @@ export interface PolicyDecision {
 }
 
 export interface PluginActivationDecisionOptions {
+  readonly distributionChannel?: "manual" | "npm";
   readonly activationSupport: "not-supported" | "approval-required";
+  readonly verificationMode?: "none" | "checksum" | "attestation";
+  readonly verificationEvidenceRefs?: readonly string[];
   readonly compatibilityIssues?: readonly { readonly message: string }[];
   readonly approvalGranted?: boolean;
 }
@@ -289,6 +292,19 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
         effect: "deny",
         requiresApproval: false,
         reason: `Plugin compatibility check failed for ${name}: ${options.compatibilityIssues?.[0]?.message ?? "Unknown incompatibility"}`
+      };
+    }
+
+    if (
+      options.distributionChannel &&
+      options.distributionChannel !== "manual" &&
+      (options.verificationMode === "none" || (options.verificationEvidenceRefs?.length ?? 0) === 0)
+    ) {
+      return {
+        allowed: false,
+        effect: "deny",
+        requiresApproval: false,
+        reason: `Plugin distribution verification is required for ${name} before non-manual activation`
       };
     }
 

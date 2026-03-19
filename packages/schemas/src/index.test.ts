@@ -91,6 +91,7 @@ describe("schema fixtures", () => {
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
     expect(() => registryPluginCatalogEntrySchema.parse(schemaFixtures.registryPluginCatalogEntry)).not.toThrow();
+    expect(() => registryPluginCatalogEntrySchema.parse(schemaFixtures.verifiedRegistryPluginCatalogEntry)).not.toThrow();
     expect(() => registryPluginCatalogSchema.parse(schemaFixtures.registryPluginCatalog)).not.toThrow();
     expect(() => incidentArtifactSchema.parse(schemaFixtures.incidentArtifact)).not.toThrow();
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
