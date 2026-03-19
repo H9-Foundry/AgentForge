@@ -30,6 +30,8 @@ import {
   qaRequestSchema,
   releaseEvidenceNormalizationSchema,
   releaseRequestSchema,
+  registryPluginCatalogEntrySchema,
+  registryPluginCatalogSchema,
   securityArtifactSchema,
   securityEvidenceNormalizationSchema,
   securityRequestSchema,
@@ -64,6 +66,8 @@ describe("schema fixtures", () => {
     expect(() => githubWorkflowStatusMappingSchema.parse(schemaFixtures.githubWorkflowStatusMapping)).not.toThrow();
     expect(() => normalizedValidationCommandSchema.parse(schemaFixtures.normalizedValidationCommand)).not.toThrow();
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
+    expect(() => registryPluginCatalogEntrySchema.parse(schemaFixtures.registryPluginCatalogEntry)).not.toThrow();
+    expect(() => registryPluginCatalogSchema.parse(schemaFixtures.registryPluginCatalog)).not.toThrow();
     expect(() => incidentArtifactSchema.parse(schemaFixtures.incidentArtifact)).not.toThrow();
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
     expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
@@ -103,6 +107,8 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.githubWorkflowStatusMapping).toBeDefined();
     expect(jsonSchemas.normalizedValidationCommand).toBeDefined();
     expect(jsonSchemas.implementationInventory).toBeDefined();
+    expect(jsonSchemas.registryPluginCatalogEntry).toBeDefined();
+    expect(jsonSchemas.registryPluginCatalog).toBeDefined();
     expect(jsonSchemas.qaEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.securityEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.maintenanceEvidenceNormalization).toBeDefined();

@@ -81,6 +81,10 @@ import {
   releaseVerificationCheckSchema,
   releaseVersionResolutionSchema,
   releaseVersionTargetSchema,
+  registryPluginCatalogEntrySchema,
+  registryPluginCatalogSchema,
+  registryPluginCompatibilitySchema,
+  registryPluginDistributionSchema,
   reviewArtifactPayloadSchema,
   reviewArtifactSchema,
   trustMetadataSchema,
@@ -160,6 +164,10 @@ export type ReleaseVerificationCheck = Infer<typeof releaseVerificationCheckSche
 export type ReleaseVersionTarget = Infer<typeof releaseVersionTargetSchema>;
 export type ReleaseVersionResolution = Infer<typeof releaseVersionResolutionSchema>;
 export type ReleaseApprovalRecommendation = Infer<typeof releaseApprovalRecommendationSchema>;
+export type RegistryPluginCompatibility = Infer<typeof registryPluginCompatibilitySchema>;
+export type RegistryPluginDistribution = Infer<typeof registryPluginDistributionSchema>;
+export type RegistryPluginCatalogEntry = Infer<typeof registryPluginCatalogEntrySchema>;
+export type RegistryPluginCatalog = Infer<typeof registryPluginCatalogSchema>;
 export type ReleaseRequest = Infer<typeof releaseRequestSchema>;
 export type ReleaseEvidenceNormalization = Infer<typeof releaseEvidenceNormalizationSchema>;
 export type ReleaseArtifactPayload = Infer<typeof releaseArtifactPayloadSchema>;

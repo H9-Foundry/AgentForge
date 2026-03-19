@@ -35,6 +35,10 @@ import type {
   ReleaseApprovalRecommendation,
   ReleaseRequest,
   ReleaseEvidenceNormalization,
+  RegistryPluginCatalog,
+  RegistryPluginCatalogEntry,
+  RegistryPluginCompatibility,
+  RegistryPluginDistribution,
   SecurityArtifact,
   SecurityEvidenceNormalization,
   SecurityRequest,
@@ -117,5 +121,14 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<NormalizedValidationCommand["classification"]>().toEqualTypeOf<
       "allow" | "approval_required" | "deny"
     >();
+    expectTypeOf<RegistryPluginCompatibility["agentforgeVersionRange"]>().toEqualTypeOf<string>();
+    expectTypeOf<RegistryPluginCompatibility["supportedWorkflowDomains"]>().toEqualTypeOf<
+      Array<"foundation" | "plan" | "design" | "build" | "review" | "test" | "security" | "release" | "operate" | "maintain">
+    >();
+    expectTypeOf<RegistryPluginDistribution["activationSupport"]>().toEqualTypeOf<
+      "not-supported" | "approval-required"
+    >();
+    expectTypeOf<RegistryPluginCatalogEntry["pluginType"]>().toEqualTypeOf<"agent" | "adapter" | "workflow">();
+    expectTypeOf<RegistryPluginCatalog["entries"]>().toEqualTypeOf<RegistryPluginCatalogEntry[]>();
   });
 });
