@@ -39,19 +39,31 @@ Available now:
 Not yet available:
 
 - consumer-facing verification guidance beyond the current release tooling
-- broader dependency-integrity and SBOM workflow support
+- full enterprise-grade SBOM generation or distribution verification
 - registry/plugin distribution trust hardening beyond local plugin trust
 - cross-host supply-chain evidence normalization
+
+Implemented now in a bounded first slice:
+
+- workspace-inventory style dependency-integrity evidence for local repos
+- release-readiness dependency-integrity checks derived from local manifests and lockfiles
+- security-review dependency-integrity signals derived from bounded local manifests and lockfiles
 
 ## Remaining Hardening Areas
 
 ### 1. Dependency Integrity
 
-Define how AgentForge should verify and report:
+First bounded implementation available now:
+
+- local manifest inventory with lockfile-aware integrity status
+- deterministic dependency-integrity signals surfaced in `security-report` and `release-report`
+- release-readiness verification checks for dependency-integrity
+
+Still to define or extend:
 
 - lockfile integrity expectations
 - dependency source and update provenance
-- SBOM or inventory outputs where appropriate
+- richer SBOM or inventory outputs where appropriate
 
 ### 2. Artifact And Attestation Verification
 
@@ -120,3 +132,7 @@ This epic should be decomposed into at least:
 2. attestation verification and trust-summary integration for release workflows
 3. plugin and registry distribution hardening requirements aligned to verified activation and consumer trust signals
 
+Status:
+
+- item 1 is now partially implemented as a bounded workspace-inventory and dependency-integrity reporting wedge
+- items 2 and 3 remain next

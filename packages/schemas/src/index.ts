@@ -546,6 +546,41 @@ export const genericCiEvidenceExportSchema = z.object({
   artifacts: z.array(ciArtifactEvidenceSchema).default([])
 });
 
+export const dependencyManifestSectionSchema = z.enum([
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies"
+]);
+
+export const dependencyInventoryEntrySchema = z.object({
+  manifestPath: z.string().min(1),
+  packageName: z.string().min(1),
+  dependencyName: z.string().min(1),
+  dependencyType: dependencyManifestSectionSchema,
+  requestedVersion: z.string().min(1)
+});
+
+export const dependencyIntegrityStatusSchema = z.enum([
+  "verified-lockfile",
+  "manifest-only",
+  "missing-lockfile"
+]);
+
+export const dependencyIntegrityEvidenceSchema = z.object({
+  inventoryFormat: z.literal("workspace-inventory"),
+  packageManager: z.string().min(1),
+  integrityStatus: dependencyIntegrityStatusSchema,
+  lockfilePath: z.string().min(1).optional(),
+  manifestPaths: z.array(z.string().min(1)).default([]),
+  packageNames: z.array(z.string().min(1)).default([]),
+  packageCount: z.number().int().min(0),
+  dependencyEntryCount: z.number().int().min(0),
+  inventoryEntries: z.array(dependencyInventoryEntrySchema).default([]),
+  provenanceSource: z.enum(["workspace-scan", "local-export"]).default("workspace-scan"),
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
 export const adapterCapabilityKindSchema = z.enum([
   "issue-reference-normalization",
   "pull-request-reference-normalization",
@@ -593,6 +628,7 @@ export const securityEvidenceNormalizationSchema = z.object({
   missingEvidenceSources: z.array(z.string().min(1)).default([]),
   normalizedFocusAreas: z.array(z.string().min(1)).default([]),
   securitySignals: z.array(z.string().min(1)).default([]),
+  dependencyIntegrityEvidence: z.array(dependencyIntegrityEvidenceSchema).default([]),
   provenanceRefs: z.array(z.string().min(1)).default([]),
   affectedPackages: z.array(z.string().min(1)).default([])
 });
@@ -851,7 +887,8 @@ export const securityArtifactPayloadSchema = z.object({
   severitySummary: z.string().min(1),
   mitigations: z.array(z.string().min(1)).default([]),
   releaseImpact: z.string().min(1),
-  followUpWork: z.array(z.string().min(1)).default([])
+  followUpWork: z.array(z.string().min(1)).default([]),
+  dependencyIntegritySignals: z.array(z.string().min(1)).default([])
 });
 
 export const implementationArtifactPayloadSchema = z.object({
@@ -1020,6 +1057,7 @@ export const releaseEvidenceNormalizationSchema = z.object({
   normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
   missingEvidenceSources: z.array(z.string().min(1)).default([]),
   ciEvidence: z.array(ciEvidenceSchema).default([]),
+  dependencyIntegrityEvidence: z.array(dependencyIntegrityEvidenceSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
   localReadinessChecks: z.array(releaseVerificationCheckSchema).default([]),
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
@@ -1033,6 +1071,7 @@ export const releaseArtifactPayloadSchema = z.object({
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
   verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
+  dependencyIntegritySignals: z.array(z.string().min(1)).default([]),
   approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
   publishingPlan: z.array(z.string().min(1)).default([]),
   trustStatus: z.string().min(1),
@@ -1255,6 +1294,8 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   gitlabCiJobEvidenceExport: gitlabCiJobEvidenceExportSchema,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportSchema,
   genericCiEvidenceExport: genericCiEvidenceExportSchema,
+  dependencyInventoryEntry: dependencyInventoryEntrySchema,
+  dependencyIntegrityEvidence: dependencyIntegrityEvidenceSchema,
   adapterCapabilityMetadata: adapterCapabilityMetadataSchema,
   githubReference: githubReferenceSchema,
   githubActionsJobEvidence: githubActionsJobEvidenceSchema,
@@ -1533,7 +1574,11 @@ const securityArtifactFixture = {
     severitySummary: "highest severity: medium; 1 synthesized security finding.",
     mitigations: ["Review dependency-risk evidence before release promotion."],
     releaseImpact: "candidate release requires explicit security review before promotion.",
-    followUpWork: ["Use deterministic security evidence normalization outputs before broader promotion."]
+    followUpWork: ["Use deterministic security evidence normalization outputs before broader promotion."],
+    dependencyIntegritySignals: [
+      "Dependency inventory covers 2 manifest(s) with 4 declared dependency entries.",
+      "Workspace dependency integrity is verified against pnpm-lock.yaml."
+    ]
   }
 } as const;
 
@@ -1578,6 +1623,10 @@ const releaseArtifactFixture = {
         currentVersion: "0.4.0",
         status: "pending-version-bump"
       }
+    ],
+    dependencyIntegritySignals: [
+      "Dependency inventory covers 2 manifest(s) with 4 declared dependency entries.",
+      "Workspace dependency integrity is verified against pnpm-lock.yaml."
     ],
     approvalRecommendations: [
       {
@@ -2156,6 +2205,49 @@ const qaEvidenceNormalizationFixture = {
   }
 } as const;
 
+const dependencyIntegrityEvidenceFixture = {
+  inventoryFormat: "workspace-inventory",
+  packageManager: "pnpm",
+  integrityStatus: "verified-lockfile",
+  lockfilePath: "pnpm-lock.yaml",
+  manifestPaths: ["package.json", "packages/cli/package.json"],
+  packageNames: ["fixture", "@h9-foundry/agentforge-cli"],
+  packageCount: 2,
+  dependencyEntryCount: 4,
+  inventoryEntries: [
+    {
+      manifestPath: "package.json",
+      packageName: "fixture",
+      dependencyName: "typescript",
+      dependencyType: "devDependencies",
+      requestedVersion: "^5.8.0"
+    },
+    {
+      manifestPath: "package.json",
+      packageName: "fixture",
+      dependencyName: "vitest",
+      dependencyType: "devDependencies",
+      requestedVersion: "^4.1.0"
+    },
+    {
+      manifestPath: "packages/cli/package.json",
+      packageName: "@h9-foundry/agentforge-cli",
+      dependencyName: "@h9-foundry/agentforge-schemas",
+      dependencyType: "dependencies",
+      requestedVersion: "workspace:*"
+    },
+    {
+      manifestPath: "packages/cli/package.json",
+      packageName: "@h9-foundry/agentforge-cli",
+      dependencyName: "@h9-foundry/agentforge-shared-types",
+      dependencyType: "dependencies",
+      requestedVersion: "workspace:*"
+    }
+  ],
+  provenanceSource: "workspace-scan",
+  provenanceRefs: ["package.json", "packages/cli/package.json", "pnpm-lock.yaml"]
+} as const;
+
 const securityEvidenceNormalizationFixture = {
   targetRef: ".agentops/runs/run-790/bundle.json",
   targetType: "artifact-bundle",
@@ -2165,11 +2257,17 @@ const securityEvidenceNormalizationFixture = {
   normalizedFocusAreas: ["dependency-risk", "release-readiness"],
   securitySignals: [
     "Referenced artifact kinds: implementation-proposal",
-    "Affected packages inferred from bounded artifact payloads: packages/cli, packages/runtime"
+    "Affected packages inferred from bounded artifact payloads: packages/cli, packages/runtime",
+    "Dependency inventory covers 2 manifest(s) with 4 declared dependency entries.",
+    "Workspace dependency integrity is verified against pnpm-lock.yaml."
   ],
+  dependencyIntegrityEvidence: [dependencyIntegrityEvidenceFixture],
   provenanceRefs: [
     ".agentops/runs/run-790/bundle.json#implementation-proposal",
-    ".agentops/runs/run-790/summary.md"
+    ".agentops/runs/run-790/summary.md",
+    "package.json",
+    "packages/cli/package.json",
+    "pnpm-lock.yaml"
   ],
   affectedPackages: ["packages/cli", "packages/runtime"]
 } as const;
@@ -2457,6 +2555,7 @@ const releaseEvidenceNormalizationFixture = {
   ],
   missingEvidenceSources: [],
   ciEvidence: [genericCiEvidenceFixture],
+  dependencyIntegrityEvidence: [dependencyIntegrityEvidenceFixture],
   versionResolutions: [
     {
       name: "@h9-foundry/agentforge-cli",
@@ -2468,6 +2567,7 @@ const releaseEvidenceNormalizationFixture = {
   localReadinessChecks: [
     { name: "qa-report-refs", status: "passed", detail: "Using one validated QA report reference." },
     { name: "security-report-refs", status: "passed", detail: "Using one validated security report reference." },
+    { name: "dependency-integrity", status: "passed", detail: "Dependency inventory is verified against pnpm-lock.yaml." },
     { name: "workspace-version-targets", status: "passed", detail: "Resolved one workspace version target." }
   ],
   readinessStatus: "ready",
@@ -2487,6 +2587,7 @@ const releaseEvidenceNormalizationFixture = {
     ".agentops/runs/run-789/bundle.json",
     ".agentops/runs/run-790/bundle.json",
     ".agentops/runs/run-790/summary.md",
+    "package.json",
     "packages/cli/package.json"
   ]
 } as const;
@@ -2674,6 +2775,7 @@ export const schemaFixtures = {
   gitlabIssueScmReference: gitlabIssueScmReferenceFixture,
   gitlabMergeRequestScmReference: gitlabMergeRequestScmReferenceFixture,
   ciEvidence: ciEvidenceFixture,
+  dependencyIntegrityEvidence: dependencyIntegrityEvidenceFixture,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportFixture,
   gitlabCiEvidence: gitlabCiEvidenceFixture,
   genericCiEvidenceExport: genericCiEvidenceExportFixture,

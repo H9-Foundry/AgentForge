@@ -5,6 +5,7 @@ import {
   agentManifestSchema,
   agentOutputSchema,
   ciEvidenceSchema,
+  dependencyIntegrityEvidenceSchema,
   genericCiEvidenceExportSchema,
   designArtifactSchema,
   githubActionsEvidenceSchema,
@@ -32,6 +33,8 @@ import {
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
   CiEvidence,
+  DependencyIntegrityEvidence,
+  DependencyInventoryEntry,
   DesignArtifact,
   DesignRequest,
   GenericCiEvidenceExport,
@@ -150,6 +153,11 @@ interface WorkspacePackageResolution {
   readonly manifestPath?: string;
 }
 
+interface WorkspacePackageManifest {
+  readonly packageName: string;
+  readonly dependencyEntries: DependencyInventoryEntry[];
+}
+
 function resolveWorkspacePackage(root: string | undefined, packageName: string): WorkspacePackageResolution {
   if (!root) {
     return {};
@@ -181,6 +189,13 @@ function resolveWorkspacePackage(root: string | undefined, packageName: string):
 
   return {};
 }
+
+const dependencyManifestSections = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies"
+] as const satisfies readonly DependencyInventoryEntry["dependencyType"][];
 
 const allowedValidationScriptNames = new Set(["test", "lint", "typecheck", "build", "build:packages", "release:verify"]);
 const fallbackValidationPackageManagers = ["pnpm", "npm", "yarn"] as const;
@@ -253,6 +268,157 @@ function collectValidationCommands(
   }
 
   return discoveredValidationCommands;
+}
+
+function findDependencyLockfile(repoRoot: string | undefined, packageManager: string): string | undefined {
+  if (!repoRoot) {
+    return undefined;
+  }
+
+  const orderedCandidates =
+    packageManager === "pnpm"
+      ? ["pnpm-lock.yaml", "package-lock.json", "yarn.lock"]
+      : packageManager === "npm"
+        ? ["package-lock.json", "pnpm-lock.yaml", "yarn.lock"]
+        : packageManager === "yarn"
+          ? ["yarn.lock", "pnpm-lock.yaml", "package-lock.json"]
+          : ["pnpm-lock.yaml", "package-lock.json", "yarn.lock"];
+
+  return orderedCandidates.find((lockfilePath) => existsSync(join(repoRoot, lockfilePath)));
+}
+
+function readPackageManifestDependencies(repoRoot: string | undefined, manifestPath: string): WorkspacePackageManifest | undefined {
+  if (!repoRoot) {
+    return undefined;
+  }
+
+  const absolutePath = join(repoRoot, manifestPath);
+  if (!existsSync(absolutePath)) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(absolutePath, "utf8")) as unknown;
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+
+  const packageName = typeof parsed.name === "string" && parsed.name.length > 0 ? parsed.name : manifestPath.replace(/\/package\.json$/, "");
+  const dependencyEntries: DependencyInventoryEntry[] = [];
+
+  for (const section of dependencyManifestSections) {
+    const sectionValue = parsed[section];
+    if (!isRecord(sectionValue)) {
+      continue;
+    }
+
+    for (const [dependencyName, requestedVersion] of Object.entries(sectionValue)) {
+      if (typeof requestedVersion !== "string") {
+        continue;
+      }
+
+      dependencyEntries.push({
+        manifestPath,
+        packageName,
+        dependencyName,
+        dependencyType: section,
+        requestedVersion
+      });
+    }
+  }
+
+  return {
+    packageName,
+    dependencyEntries
+  };
+}
+
+function resolveDependencyManifestPaths(
+  repoRoot: string | undefined,
+  candidatePaths: readonly string[]
+): string[] {
+  if (!repoRoot) {
+    return [];
+  }
+
+  const normalizedCandidates =
+    candidatePaths.length > 0
+      ? candidatePaths
+      : existsSync(join(repoRoot, "package.json"))
+        ? ["package.json"]
+        : [];
+
+  const manifestPaths = normalizedCandidates.flatMap((candidatePath) => {
+    const normalizedCandidate = candidatePath.replace(/^\.\//, "");
+    const manifestPath = normalizedCandidate.endsWith("package.json")
+      ? normalizedCandidate
+      : `${normalizedCandidate.replace(/\/$/, "")}/package.json`;
+    return existsSync(join(repoRoot, manifestPath)) ? [manifestPath] : [];
+  });
+
+  return [...new Set(manifestPaths)];
+}
+
+function collectDependencyIntegrityEvidence(
+  repoRoot: string | undefined,
+  packageManager: string,
+  manifestPaths: readonly string[]
+): DependencyIntegrityEvidence[] {
+  if (!repoRoot || manifestPaths.length === 0) {
+    return [];
+  }
+
+  const manifests = manifestPaths
+    .map((manifestPath) => readPackageManifestDependencies(repoRoot, manifestPath))
+    .filter((manifest): manifest is WorkspacePackageManifest => Boolean(manifest));
+  if (manifests.length === 0) {
+    return [];
+  }
+
+  const inventoryEntries = manifests.flatMap((manifest) => manifest.dependencyEntries);
+  const packageNames = [...new Set(manifests.map((manifest) => manifest.packageName))];
+  const lockfilePath = findDependencyLockfile(repoRoot, packageManager);
+  const integrityStatus =
+    lockfilePath
+      ? "verified-lockfile"
+      : inventoryEntries.length === 0
+        ? "manifest-only"
+        : "missing-lockfile";
+
+  return [
+    dependencyIntegrityEvidenceSchema.parse({
+      inventoryFormat: "workspace-inventory",
+      packageManager,
+      integrityStatus,
+      lockfilePath,
+      manifestPaths,
+      packageNames,
+      packageCount: packageNames.length,
+      dependencyEntryCount: inventoryEntries.length,
+      inventoryEntries,
+      provenanceSource: "workspace-scan",
+      provenanceRefs: [...new Set([...manifestPaths, ...(lockfilePath ? [lockfilePath] : [])])]
+    })
+  ];
+}
+
+function buildDependencyIntegritySignals(
+  evidenceEntries: readonly DependencyIntegrityEvidence[]
+): string[] {
+  return evidenceEntries.flatMap((evidence) => {
+    const signals = [
+      `Dependency inventory covers ${evidence.packageCount} manifest(s) with ${evidence.dependencyEntryCount} declared dependency entr${evidence.dependencyEntryCount === 1 ? "y" : "ies"}.`
+    ];
+
+    if (evidence.integrityStatus === "verified-lockfile" && evidence.lockfilePath) {
+      signals.push(`Workspace dependency integrity is verified against ${evidence.lockfilePath}.`);
+    } else if (evidence.integrityStatus === "missing-lockfile") {
+      signals.push("Workspace dependency manifests were found without a recognized lockfile.");
+    } else {
+      signals.push("Workspace dependency inventory is manifest-only and does not include lockfile verification.");
+    }
+
+    return signals;
+  });
 }
 
 function loadBundleArtifactKinds(bundlePath: string): string[] {
@@ -2087,6 +2253,20 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
         manifestPath: resolved.manifestPath
       };
     });
+    const dependencyManifestPaths = resolveDependencyManifestPaths(repoRoot, [
+      "package.json",
+      ...versionResolutions
+        .map((entry) => entry.manifestPath)
+        .filter((value): value is string => Boolean(value))
+        .map((manifestPath) => manifestPath.replace(`${repoRoot ?? ""}/`, ""))
+    ]);
+    const dependencyIntegrityEvidence = collectDependencyIntegrityEvidence(
+      repoRoot,
+      stateSlice.repo?.packageManager || "unknown",
+      dependencyManifestPaths
+    );
+    const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
+    const hasMissingDependencyIntegrity = dependencyIntegrityEvidence.some((entry) => entry.integrityStatus === "missing-lockfile");
     const missingPackages = versionResolutions.filter((entry) => entry.status === "package-missing").map((entry) => entry.name);
     const versionCheckStatus = missingPackages.length === 0 ? "passed" : "failed";
     const baseReadinessStatus =
@@ -2095,7 +2275,12 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
         : qaReportRefs.length > 0 || securityReportRefs.length > 0
           ? "partial"
           : "blocked";
-    const readinessStatus = missingPackages.length > 0 ? "blocked" : baseReadinessStatus;
+    const readinessStatus =
+      missingPackages.length > 0
+        ? "blocked"
+        : hasMissingDependencyIntegrity && baseReadinessStatus === "ready"
+          ? "partial"
+          : baseReadinessStatus;
 
     const localReadinessChecks = [
       {
@@ -2125,6 +2310,18 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
         detail: ciEvidence.length > 0
           ? `Using ${ciEvidence.length} imported CI evidence export(s) across ${[...new Set(ciEvidence.map((entry) => entry.pipelineName))].length} pipeline(s).`
           : "No imported CI evidence exports were supplied."
+      },
+      {
+        name: "dependency-integrity",
+        status:
+          dependencyIntegrityEvidence.length === 0
+            ? "skipped"
+            : hasMissingDependencyIntegrity
+              ? "failed"
+              : "passed",
+        detail:
+          dependencyIntegritySignals[0] ??
+          "No dependency manifests were available for bounded integrity verification."
       },
       {
         name: "workspace-version-targets",
@@ -2164,6 +2361,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
     ];
     const provenanceRefs = [
       ...normalizedEvidenceSources,
+      ...dependencyIntegrityEvidence.flatMap((entry) => entry.provenanceRefs),
       ...versionResolutions
         .map((entry) => entry.manifestPath)
         .filter((value): value is string => Boolean(value))
@@ -2174,6 +2372,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       normalizedEvidenceSources,
       missingEvidenceSources: [],
       ciEvidence,
+      dependencyIntegrityEvidence,
       versionResolutions: versionResolutions.map((entry) => ({
         name: entry.name,
         targetVersion: entry.targetVersion,
@@ -2265,6 +2464,8 @@ const releaseAnalystAgent: RuntimeAgent = {
     const constraints = asStringArray(intakeMetadata.constraints);
     const allEvidenceRefs = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
     const importedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
+    const dependencyIntegrityEvidence = normalizedEvidence?.dependencyIntegrityEvidence ?? [];
+    const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
     const importedCiProviders = [...new Set(importedCiEvidence.map((entry) => entry.providerName ?? entry.pipelineName))];
     const importedCiFailures = [...new Set(importedCiEvidence.flatMap((entry) => summarizeCiEvidenceFailures(entry)))];
     const versionResolutions = normalizedEvidence?.versionResolutions ?? [];
@@ -2319,6 +2520,7 @@ const releaseAnalystAgent: RuntimeAgent = {
       ...(versionResolutions.length > 0
         ? [`Resolved ${versionResolutions.length} workspace version target(s) before any publish or promotion step.`]
         : []),
+      ...dependencyIntegritySignals.map((signal) => `${signal} Review dependency integrity before any publish or promotion step.`),
       "Review the bounded QA and security evidence before invoking any publish or promotion step.",
       ...importedCiProviders.map(
         (providerName) => `Review the imported CI evidence from \`${providerName}\` before any publish or promotion step.`
@@ -2356,6 +2558,7 @@ const releaseAnalystAgent: RuntimeAgent = {
         readinessStatus,
         verificationChecks: verificationChecks.map((check) => ({ ...check })),
         versionResolutions,
+        dependencyIntegritySignals,
         approvalRecommendations: approvalRecommendations.map((recommendation) =>
           releaseApprovalRecommendationSchema.parse(recommendation)
         ),
@@ -2384,6 +2587,7 @@ const releaseAnalystAgent: RuntimeAgent = {
           securityReportRefs,
           evidenceSources,
           ciEvidence: importedCiEvidence,
+          dependencyIntegrityEvidence,
           constraints,
           normalizedEvidence: normalizedEvidence ?? null
         },
@@ -2463,15 +2667,23 @@ const securityEvidenceNormalizationAgent: RuntimeAgent = {
       targetType === "artifact-bundle"
         ? [...new Set(loadBundleArtifactPayloadPaths(targetPath).map(derivePackageScope).filter((value): value is string => Boolean(value)))]
         : [];
+    const dependencyIntegrityEvidence = collectDependencyIntegrityEvidence(
+      repoRoot,
+      stateSlice.repo?.packageManager || "unknown",
+      resolveDependencyManifestPaths(repoRoot, ["package.json", ...affectedPackages])
+    );
+    const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
     const securitySignals = [
       ...(referencedArtifactKinds.length > 0 ? [`Referenced artifact kinds: ${referencedArtifactKinds.join(", ")}`] : []),
       ...(affectedPackages.length > 0 ? [`Affected packages inferred from bounded artifact payloads: ${affectedPackages.join(", ")}`] : []),
       ...(normalizedFocusAreas.length > 0 ? [`Requested focus areas: ${normalizedFocusAreas.join(", ")}`] : []),
+      ...dependencyIntegritySignals,
       "Security evidence collection remains local, read-only, and bounded to validated references."
     ];
     const provenanceRefs = [
       securityRequest.targetRef,
       ...securityRequest.evidenceSources,
+      ...dependencyIntegrityEvidence.flatMap((entry) => entry.provenanceRefs),
       ...referencedArtifactKinds.map((artifactKind) => `${securityRequest.targetRef}#${artifactKind}`)
     ];
     const normalization = securityEvidenceNormalizationSchema.parse({
@@ -2482,6 +2694,7 @@ const securityEvidenceNormalizationAgent: RuntimeAgent = {
       missingEvidenceSources: [],
       normalizedFocusAreas,
       securitySignals,
+      dependencyIntegrityEvidence,
       provenanceRefs: [...new Set(provenanceRefs)],
       affectedPackages
     });
@@ -2552,6 +2765,8 @@ const securityAnalystAgent: RuntimeAgent = {
     const normalizedFocusAreas =
       normalizedEvidence?.normalizedFocusAreas ?? asStringArray(intakeMetadata.focusAreas);
     const normalizedConstraints = asStringArray(intakeMetadata.constraints);
+    const dependencyIntegrityEvidence = normalizedEvidence?.dependencyIntegrityEvidence ?? [];
+    const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
     const evidenceSources =
       normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
         ? normalizedEvidence.normalizedEvidenceSources
@@ -2592,6 +2807,7 @@ const securityAnalystAgent: RuntimeAgent = {
     ];
     const followUpWork = [
       ...(normalizedEvidence?.securitySignals ?? []),
+      ...dependencyIntegritySignals,
       ...(referencedArtifactKinds.length > 0
         ? [`Confirm the security posture for referenced artifacts: ${referencedArtifactKinds.join(", ")}.`]
         : []),
@@ -2632,8 +2848,9 @@ const securityAnalystAgent: RuntimeAgent = {
             ? "release-blocking security findings require resolution before promotion."
             : securityRequest.releaseContext === "candidate"
               ? "candidate release requires explicit security review before promotion."
-              : "no release context was supplied; security output remains advisory.",
-        followUpWork
+            : "no release context was supplied; security output remains advisory.",
+        followUpWork,
+        dependencyIntegritySignals
       }
     });
 
@@ -2652,6 +2869,7 @@ const securityAnalystAgent: RuntimeAgent = {
           focusAreas,
           constraints: normalizedConstraints,
           referencedArtifactKinds,
+          dependencyIntegrityEvidence,
           normalizedEvidence: normalizedEvidence ?? null
         },
         synthesizedAssessment: {
