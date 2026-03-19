@@ -451,6 +451,69 @@ export const githubActionsEvidenceNormalizationSchema = z.object({
   provenanceRefs: z.array(z.string().min(1)).default([])
 });
 
+export const scmPlatformSchema = z.enum(["github", "gitlab", "generic"]);
+export const scmReferenceKindSchema = z.enum(["issue", "pull_request", "merge_request", "commit", "branch"]);
+export const ciPlatformSchema = z.enum(["github-actions", "gitlab-ci", "generic-ci"]);
+
+export const scmReferenceSchema = z.object({
+  platform: scmPlatformSchema,
+  host: z.string().min(1),
+  namespace: z.string().min(1),
+  repo: z.string().min(1),
+  kind: scmReferenceKindSchema,
+  identifier: z.string().min(1),
+  number: z.number().int().positive().optional(),
+  canonical: z.string().min(1),
+  url: z.string().url().optional(),
+  source: z.string().min(1)
+});
+
+export const ciJobEvidenceSchema = z.object({
+  name: z.string().min(1),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  htmlUrl: z.string().url().optional(),
+  startedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional()
+});
+
+export const ciEvidenceSchema = z.object({
+  platform: ciPlatformSchema,
+  host: z.string().min(1),
+  repository: z.string().min(1),
+  pipelineName: z.string().min(1),
+  pipelineRunId: z.string().min(1),
+  runAttempt: z.number().int().positive().default(1),
+  event: z.string().min(1).optional(),
+  branch: z.string().min(1).optional(),
+  commitSha: z.string().min(1).optional(),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  htmlUrl: z.string().url().optional(),
+  jobs: z.array(ciJobEvidenceSchema).default([]),
+  provenanceSource: z.enum(["local-export", "adapter-read"]).default("local-export")
+});
+
+export const adapterCapabilityKindSchema = z.enum([
+  "issue-reference-normalization",
+  "pull-request-reference-normalization",
+  "merge-request-reference-normalization",
+  "local-ci-evidence-ingestion",
+  "remote-scm-read",
+  "remote-ci-read",
+  "comment-write",
+  "status-write"
+]);
+
+export const adapterCapabilityMetadataSchema = z.object({
+  platform: scmPlatformSchema,
+  host: z.string().min(1),
+  supportedScmReferenceKinds: z.array(scmReferenceKindSchema).default([]),
+  supportedCiPlatforms: z.array(ciPlatformSchema).default([]),
+  capabilities: z.array(adapterCapabilityKindSchema).default([]),
+  trustBoundary: z.enum(["local-only", "explicit-read", "approval-gated-write"])
+});
+
 export const qaEvidenceNormalizationSchema = z.object({
   targetRef: z.string().min(1),
   targetType: z.enum(["artifact-bundle", "validation-output", "local-reference"]),
@@ -1130,6 +1193,10 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   auditComponent: auditComponentSchema,
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,
+  scmReference: scmReferenceSchema,
+  ciJobEvidence: ciJobEvidenceSchema,
+  ciEvidence: ciEvidenceSchema,
+  adapterCapabilityMetadata: adapterCapabilityMetadataSchema,
   githubReference: githubReferenceSchema,
   githubActionsJobEvidence: githubActionsJobEvidenceSchema,
   githubActionsCheckRunEvidence: githubActionsCheckRunEvidenceSchema,
@@ -1674,6 +1741,19 @@ const githubReferenceFixture = {
   source: "#142"
 } as const;
 
+const scmReferenceFixture = {
+  platform: "github",
+  host: "github.com",
+  namespace: "H9-Foundry",
+  repo: "AgentForge",
+  kind: "issue",
+  identifier: "142",
+  number: 142,
+  canonical: "github.com/H9-Foundry/AgentForge#142",
+  url: "https://github.com/H9-Foundry/AgentForge/issues/142",
+  source: "#142"
+} as const;
+
 const githubWorkflowStatusMappingFixture = {
   workflow: "planning-discovery",
   localRunStatus: "success",
@@ -1715,6 +1795,49 @@ const githubActionsEvidenceFixture = {
       detailsUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/3"
     }
   ]
+} as const;
+
+const ciEvidenceFixture = {
+  platform: "github-actions",
+  host: "github.com",
+  repository: "H9-Foundry/AgentForge",
+  pipelineName: "CI",
+  pipelineRunId: "123456789",
+  runAttempt: 1,
+  event: "pull_request",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "failure",
+  htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/1"
+    },
+    {
+      name: "lint",
+      status: "completed",
+      conclusion: "failure",
+      htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/2"
+    }
+  ],
+  provenanceSource: "local-export"
+} as const;
+
+const adapterCapabilityMetadataFixture = {
+  platform: "github",
+  host: "github.com",
+  supportedScmReferenceKinds: ["issue", "pull_request"],
+  supportedCiPlatforms: ["github-actions"],
+  capabilities: [
+    "issue-reference-normalization",
+    "pull-request-reference-normalization",
+    "local-ci-evidence-ingestion"
+  ],
+  trustBoundary: "local-only"
 } as const;
 
 const githubHandoffSummaryFixture = {
@@ -2302,6 +2425,9 @@ export const schemaFixtures = {
   evalSpec: evalFixtureCorpusFixture.specs[1],
   evalFixtureCorpus: evalFixtureCorpusFixture,
   githubReference: githubReferenceFixture,
+  scmReference: scmReferenceFixture,
+  ciEvidence: ciEvidenceFixture,
+  adapterCapabilityMetadata: adapterCapabilityMetadataFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingFixture,

@@ -37,8 +37,11 @@ import {
   benchmarkArtifactSchema,
   benchmarkComparedRunSchema,
   benchmarkDeterministicDeltaSchema,
+  ciEvidenceSchema,
+  ciJobEvidenceSchema,
   effectivePolicySnapshotSchema,
   findingSchema,
+  adapterCapabilityMetadataSchema,
   githubActionsCheckRunEvidenceSchema,
   githubActionsEvidenceNormalizationSchema,
   githubActionsEvidenceSchema,
@@ -87,6 +90,7 @@ import {
   registryPluginDistributionSchema,
   reviewArtifactPayloadSchema,
   reviewArtifactSchema,
+  scmReferenceSchema,
   trustMetadataSchema,
   trustSourceSchema,
   trustTierSchema,
@@ -106,6 +110,9 @@ export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
+export type CiJobEvidence = Infer<typeof ciJobEvidenceSchema>;
+export type CiEvidence = Infer<typeof ciEvidenceSchema>;
+export type AdapterCapabilityMetadata = Infer<typeof adapterCapabilityMetadataSchema>;
 export type GithubActionsJobEvidence = Infer<typeof githubActionsJobEvidenceSchema>;
 export type GithubActionsCheckRunEvidence = Infer<typeof githubActionsCheckRunEvidenceSchema>;
 export type GithubActionsEvidence = Infer<typeof githubActionsEvidenceSchema>;
@@ -113,6 +120,7 @@ export type GithubActionsEvidenceNormalization = Infer<typeof githubActionsEvide
 export type GithubHandoffSection = Infer<typeof githubHandoffSectionSchema>;
 export type GithubHandoffSummary = Infer<typeof githubHandoffSummarySchema>;
 export type GithubReference = Infer<typeof githubReferenceSchema>;
+export type ScmReference = Infer<typeof scmReferenceSchema>;
 export type GithubWorkflowStatusMapping = Infer<typeof githubWorkflowStatusMappingSchema>;
 export type LifecycleArtifactWorkflowReference = Infer<typeof lifecycleArtifactWorkflowReferenceSchema>;
 export type LifecycleArtifactSourceReference = Infer<typeof lifecycleArtifactSourceReferenceSchema>;
