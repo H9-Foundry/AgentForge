@@ -24,12 +24,34 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 That flow creates `.agentops/` locally and writes run artifacts under `.agentops/runs/<run-id>/`.
 
-## Start A Request-Driven Workflow From A Preset
+## Canonical Quick Path
 
-If you want the first request-driven success path without hand-writing YAML, the published CLI now supports one bounded startup preset:
+The canonical quick path for the first request-driven workflow is source-build only until the next npm release includes `init --preset planning-discovery`.
+
+From a fresh checkout of this repository:
 
 ```bash
-npx @h9-foundry/agentforge-cli init --preset planning-discovery
+git clone https://github.com/H9-Foundry/AgentForge.git
+cd AgentForge
+pnpm install
+pnpm build
+node packages/cli/dist/bin.js init --preset planning-discovery
+node packages/cli/dist/bin.js run planning-discovery --json
+node packages/cli/dist/bin.js explain last-run --json
+```
+
+That path is intentionally four steps only:
+1. clone, install, and build
+2. start the preset
+3. run the planning workflow
+4. inspect the latest run through `agentforge explain last-run`
+
+## Start A Request-Driven Workflow From A Preset
+
+If you want the first request-driven success path without hand-writing YAML, current `main` now supports one bounded startup preset. This is source-build only until the next npm release.
+
+```bash
+node packages/cli/dist/bin.js init --preset planning-discovery
 ```
 
 That command keeps the normal local-first init behavior and also writes `.agentops/requests/planning.yaml` if it does not already exist. It never auto-runs a workflow and it will not overwrite an existing request file.

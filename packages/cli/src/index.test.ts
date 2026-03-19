@@ -536,6 +536,24 @@ describe("cli smoke flows", () => {
     expect(run.stdout).toContain("agentforge explain last-run");
   }, 90_000);
 
+  it("prints a four-step quick path for the planning preset in plain-text mode", () => {
+    const root = createGitFixture("agentops-cli-quick-path-");
+    ensureBuiltCli();
+
+    const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
+    const run = spawnSync("node", [cliEntry, "init", "--preset", "planning-discovery"], {
+      cwd: root,
+      encoding: "utf8"
+    });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain("Created starter request:");
+    expect(run.stdout).toContain("inspect or edit");
+    expect(run.stdout).toContain("Then run: `agentforge run planning-discovery --json`");
+    expect(run.stdout).toContain(".agentops/runs/<run-id>/bundle.json");
+    expect(run.stdout).toContain("agentforge explain last-run --json");
+  }, 90_000);
+
   it("fails planning-discovery before reasoning when the request is missing", async () => {
     const root = createGitFixture("agentops-cli-planning-missing-");
     initProject(root);

@@ -23,8 +23,8 @@ program
 
 program
   .command("init")
-  .description("Scaffold .agentops configuration in the current repository.")
-  .option("--preset <name>", `Create one starter request preset. Supported presets: ${startupPresetNames.join(", ")}`)
+  .description("Scaffold .agentops configuration and optional starter requests in the current repository.")
+  .option("--preset <name>", `Create one starter request preset for a common local-first path. Supported presets: ${startupPresetNames.join(", ")}`)
   .action((options: { preset?: string }) => {
     if (options.preset && !startupPresetNames.includes(options.preset as (typeof startupPresetNames)[number])) {
       throw new Error(`Unsupported startup preset: ${options.preset}. Supported presets: ${startupPresetNames.join(", ")}`);
@@ -37,7 +37,9 @@ program
     console.log(result.created.length > 0 ? `Created ${result.created.length} file(s).` : "Configuration already present.");
     if (result.preset) {
       console.log(result.preset.created ? `Created starter request: ${result.preset.requestPath}` : `Starter request already present: ${result.preset.requestPath}`);
-      console.log(`Next: run \`agentforge run ${result.preset.workflow} --json\``);
+      console.log(`Next: inspect or edit ${result.preset.requestPath}`);
+      console.log(`Then run: \`agentforge run ${result.preset.workflow} --json\``);
+      console.log("After the run, inspect `.agentops/runs/<run-id>/bundle.json` or run `agentforge explain last-run --json`.");
     }
   });
 
