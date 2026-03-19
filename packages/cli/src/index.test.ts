@@ -7,7 +7,7 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 
-import { explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalWorkflow, scanProject } from "./index.js";
+import { explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
 
 function createGitFixture(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -444,8 +444,8 @@ describe("cli smoke flows", () => {
     const root = createGitFixture("agentops-cli-guidance-");
     ensureBuiltCli();
 
-    const cliEntry = join(process.cwd(), "packages", "cli", "src", "bin.ts");
-    const run = spawnSync("pnpm", ["exec", "tsx", cliEntry, "run", "pr-review"], {
+    const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
+    const run = spawnSync("node", [cliEntry, "run", "pr-review"], {
       cwd: root,
       encoding: "utf8"
     });
@@ -1677,6 +1677,63 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.payload?.followUpIssues).toContain("#145");
     expect(bundle.lifecycleArtifacts[0]?.payload?.dependencyUpdates).toContain(".agentops/evidence/dependency-alerts.json");
     expect(bundle.lifecycleArtifacts[0]?.payload?.docsUpdates).toContain(".agentops/evidence/docs-task.md");
+  });
+
+  it("runs a local eval spec for planning-discovery and emits an eval-result artifact", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    const evalRun = await runLocalEval("planning-discovery-local-brief", root);
+
+    expect(evalRun.status).toBe("success");
+    expect(evalRun.specId).toBe("planning-discovery-local-brief");
+    expect(evalRun.workflow).toBe("planning-discovery");
+    expect(evalRun.artifactKinds).toContain("eval-result");
+    expect(evalRun.deterministicFailures).toBe(0);
+
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind?: string;
+        payload?: {
+          specId?: string;
+          workflow?: string;
+          passed?: boolean;
+          deterministicChecks?: Array<{ status?: string }>;
+        };
+      }>;
+    }>(evalRun.jsonPath);
+    expect(bundle.workflow).toBe("eval:planning-discovery-local-brief");
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("eval-result");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.specId).toBe("planning-discovery-local-brief");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.workflow).toBe("planning-discovery");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.passed).toBe(true);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.deterministicChecks?.every((check) => check.status !== "failed")).toBe(true);
+  });
+
+  it("runs a chained local eval spec for maintenance-triage with prerequisite setup runs", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    const evalRun = await runLocalEval("maintenance-triage-local-report", root);
+
+    expect(evalRun.status).toBe("success");
+    expect(evalRun.workflow).toBe("maintenance-triage");
+    expect(evalRun.setupRunCount).toBeGreaterThan(0);
+    expect(evalRun.evaluatedRunId).toBeDefined();
+
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind?: string;
+        payload?: {
+          setupRuns?: Array<{ workflow?: string }>;
+          evaluatedRunId?: string;
+        };
+      }>;
+    }>(evalRun.jsonPath);
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("eval-result");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.evaluatedRunId).toBe(evalRun.evaluatedRunId);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.setupRuns?.some((run) => run.workflow === "release-readiness")).toBe(true);
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

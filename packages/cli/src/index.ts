@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 
 import yaml from "js-yaml";
 
-import { renderAuditBundleMarkdown } from "@h9-foundry/agentforge-audit";
+import { buildAuditBundle, createAuditEntry, renderAuditBundleMarkdown } from "@h9-foundry/agentforge-audit";
 import { createWorkflowState, findWorkspaceRoot } from "@h9-foundry/agentforge-context-engine";
 import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@h9-foundry/agentforge-policy-engine";
 import { runWorkflow } from "@h9-foundry/agentforge-runtime";
@@ -13,6 +13,8 @@ import {
   auditBundleSchema,
   designArtifactSchema,
   designRequestSchema,
+  evalArtifactSchema,
+  evalFixtureCorpusSchema,
   implementationRequestSchema,
   incidentRequestSchema,
   maintenanceRequestSchema,
@@ -20,6 +22,7 @@ import {
   planningRequestSchema,
   qaRequestSchema,
   releaseRequestSchema,
+  schemaFixtures,
   securityRequestSchema,
   workflowDefinitionSchema
 } from "@h9-foundry/agentforge-schemas";
@@ -29,6 +32,11 @@ import type {
   BlockedPlugin,
   DesignArtifact,
   DesignRequest,
+  EvalDeterministicCheck,
+  EvalFixtureCorpus,
+  EvalModelDependentCheck,
+  EvalSpec,
+  EvalSetupRun,
   GithubReference,
   GithubWorkflowStatusMapping,
   ImplementationRequest,
@@ -1070,6 +1078,22 @@ export interface WorkflowRunResult {
   artifactKinds: string[];
 }
 
+export interface EvalRunResult {
+  runId: string;
+  specId: string;
+  workflow: string;
+  outputDir: string;
+  jsonPath: string;
+  markdownPath: string;
+  status: string;
+  evaluatedRunId?: string;
+  evaluatedBundlePath?: string;
+  setupRunCount: number;
+  deterministicCheckCount: number;
+  deterministicFailures: number;
+  artifactKinds: string[];
+}
+
 export interface LastRunExplanation {
   runId: string;
   status: string;
@@ -1092,6 +1116,16 @@ function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle
       return undefined;
     }
 
+    const compactDateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})$/);
+    if (compactDateTimeMatch) {
+      const [, year, month, day, hour, minute, second] = compactDateTimeMatch;
+      const isoCandidate = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+      const parsedCompactDateTime = Date.parse(isoCandidate);
+      if (!Number.isNaN(parsedCompactDateTime)) {
+        return parsedCompactDateTime;
+      }
+    }
+
     const parsedDate = Date.parse(value);
     if (!Number.isNaN(parsedDate)) {
       return parsedDate;
@@ -1111,24 +1145,35 @@ function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle
       const stats = statSync(bundlePath);
       const bundle = JSON.parse(readFileSync(bundlePath, "utf8")) as Record<string, unknown>;
       const bundleRunId = typeof bundle.runId === "string" ? bundle.runId : entry;
-      const completedAtMs =
+      const parsedCompletedAtMs =
         parseRunTimestampMs(bundle.finishedAt) ??
         parseRunTimestampMs(bundle.startedAt) ??
         parseRunTimestampMs(bundleRunId) ??
-        parseRunTimestampMs(entry) ??
-        stats.mtimeMs;
+        parseRunTimestampMs(entry);
+      const completedAtMs = parsedCompletedAtMs ?? stats.mtimeMs;
 
       return {
         runDir: entry,
         bundle,
         bundleRunId,
-        completedAtMs
+        completedAtMs,
+        hasExplicitTimestamp: typeof parsedCompletedAtMs === "number"
       };
     })
-    .filter((candidate): candidate is { runDir: string; bundle: Record<string, unknown>; bundleRunId: string; completedAtMs: number } =>
+    .filter((candidate): candidate is {
+      runDir: string;
+      bundle: Record<string, unknown>;
+      bundleRunId: string;
+      completedAtMs: number;
+      hasExplicitTimestamp: boolean;
+    } =>
       Boolean(candidate)
     )
     .sort((left, right) => {
+      if (left.hasExplicitTimestamp !== right.hasExplicitTimestamp) {
+        return left.hasExplicitTimestamp ? -1 : 1;
+      }
+
       if (left.completedAtMs !== right.completedAtMs) {
         return right.completedAtMs - left.completedAtMs;
       }
@@ -1168,6 +1213,247 @@ function loadAgentForgeConfig(root: string): AgentForgeConfig {
 
 function ensureDirectory(pathValue: string): void {
   mkdirSync(pathValue, { recursive: true });
+}
+
+function writeYamlFile(filePath: string, value: unknown): void {
+  writeFileSync(filePath, yaml.dump(value), "utf8");
+}
+
+function loadEvalFixtureCorpus(): EvalFixtureCorpus {
+  return evalFixtureCorpusSchema.parse(schemaFixtures.evalFixtureCorpus);
+}
+
+function getEvalSpec(specId: string): EvalSpec {
+  const corpus = loadEvalFixtureCorpus();
+  const spec = corpus.specs.find((candidate) => candidate.id === specId);
+  if (!spec) {
+    throw new Error(`Unknown eval spec: ${specId}`);
+  }
+
+  return spec;
+}
+
+function toBundleRef(run: WorkflowRunResult): string {
+  return `.agentops/runs/${run.runId}/bundle.json`;
+}
+
+function toSummaryRef(run: WorkflowRunResult): string {
+  return `.agentops/runs/${run.runId}/summary.md`;
+}
+
+function toSetupRun(workflow: string, run: WorkflowRunResult): EvalSetupRun {
+  return {
+    workflow,
+    runId: run.runId,
+    bundlePath: toBundleRef(run)
+  };
+}
+
+function createBlankEvalWorkspace(root: string, evalRunId: string, specId: string): string {
+  const workspaceRoot = join(root, ".agentops", "evals", specId, evalRunId, "workspace");
+  ensureDirectory(workspaceRoot);
+  const evidenceRoot = join(workspaceRoot, ".agentops", "evidence");
+  ensureDirectory(evidenceRoot);
+  execFileSync("git", ["init"], { cwd: workspaceRoot, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "eval@example.com"], { cwd: workspaceRoot, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "AgentForge Eval"], { cwd: workspaceRoot, stdio: "ignore" });
+  writeFileSync(
+    join(workspaceRoot, "package.json"),
+    JSON.stringify(
+      {
+        name: "fixture",
+        repository: {
+          type: "git",
+          url: "https://github.com/H9-Foundry/fixture.git"
+        },
+        scripts: {
+          test: "echo test",
+          lint: "echo lint",
+          typecheck: "echo typecheck",
+          build: "echo build"
+        }
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  writeFileSync(join(workspaceRoot, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n", "utf8");
+  writeFileSync(join(workspaceRoot, "src.ts"), "export const value = 1;\n", "utf8");
+  writeFileSync(
+    join(evidenceRoot, "dependency-alerts.json"),
+    JSON.stringify(
+      {
+        alerts: [
+          {
+            package: "example-dependency",
+            severity: "moderate",
+            summary: "Upgrade pending review for deterministic eval coverage."
+          }
+        ]
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  writeFileSync(
+    join(evidenceRoot, "docs-task.md"),
+    "# Docs follow-up\n\n- Align workflow documentation after maintenance triage.\n",
+    "utf8"
+  );
+  execFileSync("git", ["add", "."], { cwd: workspaceRoot, stdio: "ignore" });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: workspaceRoot, stdio: "ignore" });
+  writeFileSync(join(workspaceRoot, "src.ts"), "export const value = 2;\n", "utf8");
+  initProject(workspaceRoot);
+  return workspaceRoot;
+}
+
+function evalRedactionCategories(): string[] {
+  return ["github-token", "api-key", "aws-key", "bearer-token", "password", "private-key"];
+}
+
+function createEvalBundle(
+  root: string,
+  spec: EvalSpec,
+  evaluatedRun: WorkflowRunResult | undefined,
+  workspacePath: string,
+  setupRuns: readonly EvalSetupRun[],
+  deterministicChecks: readonly EvalDeterministicCheck[],
+  modelDependentChecks: readonly EvalModelDependentCheck[]
+): { bundle: ReturnType<typeof auditBundleSchema.parse>; jsonPath: string; markdownPath: string; outputDir: string } {
+  const config = loadAgentForgeConfig(root);
+  const policy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+  const state = createWorkflowState({
+    cwd: root,
+    workflow: `eval:${spec.id}`,
+    mode: "inspect",
+    policy
+  });
+  const runsRoot = join(root, config.runtime.runsPath);
+  const outputDir = join(runsRoot, state.runId);
+  ensureDirectory(outputDir);
+  const jsonPath = join(outputDir, "bundle.json");
+  const markdownPath = join(outputDir, "summary.md");
+  const failureCount = deterministicChecks.filter((check) => check.status === "failed").length;
+  const passed = failureCount === 0;
+  const startedAt = new Date().toISOString();
+  const evalArtifact = evalArtifactSchema.parse({
+    schemaVersion: state.version,
+    artifactKind: "eval-result",
+    lifecycleDomain: "evaluate",
+    workflow: {
+      name: state.workflow,
+      displayName: "Eval Runner"
+    },
+    source: {
+      sourceType: "workflow-run",
+      runId: state.runId,
+      inputRefs: [
+        ...(evaluatedRun?.jsonPath ? [evaluatedRun.jsonPath] : []),
+        ...setupRuns.map((setup) => setup.bundlePath)
+      ],
+      issueRefs: ["#165"],
+      githubRefs: []
+    },
+    status: passed ? "complete" : "draft",
+    generatedAt: startedAt,
+    repo: {
+      root: state.repo.root,
+      name: state.repo.name,
+      branch: state.repo.branch
+    },
+    provenance: {
+      generatedBy: "agentforge-runtime",
+      schemaVersion: state.version,
+      executionEnvironment: state.context.ciExecution ? "ci" : "local",
+      repoRoot: state.repo.root
+    },
+    redaction: {
+      applied: true,
+      strategyVersion: "1.0.0",
+      categories: evalRedactionCategories()
+    },
+    auditLink: {
+      bundlePath: jsonPath,
+      entryIds: [`${state.runId}-eval-runner`],
+      findingIds: [],
+      proposedActionIds: []
+    },
+    summary: passed
+      ? `Eval result for ${spec.id} passed ${deterministicChecks.length} deterministic check(s).`
+      : `Eval result for ${spec.id} failed ${failureCount} deterministic check(s).`,
+    payload: {
+      specId: spec.id,
+      specName: spec.name,
+      workflow: spec.workflow,
+      repoFixture: spec.repoFixture,
+      workspacePath,
+      evaluatedRunId: evaluatedRun?.runId,
+      evaluatedBundlePath: evaluatedRun ? toBundleRef(evaluatedRun) : undefined,
+      setupRuns,
+      deterministicChecks,
+      modelDependentChecks,
+      passed,
+      failureCount,
+      warningCount: 0
+    }
+  });
+
+  state.lifecycleArtifacts = [evalArtifact];
+  state.auditTrail = [
+    createAuditEntry({
+      id: `${state.runId}-eval-runner`,
+      nodeId: "eval-runner",
+      nodeName: "eval-runner",
+      kind: "deterministic",
+      startedAt,
+      completedAt: new Date().toISOString(),
+      status: passed ? "success" : "failed",
+      summary: evalArtifact.summary,
+      toolsRequested: [],
+      toolsExecuted: [],
+      blockedActions: [],
+      validationPassed: passed
+    }),
+    createAuditEntry({
+      id: `${state.runId}-report`,
+      nodeId: "report",
+      nodeName: "final-report",
+      kind: "report",
+      startedAt,
+      completedAt: new Date().toISOString(),
+      status: "success",
+      summary: "Generated eval result artifacts.",
+      toolsRequested: [],
+      toolsExecuted: [],
+      blockedActions: [],
+      validationPassed: true
+    })
+  ];
+
+  const bundle = buildAuditBundle(state, {
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    status: passed ? "success" : "partial",
+    jsonPath,
+    markdownPath,
+    provenance: {
+      generatedBy: "agentforge-runtime",
+      schemaVersion: state.version,
+      executionEnvironment: state.context.ciExecution ? "ci" : "local",
+      repoRoot: state.repo.root
+    },
+    redaction: {
+      applied: true,
+      strategyVersion: "1.0.0",
+      categories: evalRedactionCategories()
+    },
+    components: []
+  });
+  writeFileSync(jsonPath, JSON.stringify(bundle, null, 2), "utf8");
+  writeFileSync(markdownPath, renderAuditBundleMarkdown(bundle), "utf8");
+  return { bundle, jsonPath, markdownPath, outputDir };
 }
 
 function ensureInitFiles(root: string): string[] {
@@ -1420,6 +1706,351 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
     blockedActions,
     blockedPlugins: bundle.blockedPlugins.length,
     artifactCount: bundle.lifecycleArtifacts.length,
+    artifactKinds: bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind)
+  };
+}
+
+function checkResult(status: "passed" | "failed" | "not_applicable", name: string, expected: string, actual?: string, details?: string): EvalDeterministicCheck {
+  return {
+    name,
+    status,
+    expected,
+    actual,
+    ...(details ? { details } : {})
+  };
+}
+
+function compareEvalSpec(
+  spec: EvalSpec,
+  bundle: ReturnType<typeof auditBundleSchema.parse> | undefined,
+  executionError?: string
+): { deterministicChecks: EvalDeterministicCheck[]; modelDependentChecks: EvalModelDependentCheck[] } {
+  const checks: EvalDeterministicCheck[] = [];
+
+  if (!bundle) {
+    checks.push(
+      checkResult(
+        "failed",
+        "workflow-execution",
+        "successful workflow execution",
+        executionError ?? "unknown failure",
+        "The eval runner could not produce an evaluated workflow bundle."
+      )
+    );
+    return {
+      deterministicChecks: checks,
+      modelDependentChecks: [
+        {
+          name: "rubric-scoring",
+          status: "not_executed",
+          details: "Provider-dependent scoring is out of scope for the first local eval runner slice."
+        }
+      ]
+    };
+  }
+
+  checks.push(
+    checkResult(
+      bundle.status === spec.expectedStatus ? "passed" : "failed",
+      "run-status",
+      spec.expectedStatus,
+      bundle.status,
+      "The evaluated workflow status should match the deterministic eval spec."
+    )
+  );
+
+  checks.push(
+    checkResult(
+      bundle.redaction.applied === spec.redactionExpectations.applied ? "passed" : "failed",
+      "redaction-applied",
+      String(spec.redactionExpectations.applied),
+      String(bundle.redaction.applied)
+    )
+  );
+
+  for (const category of spec.redactionExpectations.expectedCategories) {
+    checks.push(
+      checkResult(
+        bundle.redaction.categories.includes(category) ? "passed" : "failed",
+        `redaction-category:${category}`,
+        category,
+        bundle.redaction.categories.join(", ")
+      )
+    );
+  }
+
+  checks.push(
+    checkResult(
+      bundle.policy.defaults.executionMode === spec.policyExpectations.executionMode ? "passed" : "failed",
+      "policy-execution-mode",
+      spec.policyExpectations.executionMode,
+      bundle.policy.defaults.executionMode
+    )
+  );
+
+  if (spec.policyExpectations.readOnly) {
+    checks.push(
+      checkResult(
+        bundle.policy.defaults.writes !== "allow" ? "passed" : "failed",
+        "policy-read-only",
+        "writes not equal allow",
+        bundle.policy.defaults.writes
+      )
+    );
+  }
+
+  for (const sideEffectClass of spec.policyExpectations.sideEffectClasses) {
+    checks.push(
+      checkResult(
+        "not_applicable",
+        `side-effect-class:${sideEffectClass}`,
+        sideEffectClass,
+        undefined,
+        "The first eval runner records policy posture and workflow outputs but does not inspect adapter-level side-effect execution traces."
+      )
+    );
+  }
+
+  for (const expectedArtifact of spec.artifactExpectations) {
+    const actualArtifact = bundle.lifecycleArtifacts.find((artifact) => artifact.artifactKind === expectedArtifact.artifactKind);
+    checks.push(
+      checkResult(
+        actualArtifact ? "passed" : "failed",
+        `artifact-kind:${expectedArtifact.artifactKind}`,
+        expectedArtifact.artifactKind,
+        actualArtifact?.artifactKind
+      )
+    );
+
+    if (!actualArtifact || typeof actualArtifact.payload !== "object" || actualArtifact.payload === null) {
+      continue;
+    }
+
+    const payload = actualArtifact.payload as Record<string, unknown>;
+    for (const field of expectedArtifact.requiredPayloadFields) {
+      checks.push(
+        checkResult(
+          field in payload ? "passed" : "failed",
+          `payload-field:${expectedArtifact.artifactKind}:${field}`,
+          field,
+          Object.keys(payload).join(", ")
+        )
+      );
+    }
+
+    for (const term of expectedArtifact.requiredSummaryTerms) {
+      const summary = actualArtifact.summary.toLowerCase();
+      checks.push(
+        checkResult(
+          summary.includes(term.toLowerCase()) ? "passed" : "failed",
+          `summary-term:${expectedArtifact.artifactKind}:${term}`,
+          term,
+          actualArtifact.summary
+        )
+      );
+    }
+  }
+
+  if (spec.artifactExpectations.length === 0) {
+    checks.push(
+      checkResult(
+        bundle.lifecycleArtifacts.length === 0 ? "passed" : "failed",
+        "artifact-count",
+        "0",
+        String(bundle.lifecycleArtifacts.length)
+      )
+    );
+  }
+
+  return {
+    deterministicChecks: checks,
+    modelDependentChecks: [
+      {
+        name: "rubric-scoring",
+        status: "not_executed",
+        details: "Provider-dependent scoring is out of scope for the first local eval runner slice."
+      }
+    ]
+  };
+}
+
+async function executeEvalWorkflow(spec: EvalSpec, workspaceRoot: string): Promise<{ evaluatedRun: WorkflowRunResult; setupRuns: EvalSetupRun[] }> {
+  const setupRuns: EvalSetupRun[] = [];
+  const requestsRoot = join(workspaceRoot, ".agentops", "requests");
+  ensureDirectory(requestsRoot);
+
+  const runPlanning = async (): Promise<WorkflowRunResult> => {
+    writeYamlFile(join(requestsRoot, "planning.yaml"), schemaFixtures.planningRequest);
+    return runLocalWorkflow("planning-discovery", workspaceRoot);
+  };
+
+  const runDesign = async (): Promise<WorkflowRunResult> => {
+    const planningRun = await runPlanning();
+    setupRuns.push(toSetupRun("planning-discovery", planningRun));
+    writeYamlFile(join(requestsRoot, "design.yaml"), {
+      ...schemaFixtures.designRequest,
+      planningBriefRef: toBundleRef(planningRun)
+    });
+    return runLocalWorkflow("architecture-design-review", workspaceRoot);
+  };
+
+  const runImplementation = async (): Promise<WorkflowRunResult> => {
+    const designRun = await runDesign();
+    setupRuns.push(toSetupRun("architecture-design-review", designRun));
+    writeYamlFile(join(requestsRoot, "implementation.yaml"), {
+      ...schemaFixtures.implementationRequest,
+      designRecordRef: toBundleRef(designRun)
+    });
+    return runLocalWorkflow("implementation-proposal", workspaceRoot);
+  };
+
+  const runQa = async (): Promise<WorkflowRunResult> => {
+    const implementationRun = await runImplementation();
+    setupRuns.push(toSetupRun("implementation-proposal", implementationRun));
+    writeYamlFile(join(requestsRoot, "qa.yaml"), {
+      ...schemaFixtures.qaRequest,
+      targetRef: toBundleRef(implementationRun),
+      evidenceSources: [toSummaryRef(implementationRun)]
+    });
+    return runLocalWorkflow("qa-review", workspaceRoot);
+  };
+
+  const runSecurity = async (): Promise<WorkflowRunResult> => {
+    const qaRun = await runQa();
+    setupRuns.push(toSetupRun("qa-review", qaRun));
+    writeYamlFile(join(requestsRoot, "security.yaml"), {
+      ...schemaFixtures.securityRequest,
+      targetRef: toBundleRef(qaRun),
+      evidenceSources: [toSummaryRef(qaRun)]
+    });
+    return runLocalWorkflow("security-review", workspaceRoot);
+  };
+
+  const runRelease = async (): Promise<WorkflowRunResult> => {
+    const securityRun = await runSecurity();
+    setupRuns.push(toSetupRun("security-review", securityRun));
+    const qaRun = setupRuns.find((run) => run.workflow === "qa-review");
+    if (!qaRun) {
+      throw new Error("QA setup run was not recorded before release eval execution.");
+    }
+    writeYamlFile(join(requestsRoot, "release.yaml"), {
+      ...schemaFixtures.releaseRequest,
+      qaReportRefs: [qaRun.bundlePath],
+      securityReportRefs: [toBundleRef(securityRun)],
+      evidenceSources: [toSummaryRef(securityRun)]
+    });
+    return runLocalWorkflow("release-readiness", workspaceRoot);
+  };
+
+  switch (spec.workflow) {
+    case "pr-review":
+      return { evaluatedRun: await runLocalWorkflow("pr-review", workspaceRoot), setupRuns };
+    case "planning-discovery":
+      writeYamlFile(join(requestsRoot, "planning.yaml"), spec.request);
+      return { evaluatedRun: await runLocalWorkflow("planning-discovery", workspaceRoot), setupRuns };
+    case "architecture-design-review": {
+      const planningRun = await runPlanning();
+      setupRuns.push(toSetupRun("planning-discovery", planningRun));
+      writeYamlFile(join(requestsRoot, "design.yaml"), {
+        ...spec.request,
+        planningBriefRef: toBundleRef(planningRun)
+      });
+      return { evaluatedRun: await runLocalWorkflow("architecture-design-review", workspaceRoot), setupRuns };
+    }
+    case "implementation-proposal": {
+      const designRun = await runDesign();
+      setupRuns.push(toSetupRun("architecture-design-review", designRun));
+      writeYamlFile(join(requestsRoot, "implementation.yaml"), {
+        ...spec.request,
+        designRecordRef: toBundleRef(designRun)
+      });
+      return { evaluatedRun: await runLocalWorkflow("implementation-proposal", workspaceRoot), setupRuns };
+    }
+    case "qa-review": {
+      const implementationRun = await runImplementation();
+      setupRuns.push(toSetupRun("implementation-proposal", implementationRun));
+      writeYamlFile(join(requestsRoot, "qa.yaml"), {
+        ...spec.request,
+        targetRef: toBundleRef(implementationRun),
+        evidenceSources: [toSummaryRef(implementationRun)]
+      });
+      return { evaluatedRun: await runLocalWorkflow("qa-review", workspaceRoot), setupRuns };
+    }
+    case "security-review": {
+      const qaRun = await runQa();
+      setupRuns.push(toSetupRun("qa-review", qaRun));
+      writeYamlFile(join(requestsRoot, "security.yaml"), {
+        ...spec.request,
+        targetRef: toBundleRef(qaRun),
+        evidenceSources: [toSummaryRef(qaRun)]
+      });
+      return { evaluatedRun: await runLocalWorkflow("security-review", workspaceRoot), setupRuns };
+    }
+    case "maintenance-triage": {
+      const releaseRun = await runRelease();
+      setupRuns.push(toSetupRun("release-readiness", releaseRun));
+      writeYamlFile(join(requestsRoot, "maintenance.yaml"), {
+        ...spec.request,
+        releaseReportRefs: [toBundleRef(releaseRun)]
+      });
+      return { evaluatedRun: await runLocalWorkflow("maintenance-triage", workspaceRoot), setupRuns };
+    }
+  }
+}
+
+export async function runLocalEval(specId: string, cwd = process.cwd()): Promise<EvalRunResult> {
+  const root = findWorkspaceRoot(cwd);
+  ensureInitFiles(root);
+  const spec = getEvalSpec(specId);
+  const controlPolicy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+  const controlState = createWorkflowState({
+    cwd: root,
+    workflow: `eval:${spec.id}`,
+    mode: controlPolicy.defaults.executionMode,
+    policy: controlPolicy
+  });
+
+  const workspaceRoot = spec.repoFixture === "agentforge-monorepo" ? root : createBlankEvalWorkspace(root, controlState.runId, spec.id);
+  let evaluatedRun: WorkflowRunResult | undefined;
+  let setupRuns: EvalSetupRun[] = [];
+  let executionError: string | undefined;
+
+  try {
+    const result = await executeEvalWorkflow(spec, workspaceRoot);
+    evaluatedRun = result.evaluatedRun;
+    setupRuns = result.setupRuns;
+  } catch (error) {
+    executionError = error instanceof Error ? error.message : String(error);
+  }
+
+  const evaluatedBundle =
+    evaluatedRun && existsSync(evaluatedRun.jsonPath)
+      ? auditBundleSchema.parse(JSON.parse(readFileSync(evaluatedRun.jsonPath, "utf8")) as unknown)
+      : undefined;
+  const { deterministicChecks, modelDependentChecks } = compareEvalSpec(spec, evaluatedBundle, executionError);
+  const { bundle, jsonPath, markdownPath, outputDir } = createEvalBundle(
+    root,
+    spec,
+    evaluatedRun,
+    workspaceRoot,
+    setupRuns,
+    deterministicChecks,
+    modelDependentChecks
+  );
+
+  return {
+    runId: bundle.runId,
+    specId: spec.id,
+    workflow: spec.workflow,
+    outputDir,
+    jsonPath,
+    markdownPath,
+    status: bundle.status,
+    evaluatedRunId: evaluatedRun?.runId,
+    evaluatedBundlePath: evaluatedRun ? toBundleRef(evaluatedRun) : undefined,
+    setupRunCount: setupRuns.length,
+    deterministicCheckCount: deterministicChecks.length,
+    deterministicFailures: deterministicChecks.filter((check) => check.status === "failed").length,
     artifactKinds: bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind)
   };
 }

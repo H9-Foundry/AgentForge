@@ -3,6 +3,7 @@ import { Command } from "commander";
 
 import {
   checkReleaseReadiness,
+  runLocalEval,
   explainLastRun,
   initProject,
   renderReleaseGuide,
@@ -65,6 +66,32 @@ program
     }
     console.log("Next: run `agentforge explain last-run` for a compact summary of this workflow run.");
     console.log(`Blocked plugins: ${result.blockedPlugins}`);
+  });
+
+const evalCommand = program.command("eval").description("Run bounded local eval specs against the official workflow surface.");
+
+evalCommand
+  .command("run")
+  .description("Execute one built-in local eval spec and emit an eval-result artifact.")
+  .argument("<spec-id>", "Eval spec id from the built-in deterministic fixture corpus.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action(async (specId, options: { json?: boolean }) => {
+    const result = await runLocalEval(specId);
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`Completed eval ${result.runId} for spec ${result.specId}`);
+    console.log(`Workflow: ${result.workflow}`);
+    console.log(`Artifacts: ${result.outputDir}`);
+    console.log(`Audit bundle: ${result.jsonPath}`);
+    console.log(`Summary: ${result.markdownPath}`);
+    console.log(`Deterministic checks: ${result.deterministicCheckCount}`);
+    console.log(`Deterministic failures: ${result.deterministicFailures}`);
+    if (result.evaluatedRunId) {
+      console.log(`Evaluated run: ${result.evaluatedRunId}`);
+    }
+    console.log("Next: run `agentforge explain last-run` for a compact summary of this eval run.");
   });
 
 program
