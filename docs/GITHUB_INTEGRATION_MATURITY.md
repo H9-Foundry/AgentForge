@@ -99,6 +99,8 @@ GitHub is the first mature integration target because it already anchors plannin
 
 The host-agnostic SCM/CI contract layer now exists and the first non-GitHub host pair is validated through the bounded GitLab wedge, so GitHub-specific references and Actions evidence should remain a host-specific baseline built on top of shared shapes rather than the shared model itself becoming GitHub-shaped.
 
+That host-agnostic layer now also includes a bounded generic local CI evidence adapter, so GitHub Actions should remain the best-supported concrete CI baseline rather than the only supported way to normalize external pipeline evidence.
+
 It should remain:
 
 - the best-supported near-term host integration
@@ -112,4 +114,4 @@ This epic is now decomposed into:
 1. implemented: GitHub issue/PR reference and status normalization shared across lifecycle workflows
 2. implemented in part: bounded GitHub handoff rendering for planning, design, QA, and release artifacts
 3. implemented in part: deterministic GitHub Actions evidence ingestion for QA plus a shared normalization contract for later release workflows
-4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior now that GitLab normalization also exists
+4. ongoing: support-matrix and policy guidance for GitHub-specific versus host-agnostic behavior now that GitLab normalization and generic local CI evidence ingestion also exist

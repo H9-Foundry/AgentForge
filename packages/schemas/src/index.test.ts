@@ -4,7 +4,9 @@ import {
   agentManifestSchema,
   auditBundleSchema,
   benchmarkArtifactSchema,
+  ciArtifactEvidenceSchema,
   ciEvidenceSchema,
+  genericCiEvidenceExportSchema,
   gitlabCiEvidenceExportSchema,
   designArtifactSchema,
   designRequestSchema,
@@ -65,11 +67,15 @@ describe("schema fixtures", () => {
     expect(() => scmReferenceSchema.parse(schemaFixtures.scmReference)).not.toThrow();
     expect(() => scmReferenceSchema.parse(schemaFixtures.gitlabIssueScmReference)).not.toThrow();
     expect(() => scmReferenceSchema.parse(schemaFixtures.gitlabMergeRequestScmReference)).not.toThrow();
+    expect(() => ciArtifactEvidenceSchema.parse(schemaFixtures.genericCiEvidence.artifacts[0])).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.ciEvidence)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.gitlabCiEvidence)).not.toThrow();
+    expect(() => ciEvidenceSchema.parse(schemaFixtures.genericCiEvidence)).not.toThrow();
     expect(() => gitlabCiEvidenceExportSchema.parse(schemaFixtures.gitlabCiEvidenceExport)).not.toThrow();
+    expect(() => genericCiEvidenceExportSchema.parse(schemaFixtures.genericCiEvidenceExport)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.adapterCapabilityMetadata)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.gitlabAdapterCapabilityMetadata)).not.toThrow();
+    expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.genericCiAdapterCapabilityMetadata)).not.toThrow();
     expect(() => githubActionsEvidenceSchema.parse(schemaFixtures.githubActionsEvidence)).not.toThrow();
     expect(() =>
       githubActionsEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization.githubActions)
@@ -114,7 +120,9 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.releaseRequest).toBeDefined();
     expect(jsonSchemas.githubReference).toBeDefined();
     expect(jsonSchemas.scmReference).toBeDefined();
+    expect(jsonSchemas.ciArtifactEvidence).toBeDefined();
     expect(jsonSchemas.ciEvidence).toBeDefined();
+    expect(jsonSchemas.genericCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.gitlabCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.adapterCapabilityMetadata).toBeDefined();
     expect(jsonSchemas.githubActionsEvidence).toBeDefined();
