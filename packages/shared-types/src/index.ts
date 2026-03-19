@@ -7,6 +7,7 @@ import {
   agentforgeConfigSchema,
   agentOutputSchema,
   approvalCheckpointSchema,
+  attestationVerificationEvidenceSchema,
   auditBundleSchema,
   auditComponentSchema,
   lifecycleArtifactAuditLinkSchema,
@@ -112,6 +113,7 @@ export type ProposedAction = Infer<typeof proposedActionSchema>;
 export type ToolRequest = Infer<typeof toolRequestSchema>;
 export type ToolResult = Infer<typeof toolResultSchema>;
 export type ApprovalCheckpoint = Infer<typeof approvalCheckpointSchema>;
+export type AttestationVerificationEvidence = Infer<typeof attestationVerificationEvidenceSchema>;
 export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;

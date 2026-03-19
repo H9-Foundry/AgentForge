@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   agentManifestSchema,
   agentOutputSchema,
+  attestationVerificationEvidenceSchema,
   ciEvidenceSchema,
   dependencyIntegrityEvidenceSchema,
   genericCiEvidenceExportSchema,
@@ -32,6 +33,7 @@ import {
 } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
+  AttestationVerificationEvidence,
   CiEvidence,
   DependencyIntegrityEvidence,
   DependencyInventoryEntry,
@@ -419,6 +421,88 @@ function buildDependencyIntegritySignals(
 
     return signals;
   });
+}
+
+function loadAttestationVerificationEvidence(bundlePath: string): AttestationVerificationEvidence | undefined {
+  if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  const candidate = isRecord(parsed) ? { ...parsed, sourcePath: parsed.sourcePath ?? bundlePath } : parsed;
+  const result = attestationVerificationEvidenceSchema.safeParse(candidate);
+  return result.success ? result.data : undefined;
+}
+
+function normalizeAttestationVerificationEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): AttestationVerificationEvidence[] {
+  const seen = new Set<string>();
+  const normalized: AttestationVerificationEvidence[] = [];
+
+  for (const pathValue of evidenceSources) {
+    if (!repoRoot) {
+      continue;
+    }
+
+    const evidence = loadAttestationVerificationEvidence(join(repoRoot, pathValue));
+    if (!evidence) {
+      continue;
+    }
+
+    const key = `${evidence.verifier}:${evidence.subject}:${evidence.status}:${evidence.sourcePath ?? pathValue}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(evidence);
+  }
+
+  return normalized;
+}
+
+function buildReleaseTrustSummary(
+  evidenceEntries: readonly AttestationVerificationEvidence[]
+): string[] {
+  if (evidenceEntries.length === 0) {
+    return ["Trusted publishing remains reviewed separately; no attestation verification evidence was supplied."];
+  }
+
+  const failedCount = evidenceEntries.filter((entry) => entry.status === "failed").length;
+  const verifiedCount = evidenceEntries.filter((entry) => entry.status === "verified").length;
+  const skippedCount = evidenceEntries.filter((entry) => entry.status === "skipped").length;
+  const summary = [];
+
+  if (verifiedCount > 0) {
+    summary.push(`Verified ${verifiedCount} attestation or provenance evidence export${verifiedCount === 1 ? "" : "s"}.`);
+  }
+
+  if (failedCount > 0) {
+    summary.push(`Detected ${failedCount} attestation verification failure${failedCount === 1 ? "" : "s"} that require release follow-up.`);
+  }
+
+  if (skippedCount > 0) {
+    summary.push(`Skipped ${skippedCount} attestation verification evidence export${skippedCount === 1 ? "" : "s"} based on the supplied local evidence.`);
+  }
+
+  summary.push("Trusted publishing remains reviewed separately from bounded attestation verification.");
+  return summary;
+}
+
+function resolveReleaseTrustStatus(
+  evidenceEntries: readonly AttestationVerificationEvidence[]
+): string {
+  if (evidenceEntries.some((entry) => entry.status === "failed")) {
+    return "attestation-verification-failed";
+  }
+
+  if (evidenceEntries.some((entry) => entry.status === "verified")) {
+    return "attestation-verified-trusted-publishing-reviewed-separately";
+  }
+
+  return "trusted-publishing-reviewed-separately";
 }
 
 function loadBundleArtifactKinds(bundlePath: string): string[] {
@@ -2233,6 +2317,8 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       : releaseRequest.evidenceSources;
     const normalizedEvidenceSources = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
     const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
+    const attestationVerificationEvidence = normalizeAttestationVerificationEvidence(repoRoot, normalizedEvidenceSources);
+    const trustSummary = buildReleaseTrustSummary(attestationVerificationEvidence);
     const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
     if (missingEvidenceSources.length > 0) {
       throw new Error(`Release evidence source not found: ${missingEvidenceSources[0]}`);
@@ -2267,6 +2353,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
     );
     const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
     const hasMissingDependencyIntegrity = dependencyIntegrityEvidence.some((entry) => entry.integrityStatus === "missing-lockfile");
+    const hasFailedAttestationVerification = attestationVerificationEvidence.some((entry) => entry.status === "failed");
     const missingPackages = versionResolutions.filter((entry) => entry.status === "package-missing").map((entry) => entry.name);
     const versionCheckStatus = missingPackages.length === 0 ? "passed" : "failed";
     const baseReadinessStatus =
@@ -2278,6 +2365,8 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
     const readinessStatus =
       missingPackages.length > 0
         ? "blocked"
+        : hasFailedAttestationVerification
+          ? "blocked"
         : hasMissingDependencyIntegrity && baseReadinessStatus === "ready"
           ? "partial"
           : baseReadinessStatus;
@@ -2324,6 +2413,16 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
           "No dependency manifests were available for bounded integrity verification."
       },
       {
+        name: "attestation-verification",
+        status:
+          attestationVerificationEvidence.length === 0
+            ? "skipped"
+            : hasFailedAttestationVerification
+              ? "failed"
+              : "passed",
+        detail: trustSummary[0]
+      },
+      {
         name: "workspace-version-targets",
         status: versionCheckStatus,
         detail:
@@ -2362,6 +2461,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
     const provenanceRefs = [
       ...normalizedEvidenceSources,
       ...dependencyIntegrityEvidence.flatMap((entry) => entry.provenanceRefs),
+      ...attestationVerificationEvidence.flatMap((entry) => entry.provenanceRefs),
       ...versionResolutions
         .map((entry) => entry.manifestPath)
         .filter((value): value is string => Boolean(value))
@@ -2373,6 +2473,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       missingEvidenceSources: [],
       ciEvidence,
       dependencyIntegrityEvidence,
+      attestationVerificationEvidence,
       versionResolutions: versionResolutions.map((entry) => ({
         name: entry.name,
         targetVersion: entry.targetVersion,
@@ -2382,6 +2483,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       localReadinessChecks,
       readinessStatus,
       approvalRecommendations,
+      trustSummary,
       provenanceRefs: [...new Set(provenanceRefs)]
     });
 
@@ -2466,6 +2568,8 @@ const releaseAnalystAgent: RuntimeAgent = {
     const importedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
     const dependencyIntegrityEvidence = normalizedEvidence?.dependencyIntegrityEvidence ?? [];
     const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
+    const attestationVerificationEvidence = normalizedEvidence?.attestationVerificationEvidence ?? [];
+    const trustSummary = normalizedEvidence?.trustSummary ?? buildReleaseTrustSummary(attestationVerificationEvidence);
     const importedCiProviders = [...new Set(importedCiEvidence.map((entry) => entry.providerName ?? entry.pipelineName))];
     const importedCiFailures = [...new Set(importedCiEvidence.flatMap((entry) => summarizeCiEvidenceFailures(entry)))];
     const versionResolutions = normalizedEvidence?.versionResolutions ?? [];
@@ -2521,6 +2625,7 @@ const releaseAnalystAgent: RuntimeAgent = {
         ? [`Resolved ${versionResolutions.length} workspace version target(s) before any publish or promotion step.`]
         : []),
       ...dependencyIntegritySignals.map((signal) => `${signal} Review dependency integrity before any publish or promotion step.`),
+      ...trustSummary.map((line) => `${line} Keep publish execution separate from verification.`),
       "Review the bounded QA and security evidence before invoking any publish or promotion step.",
       ...importedCiProviders.map(
         (providerName) => `Review the imported CI evidence from \`${providerName}\` before any publish or promotion step.`
@@ -2559,11 +2664,12 @@ const releaseAnalystAgent: RuntimeAgent = {
         verificationChecks: verificationChecks.map((check) => ({ ...check })),
         versionResolutions,
         dependencyIntegritySignals,
+        trustSummary,
         approvalRecommendations: approvalRecommendations.map((recommendation) =>
           releaseApprovalRecommendationSchema.parse(recommendation)
         ),
         publishingPlan,
-        trustStatus: "trusted-publishing-reviewed-separately",
+        trustStatus: resolveReleaseTrustStatus(attestationVerificationEvidence),
         publishedPackages: [],
         tagRefs: [],
         provenanceRefs: allEvidenceRefs,
@@ -2588,6 +2694,7 @@ const releaseAnalystAgent: RuntimeAgent = {
           evidenceSources,
           ciEvidence: importedCiEvidence,
           dependencyIntegrityEvidence,
+          attestationVerificationEvidence,
           constraints,
           normalizedEvidence: normalizedEvidence ?? null
         },
@@ -2596,6 +2703,7 @@ const releaseAnalystAgent: RuntimeAgent = {
           approvalRecommendations,
           publishingPlan,
           rollbackNotes,
+          trustSummary,
           importedCiFailures
         }
       }

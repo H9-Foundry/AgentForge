@@ -80,6 +80,12 @@ Use the CLI to separate guidance from verification:
 - `agentforge release verify --json`
   - emits the clean-room verification result as structured JSON for Codex or CI consumption
 
+`release-readiness` can also consume explicit local attestation-verification JSON exports as bounded evidence. That path is read-only and reporting-oriented:
+
+- it adds trust-summary lines and attestation verification checks to the release report
+- it does not replace trusted publishing
+- it does not promote a release automatically based only on attestation presence
+
 ## Build Provenance
 
 `.github/workflows/release-provenance.yml` remains useful even when package publishing is active. It attests the build artifact for the full workspace so reviewers can inspect a reproducible CI build independent of npm publication.

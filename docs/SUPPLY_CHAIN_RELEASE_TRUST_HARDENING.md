@@ -48,6 +48,8 @@ Implemented now in a bounded first slice:
 - workspace-inventory style dependency-integrity evidence for local repos
 - release-readiness dependency-integrity checks derived from local manifests and lockfiles
 - security-review dependency-integrity signals derived from bounded local manifests and lockfiles
+- local attestation verification evidence normalization for release workflows
+- trust-summary lines derived from bounded attestation or provenance evidence
 
 ## Remaining Hardening Areas
 
@@ -67,7 +69,13 @@ Still to define or extend:
 
 ### 2. Artifact And Attestation Verification
 
-Define how workflows should consume:
+First bounded implementation available now:
+
+- local attestation or provenance verification exports can be normalized into release evidence
+- `release-readiness` can surface trust summary lines and readiness checks from that evidence
+- trusted publishing remains separate from bounded attestation verification
+
+Still to define or extend:
 
 - provenance attestations
 - package verification results
@@ -135,4 +143,5 @@ This epic should be decomposed into at least:
 Status:
 
 - item 1 is now partially implemented as a bounded workspace-inventory and dependency-integrity reporting wedge
-- items 2 and 3 remain next
+- item 2 is now partially implemented as a bounded local attestation-verification and trust-summary wedge
+- item 3 remains next
