@@ -11,7 +11,7 @@ Can AgentForge be used in another repository today as a local-only pre-PR qualit
 
 Today, a technical evaluator can install the published CLI, run the official local workflow surface, and inspect bounded run artifacts without GitHub wiring. That is enough for pilot-style local usage in another repository.
 
-It is not yet plug-and-play for less technical adopters. Preset-based startup and the canonical four-step quick path now exist on current `main`, but they are still source-build only until the next npm release. Clearer external agent packaging and published quick-path availability remain open gaps.
+It is not yet plug-and-play for less technical adopters. Preset-based startup and the canonical four-step quick path now exist on current `main`, but they are still source-build only until the next npm release. The external support boundary is now explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. Published quick-path availability remains the main open gap.
 
 ## Readiness Levels
 
@@ -40,7 +40,7 @@ The local-only adoption bar is met only when all of these are true:
 | Deterministic artifact inspection | Pass | Official workflows and evals emit inspectable run bundles with structured artifact output. |
 | Quick path without maintainer docs | Partial | Current `main` now provides one canonical four-step quick path, but it has not reached the latest published CLI yet. |
 | No-YAML startup for a common path | Partial | `init --preset planning-discovery` exists on current `main`, but it is source-build only until the next npm release. |
-| External starter-agent packaging clarity | Fail | Starter agents are still primarily repo-internal surfaces. |
+| External starter-agent packaging clarity | Pass | The support boundary is now explicit: external users consume workflows and presets through the CLI, while `agents/*` and `packages/registry-client` remain repo-internal. |
 
 ## Decision Guidance
 
@@ -69,3 +69,5 @@ Do not describe AgentForge as plug-and-play for less technical adopters until:
 - [#220](https://github.com/H9-Foundry/AgentForge/issues/220) preset-based workflow startup for external repos
 - [#222](https://github.com/H9-Foundry/AgentForge/issues/222) non-technical adopter quick path
 - [#221](https://github.com/H9-Foundry/AgentForge/issues/221) external agent packaging and starter preset distribution
+
+See [docs/EXTERNAL_STARTER_AGENT_PACKAGING.md](EXTERNAL_STARTER_AGENT_PACKAGING.md) for the current starter-agent and preset packaging boundary.

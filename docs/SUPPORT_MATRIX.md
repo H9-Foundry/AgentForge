@@ -35,15 +35,17 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 
 ## Agent Support
 
+`Official` in this table means supported as bundled workflow assets behind the CLI and official workflows, not as standalone external packages unless stated otherwise.
+
 | Agent | Maturity | Notes |
 | --- | --- | --- |
 | `context-collector` | Official | Current starter agent. |
 | `planning-analyst` | Official | Starter planning agent for `planning-discovery`. |
 | `design-analyst` | Official | Starter design agent for `architecture-design-review`. |
 | `implementation-planner` | Official | Starter implementation agent for `implementation-proposal`. |
-| `qa-analyst` | Official | Starter QA agent for `qa-review`. |
-| `security-analyst` | Official | Starter security agent for `security-review`. |
-| `maintenance-analyst` | Official | Starter maintenance agent for `maintenance-triage`. |
+| `qa-analyst` | Official | Starter QA agent for `qa-review`; supported as an in-repo workflow asset, not as a standalone external package. |
+| `security-analyst` | Official | Starter security agent for `security-review`; supported as an in-repo workflow asset, not as a standalone external package. |
+| `maintenance-analyst` | Official | Starter maintenance agent for `maintenance-triage`; supported as an in-repo workflow asset, not as a standalone external package. |
 | `security-audit` | Official | Current starter agent. |
 | `code-review` | Official | Current starter agent. |
 | `test-generation` | Official | Current starter agent. |
@@ -75,7 +77,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `@h9-foundry/agentforge-runtime` | Official | Public runtime package. |
 | `@h9-foundry/agentforge-audit` | Official | Public audit/reporting package. |
 | `packages/registry-client` | Internal | Future-facing registry surface. |
-| `agents/*` | Internal | Official in-repo agents, not yet public packages. |
+| `agents/*` | Internal | Official in-repo agents used by the workflow surface, not individually supported public packages. |
 | `adapters/*` | Internal | Internal starter adapters, not yet public packages. |
 
 ## Environment Support
@@ -94,8 +96,8 @@ See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINES
 | Adoption Surface | Maturity | Notes |
 | --- | --- | --- |
 | technical local-first adoption | Partial | Strongest current external fit: technical evaluators can install the CLI, run official local workflows, and inspect audit artifacts without GitHub wiring. |
-| less-technical plug-and-play adoption | Planned | This is now an explicit product target, but it is not complete yet; common workflow startup still expects too much familiarity with request files and repo structure. |
-| agent-stack integration readiness | Planned | Internal starter agents exist, but external packaging, preset distribution, and low-friction agent consumption are not yet supported as a public surface. |
+| less-technical plug-and-play adoption | Planned | This is now an explicit product target, but it is not complete yet; the quick path and no-YAML startup are still source-build only until the next published release. |
+| agent-stack integration readiness | Planned | The supported external surface is still the CLI plus official workflows and presets; starter agents and `packages/registry-client` remain repo-internal. |
 
 ## Self-Hosting Scope
 
