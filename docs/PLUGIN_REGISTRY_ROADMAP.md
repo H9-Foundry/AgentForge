@@ -33,11 +33,11 @@ Available now:
 - trust-tier, trust-source, and reviewed-state enforcement
 - blocked-plugin reporting in audit output
 - internal `packages/registry-client` placeholder package
+- registry metadata contract for read-only catalog records
 
 Not yet available:
 
 - remote plugin discovery
-- registry metadata schema
 - signed third-party plugin distribution
 - adapter/provider plugin loading
 - install or update flows

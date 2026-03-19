@@ -1,4 +1,4 @@
-import { z } from "zod/v3";
+import { z, type ZodTypeAny } from "zod/v3";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 export const schemaVersion = "1.0.0";
@@ -13,6 +13,10 @@ export const toolResultStatusSchema = z.enum(["success", "blocked", "failed"]);
 export const runStatusSchema = z.enum(["success", "partial", "failed"]);
 export const trustTierSchema = z.enum(["core", "verified", "community", "untrusted"]);
 export const trustSourceSchema = z.enum(["official", "local", "third-party"]);
+export const registryPluginTypeSchema = z.enum(["agent", "adapter", "workflow"]);
+export const registryDistributionChannelSchema = z.enum(["manual", "npm"]);
+export const registryInstallSupportSchema = z.enum(["manual-only", "not-supported"]);
+export const registryActivationSupportSchema = z.enum(["not-supported", "approval-required"]);
 export const lifecycleArtifactKindSchema = z.enum([
   "planning-brief",
   "design-record",
@@ -85,6 +89,38 @@ export const trustMetadataSchema = z.object({
   tier: trustTierSchema.default("core"),
   source: trustSourceSchema.default("official"),
   reviewed: z.boolean().default(true)
+});
+
+export const registryPluginCompatibilitySchema = z.object({
+  agentforgeVersionRange: z.string().min(1),
+  manifestVersion: z.number().int().positive().default(1),
+  supportedWorkflowDomains: z.array(catalogDomainSchema).default([])
+});
+
+export const registryPluginDistributionSchema = z.object({
+  channel: registryDistributionChannelSchema,
+  packageName: z.string().min(1),
+  version: z.string().min(1),
+  reference: z.string().min(1),
+  installSupport: registryInstallSupportSchema.default("manual-only"),
+  activationSupport: registryActivationSupportSchema.default("not-supported")
+});
+
+export const registryPluginCatalogEntrySchema = z.object({
+  id: z.string().min(1),
+  displayName: z.string().min(1),
+  pluginType: registryPluginTypeSchema,
+  description: z.string().min(1).optional(),
+  catalog: catalogMetadataSchema,
+  trust: trustMetadataSchema,
+  compatibility: registryPluginCompatibilitySchema,
+  distribution: registryPluginDistributionSchema
+});
+
+export const registryPluginCatalogSchema = z.object({
+  version: z.number().int().positive(),
+  generatedAt: z.string().datetime().optional(),
+  entries: z.array(registryPluginCatalogEntrySchema).default([])
 });
 
 export const agentPluginRegistrationSchema = z.object({
@@ -1083,7 +1119,7 @@ export const auditBundleSchema = z.object({
   components: z.array(auditComponentSchema).default([])
 });
 
-export const schemaRegistry = {
+export const schemaRegistry: Record<string, ZodTypeAny> = {
   finding: findingSchema,
   blockedPlugin: blockedPluginSchema,
   proposedAction: proposedActionSchema,
@@ -1108,6 +1144,10 @@ export const schemaRegistry = {
   lifecycleArtifactAuditLink: lifecycleArtifactAuditLinkSchema,
   lifecycleArtifactEnvelope: lifecycleArtifactEnvelopeSchema,
   catalogMetadata: catalogMetadataSchema,
+  registryPluginCompatibility: registryPluginCompatibilitySchema,
+  registryPluginDistribution: registryPluginDistributionSchema,
+  registryPluginCatalogEntry: registryPluginCatalogEntrySchema,
+  registryPluginCatalog: registryPluginCatalogSchema,
   planningArtifactPayload: planningArtifactPayloadSchema,
   designArtifactOption: designArtifactOptionSchema,
   designArtifactPayload: designArtifactPayloadSchema,
@@ -2124,6 +2164,72 @@ export const schemaFixtures = {
       source: "official",
       reviewed: true
     }
+  },
+  registryPluginCatalogEntry: {
+    id: "local-review",
+    displayName: "Local Review Plugin",
+    pluginType: "agent",
+    description: "Catalog entry for a locally registered review plugin.",
+    catalog: {
+      domain: "review",
+      supportLevel: "planned",
+      maturity: "prototype",
+      trustScope: "official-and-reviewed-local"
+    },
+    trust: {
+      tier: "verified",
+      source: "local",
+      reviewed: true
+    },
+    compatibility: {
+      agentforgeVersionRange: ">=0.8.0",
+      manifestVersion: 1,
+      supportedWorkflowDomains: ["review", "test"]
+    },
+    distribution: {
+      channel: "manual",
+      packageName: "@example/local-review",
+      version: "0.1.0",
+      reference: "packages/local-review",
+      installSupport: "manual-only",
+      activationSupport: "approval-required"
+    }
+  },
+  registryPluginCatalog: {
+    version: 1,
+    generatedAt: "2026-03-19T11:30:00.000Z",
+    entries: [
+      {
+        id: "local-review",
+        displayName: "Local Review Plugin",
+        pluginType: "agent",
+        description: "Catalog entry for a locally registered review plugin.",
+        catalog: {
+          domain: "review",
+          supportLevel: "planned",
+          maturity: "prototype",
+          trustScope: "official-and-reviewed-local"
+        },
+        trust: {
+          tier: "verified",
+          source: "local",
+          reviewed: true
+        },
+        compatibility: {
+          agentforgeVersionRange: ">=0.8.0",
+          manifestVersion: 1,
+          supportedWorkflowDomains: ["review", "test"]
+        },
+        distribution: {
+          channel: "manual",
+          packageName: "@example/local-review",
+          version: "0.1.0",
+          reference: "packages/local-review",
+          installSupport: "manual-only",
+          activationSupport: "approval-required"
+        }
+      }
+    ]
   },
   policyDocument: {
     version: 1,
