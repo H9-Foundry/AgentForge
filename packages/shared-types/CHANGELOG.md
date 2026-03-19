@@ -1,5 +1,20 @@
 # @h9-foundry/agentforge-shared-types
 
+## 0.8.0
+
+### Minor Changes
+
+- 9ce38fa: Add local benchmark comparison via `agentforge eval compare ...` and emit `benchmark-summary` artifacts for deterministic eval-result deltas.
+- ebf3f39: Add a bounded local eval runner with `agentforge eval run <spec-id>` and emit `eval-result` artifacts for deterministic workflow fixture checks.
+
+### Patch Changes
+
+- 005e3ba: Add provider-agnostic `eval-spec` contracts and a deterministic local fixture corpus for the current official workflow surface.
+- Updated dependencies [9ce38fa]
+- Updated dependencies [005e3ba]
+- Updated dependencies [ebf3f39]
+  - @h9-foundry/agentforge-schemas@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes

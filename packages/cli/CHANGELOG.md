@@ -1,5 +1,25 @@
 # @h9-foundry/agentforge-cli
 
+## 0.8.0
+
+### Minor Changes
+
+- 9ce38fa: Add local benchmark comparison via `agentforge eval compare ...` and emit `benchmark-summary` artifacts for deterministic eval-result deltas.
+- ebf3f39: Add a bounded local eval runner with `agentforge eval run <spec-id>` and emit `eval-result` artifacts for deterministic workflow fixture checks.
+
+### Patch Changes
+
+- Updated dependencies [9ce38fa]
+- Updated dependencies [005e3ba]
+- Updated dependencies [ebf3f39]
+  - @h9-foundry/agentforge-schemas@0.8.0
+  - @h9-foundry/agentforge-shared-types@0.8.0
+  - @h9-foundry/agentforge-context-engine@0.8.0
+  - @h9-foundry/agentforge-policy-engine@0.8.0
+  - @h9-foundry/agentforge-runtime@0.8.0
+  - @h9-foundry/agentforge-audit@0.8.0
+  - @h9-foundry/agentforge-sdk@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes
