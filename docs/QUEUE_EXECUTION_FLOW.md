@@ -166,6 +166,7 @@ Add:
 
 - `agentforge release check --json`
 - `agentforge release verify --json`
+- do not claim `available in the published CLI` in README, quickstart, or support docs until the latest npm release contains the capability and published verification has been re-run
 - if `pnpm test` is being run from a long-lived wrapper session, confirm the direct-shell exit code with `pnpm test; echo EXIT:$?` before treating a stalled session as a repo failure
 - [#120](https://github.com/H9-Foundry/AgentForge/issues/120) tracks the earlier validation ambiguity and its local-guidance resolution
 

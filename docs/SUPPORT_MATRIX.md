@@ -11,6 +11,12 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 - **Planned**: not implemented yet
 - **Internal**: present in the repository but not yet supported as public surface
 
+## Published CLI Availability Terms
+
+- **Published now**: available in the latest npm release of `@h9-foundry/agentforge-cli`
+- **Source-build only**: implemented on `main`, but not yet in the latest npm release
+- Product-facing docs must say `available in the published CLI` only after published parity is verified
+
 ## Workflow Support
 
 | Workflow | Maturity | Notes |
@@ -102,6 +108,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 
 ## Compatibility Notes
 
+- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it.
 - Current support is strongest for local repository execution and GitHub-centric release workflows.
 - Public compatibility commitments are intentionally narrow until broader workflow and integration support exists.
 - Planned support in this matrix should be treated as roadmap direction, not shipped capability.

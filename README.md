@@ -7,13 +7,20 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 ## What You Can Do Today
 
 - try the current official workflow wedge with the published CLI, without cloning this monorepo
-- initialize a repository, scan it, run `pr-review`, `planning-discovery`, and `architecture-design-review`, then use the current repo build for `implementation-proposal`, `qa-review`, `security-review`, and `maintenance-triage` until the next package release ships them
+- initialize a repository, scan it, and run `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, and `maintenance-triage` with the latest published CLI
 - inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, `implementation-proposal`, `qa-report`, `security-report`, and `maintenance-report`
+- run `agentforge eval run` and `agentforge eval compare` locally against the deterministic workflow fixture corpus in the latest published CLI
 - evaluate the secure-by-default runtime model before broader SDLC workflow support lands
 
 ## Adoption Target
 
 AgentForge is ready now for technical early adopters who want local-first, read-only workflow tooling before PR creation. Plug-and-play external adoption for less technical users is an active product target, not a completed claim: the goal is to make the published CLI installable, understandable, and usable in other repositories without monorepo knowledge or hand-authoring request YAML for common paths.
+
+Published CLI wording rule:
+
+- `available in the published CLI` means the capability is present in the latest npm release
+- `source-build only` means the capability exists on `main` but has not reached the latest npm release yet
+- product-facing docs must use those terms consistently whenever repo `main` is ahead of npm
 
 ## Try It In 2 Minutes
 

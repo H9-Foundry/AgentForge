@@ -2,9 +2,15 @@
 
 This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation-to-QA-to-security-to-maintenance lifecycle handoff, all with auditable outputs.
 
+Published CLI wording rule:
+
+- `available in the published CLI` means available in the latest npm release
+- `source-build only` means the capability exists on `main` but has not reached npm yet
+- this document should use those terms explicitly whenever repo `main` is ahead of the latest published package set
+
 ## Fastest Evaluator Path
 
-Use the published CLI if you want to try the current published wedges without cloning the monorepo.
+Use the published CLI if you want to try the current published wedges without cloning the monorepo. The latest published CLI now includes the full official local workflow surface plus `eval run` and `eval compare`.
 
 ```bash
 mkdir agentforge-demo
@@ -178,13 +184,13 @@ The security bundle should include one `security-report` lifecycle artifact with
 
 `maintenance-triage` is now available in the published CLI as part of the official local workflow surface.
 
-Create a maintenance request that points at the prior security or release bundle:
+Create a maintenance request that points at bounded maintenance follow-up context. The published maintenance request accepts `dependencyAlertRefs`, `docsTaskRefs`, `releaseReportRefs`, or `issueRefs`; it does not accept a security bundle in `releaseReportRefs`.
 
 ```bash
 cat > .agentops/requests/maintenance.yaml <<'EOF'
 maintenanceGoal: Review dependency and docs hygiene after the latest workflow chain
-releaseReportRefs:
-  - .agentops/runs/<security-or-release-run-id>/bundle.json
+issueRefs:
+  - '#224'
 constraints:
   - Keep the workflow read-only
 EOF
@@ -243,11 +249,11 @@ node packages/cli/dist/bin.js explain last-run
 
 ## Dogfood The Official Workflows With Local Evals
 
-Use the source-built CLI to execute the deterministic eval corpus against the official workflow surface:
+Use the published CLI to execute the deterministic eval corpus against the official workflow surface:
 
 ```bash
-node packages/cli/dist/bin.js eval run planning-discovery-local-brief --json
-node packages/cli/dist/bin.js eval run maintenance-triage-local-report --json
+npx @h9-foundry/agentforge-cli eval run planning-discovery-local-brief --json
+npx @h9-foundry/agentforge-cli eval run maintenance-triage-local-report --json
 ```
 
 Each eval writes a normal run bundle under `.agentops/runs/<eval-run-id>/` and emits one `eval-result` lifecycle artifact.
@@ -255,8 +261,8 @@ Each eval writes a normal run bundle under `.agentops/runs/<eval-run-id>/` and e
 To compare two eval runs deterministically and emit a benchmark artifact:
 
 ```bash
-node packages/cli/dist/bin.js eval compare <baseline-eval-run-id> <candidate-eval-run-id> --json
-node packages/cli/dist/bin.js explain last-run --json
+npx @h9-foundry/agentforge-cli eval compare <baseline-eval-run-id> <candidate-eval-run-id> --json
+npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 The benchmark compare path remains local-first and deterministic. It distinguishes:
