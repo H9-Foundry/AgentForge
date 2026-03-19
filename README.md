@@ -16,6 +16,8 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 
 AgentForge is ready now for technical early adopters who want local-first, read-only workflow tooling before PR creation. Plug-and-play external adoption for less technical users is an active product target, not a completed claim: the goal is to make the published CLI installable, understandable, and usable in other repositories without monorepo knowledge or hand-authoring request YAML for common paths.
 
+See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md) for the current local-only readiness rubric and the exact constraints on external use today.
+
 Published CLI wording rule:
 
 - `available in the published CLI` means the capability is present in the latest npm release

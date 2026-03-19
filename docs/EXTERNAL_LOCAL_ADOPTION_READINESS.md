@@ -1,0 +1,70 @@
+# External Local-Only Adoption Readiness
+
+This document answers one practical question:
+
+Can AgentForge be used in another repository today as a local-only pre-PR quality layer?
+
+## Current Answer
+
+- technical early-adopter local-only adoption: `Partial`
+- less-technical plug-and-play local-only adoption: `Planned`
+
+Today, a technical evaluator can install the published CLI, run the official local workflow surface, and inspect bounded run artifacts without GitHub wiring. That is enough for pilot-style local usage in another repository.
+
+It is not yet plug-and-play for less technical adopters. The remaining gaps are preset-based startup, a simpler quick path, clearer external agent packaging, and explicit support guidance that does not assume familiarity with request-file authoring.
+
+## Readiness Levels
+
+- `Planned`: the capability is a target, but the required product surface is not usable yet
+- `Partial`: the capability is usable with constraints, but still expects technical early-adopter setup or judgment
+- `Official`: the capability is intentionally supported, documented, and usable without hidden maintainer knowledge for the stated audience
+
+## Minimum Checklist For External Local-Only Adoption
+
+The local-only adoption bar is met only when all of these are true:
+
+- the published CLI matches the workflows and capabilities claimed in README and support docs
+- official workflows are discoverable through CLI help and quickstart guidance
+- the evaluator path stays local-first and read-only by default
+- run artifacts are deterministic and easy to inspect through `bundle.json` and `summary.md`
+- product-facing docs clearly distinguish published CLI support from source-build-only capability
+- the documented quick path can be followed without maintainer-only docs
+
+## Current Evaluation
+
+| Criterion | Status | Current Reality |
+| --- | --- | --- |
+| Published CLI parity | Pass | The latest published `0.8.0` CLI includes the official local workflow surface plus `eval run` and `eval compare`. |
+| Official workflow discoverability | Pass | README, support docs, and quickstart now describe the published CLI surface explicitly. |
+| Safe local-first defaults | Pass | Default posture remains local-first and read-only, with approval-gated side effects. |
+| Deterministic artifact inspection | Pass | Official workflows and evals emit inspectable run bundles with structured artifact output. |
+| Quick path without maintainer docs | Partial | A technical evaluator can follow the published quickstart, but less-technical users still face request-file friction. |
+| No-YAML startup for a common path | Fail | Preset-based startup is not implemented yet. |
+| External starter-agent packaging clarity | Fail | Starter agents are still primarily repo-internal surfaces. |
+
+## Decision Guidance
+
+### Use In Another Repo Today
+
+Yes, if all of these are acceptable:
+
+- the user is comfortable with CLI-first setup
+- the goal is local-only pre-PR review, planning, QA, security, or maintenance assistance
+- the team accepts proposal/reporting workflows rather than autonomous write-heavy behavior
+- the team can inspect `.agentops/runs/<run-id>/bundle.json` and `.agentops/runs/<run-id>/summary.md`
+
+### Do Not Describe As Plug-And-Play Yet
+
+Do not describe AgentForge as plug-and-play for less technical adopters until:
+
+- preset-based startup exists
+- one non-technical quick path exists and is documented as supported
+- external agent packaging/support boundaries are explicit
+- product-facing docs no longer assume request-file authoring for the first successful path
+
+## Related Work
+
+- [#224](https://github.com/H9-Foundry/AgentForge/issues/224) published CLI parity with documented official workflows
+- [#220](https://github.com/H9-Foundry/AgentForge/issues/220) preset-based workflow startup for external repos
+- [#222](https://github.com/H9-Foundry/AgentForge/issues/222) non-technical adopter quick path
+- [#221](https://github.com/H9-Foundry/AgentForge/issues/221) external agent packaging and starter preset distribution

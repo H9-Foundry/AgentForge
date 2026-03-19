@@ -89,6 +89,8 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 
 ## Adoption Readiness
 
+See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINESS.md) for the explicit go/no-go checklist for external local-only adoption.
+
 | Adoption Surface | Maturity | Notes |
 | --- | --- | --- |
 | technical local-first adoption | Partial | Strongest current external fit: technical evaluators can install the CLI, run official local workflows, and inspect audit artifacts without GitHub wiring. |
