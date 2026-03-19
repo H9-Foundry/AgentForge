@@ -81,6 +81,14 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | general CI runtime support | Partial | Some workflow behavior exists in CI, but general CI workflow support is not complete. |
 | hosted multi-tenant service | Planned | Not implemented. |
 
+## Adoption Readiness
+
+| Adoption Surface | Maturity | Notes |
+| --- | --- | --- |
+| technical local-first adoption | Partial | Strongest current external fit: technical evaluators can install the CLI, run official local workflows, and inspect audit artifacts without GitHub wiring. |
+| less-technical plug-and-play adoption | Planned | This is now an explicit product target, but it is not complete yet; common workflow startup still expects too much familiarity with request files and repo structure. |
+| agent-stack integration readiness | Planned | Internal starter agents exist, but external packaging, preset distribution, and low-friction agent consumption are not yet supported as a public surface. |
+
 ## Self-Hosting Scope
 
 | Self-hosted use | Maturity | Notes |

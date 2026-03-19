@@ -2,7 +2,7 @@
 
 This document defines how maintainers should work through the AgentForge backlog.
 
-It is a **maintainer operating flow**, not a shipped product workflow. The only official runtime workflow remains `.agentops/workflows/pr-review.yaml`, plus the existing release/readiness tooling.
+It is a **maintainer operating flow**, not a shipped product workflow. Official runtime workflow support is tracked in [docs/SUPPORT_MATRIX.md](SUPPORT_MATRIX.md); this document exists to sequence backlog work and maintain truthful queue state.
 
 The live execution tracker for this process is [#83](https://github.com/H9-Foundry/AgentForge/issues/83).
 
@@ -28,6 +28,13 @@ See [docs/SELF_HOSTING.md](SELF_HOSTING.md).
 
 The backlog is managed in four lanes plus one parallel safe lane for newcomer usability work.
 
+Cross-cutting productization target:
+
+- plug-and-play external adoption and less-technical user readiness
+  - this is a tracked umbrella epic that cuts across onboarding, workflow packaging, evals, registry work, published CLI parity, and external local-only adoption readiness
+  - it should influence sequencing and acceptance for user-facing slices
+  - it is not complete and must not be treated as shipped product status
+
 ### Active Lane
 
 Work that is currently being executed now.
@@ -40,7 +47,7 @@ Rules:
 
 Current active lane:
 
-1. [#62](https://github.com/H9-Foundry/AgentForge/issues/62) plugin and registry roadmap
+1. [#63](https://github.com/H9-Foundry/AgentForge/issues/63) evals and benchmarks framework
 
 ### Ready Lane
 
@@ -48,12 +55,10 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-2. [#63](https://github.com/H9-Foundry/AgentForge/issues/63) evals and benchmarks framework
+2. [#62](https://github.com/H9-Foundry/AgentForge/issues/62) plugin and registry roadmap
 3. [#64](https://github.com/H9-Foundry/AgentForge/issues/64) additional SCM and CI integrations roadmap
 4. [#65](https://github.com/H9-Foundry/AgentForge/issues/65) supply-chain and release trust hardening
-5. planning/discovery implementation follow-ons under [#127](https://github.com/H9-Foundry/AgentForge/issues/127), [#128](https://github.com/H9-Foundry/AgentForge/issues/128), [#129](https://github.com/H9-Foundry/AgentForge/issues/129), and [#130](https://github.com/H9-Foundry/AgentForge/issues/130)
-6. architecture/design implementation follow-ons under [#132](https://github.com/H9-Foundry/AgentForge/issues/132), [#133](https://github.com/H9-Foundry/AgentForge/issues/133), [#134](https://github.com/H9-Foundry/AgentForge/issues/134), [#136](https://github.com/H9-Foundry/AgentForge/issues/136), and [#135](https://github.com/H9-Foundry/AgentForge/issues/135)
-7. Phase 2 workflow implementation follow-ons under [#139](https://github.com/H9-Foundry/AgentForge/issues/139) through [#159](https://github.com/H9-Foundry/AgentForge/issues/159)
+5. the plug-and-play external adoption and less-technical user readiness umbrella plus its child issues for preset startup, external agent packaging, quick-path onboarding, local-only readiness criteria, and published CLI parity
 
 ### Parallel Safe Lane
 
@@ -85,7 +90,9 @@ Work that is part of the roadmap and ordered relative to dependencies, but not y
 
 Current mapped lane:
 
-- no additional mapped items beyond the current active and ready lanes yet
+- Phase 2 workflow implementation follow-ons under [#139](https://github.com/H9-Foundry/AgentForge/issues/139) through [#159](https://github.com/H9-Foundry/AgentForge/issues/159) (substantially implemented)
+- eval runner / benchmark completion under [#165](https://github.com/H9-Foundry/AgentForge/issues/165) and [#166](https://github.com/H9-Foundry/AgentForge/issues/166)
+- the external adoption/readiness umbrella tracks cross-cutting productization work that depends on these slices but is not satisfied by workflow breadth alone
 
 ### Deferred Lane
 
