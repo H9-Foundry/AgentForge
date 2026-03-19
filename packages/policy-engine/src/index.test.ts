@@ -154,6 +154,121 @@ describe("policy engine", () => {
     expect(engine.evaluatePluginTrust("unreviewed-plugin", { tier: "verified", source: "local", reviewed: false }).allowed).toBe(false);
   });
 
+  it("approval-gates supported plugin activation and denies unsupported activation", () => {
+    const engine = createPolicyEngine(
+      {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "approval_required"
+        },
+        paths: {
+          allowedRead: ["**/*"],
+          allowedWrite: [".agentops/runs/**", "tests/**"],
+          blocked: [".env*", "secrets/**"]
+        },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
+        tools: {
+          "filesystem.read-file": { effect: "allow" }
+        }
+      },
+      "/repo"
+    );
+
+    expect(
+      engine.evaluatePluginActivation(
+        "local-review",
+        { tier: "verified", source: "local", reviewed: true },
+        { activationSupport: "approval-required", approvalGranted: false }
+      )
+    ).toEqual({
+      allowed: true,
+      effect: "approval_required",
+      requiresApproval: true,
+      reason: "Plugin activation requires approval for local-review"
+    });
+
+    expect(
+      engine.evaluatePluginActivation(
+        "local-review",
+        { tier: "verified", source: "local", reviewed: true },
+        { activationSupport: "approval-required", approvalGranted: true }
+      )
+    ).toEqual({
+      allowed: true,
+      effect: "allow",
+      requiresApproval: false
+    });
+
+    expect(
+      engine.evaluatePluginActivation(
+        "local-review",
+        { tier: "verified", source: "local", reviewed: true },
+        { activationSupport: "not-supported", approvalGranted: true }
+      )
+    ).toEqual({
+      allowed: false,
+      effect: "deny",
+      requiresApproval: false,
+      reason: "Plugin activation is not supported for local-review"
+    });
+  });
+
+  it("denies plugin activation when compatibility checks fail", () => {
+    const engine = createPolicyEngine(
+      {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "approval_required"
+        },
+        paths: {
+          allowedRead: ["**/*"],
+          allowedWrite: [".agentops/runs/**", "tests/**"],
+          blocked: [".env*", "secrets/**"]
+        },
+        plugins: {
+          allowedTiers: ["core", "verified"],
+          allowedSources: ["official", "local"],
+          requireReviewed: true
+        },
+        tools: {
+          "filesystem.read-file": { effect: "allow" }
+        }
+      },
+      "/repo"
+    );
+
+    expect(
+      engine.evaluatePluginActivation(
+        "local-review",
+        { tier: "verified", source: "local", reviewed: true },
+        {
+          activationSupport: "approval-required",
+          approvalGranted: true,
+          compatibilityIssues: [{ message: "AgentForge 0.8.0 does not satisfy >=0.9.0" }]
+        }
+      )
+    ).toEqual({
+      allowed: false,
+      effect: "deny",
+      requiresApproval: false,
+      reason: "Plugin compatibility check failed for local-review: AgentForge 0.8.0 does not satisfy >=0.9.0"
+    });
+  });
+
   it("sanitizes lifecycle artifact summaries and nested payload strings", () => {
     const engine = createPolicyEngine(
       {

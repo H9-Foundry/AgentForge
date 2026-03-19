@@ -21,6 +21,12 @@ export interface PolicyDecision {
   readonly reason?: string;
 }
 
+export interface PluginActivationDecisionOptions {
+  readonly activationSupport: "not-supported" | "approval-required";
+  readonly compatibilityIssues?: readonly { readonly message: string }[];
+  readonly approvalGranted?: boolean;
+}
+
 function normalizeToolConfig(toolConfig: unknown): unknown {
   if (!toolConfig || typeof toolConfig !== "object") return toolConfig;
   const record = toolConfig as Record<string, unknown>;
@@ -271,6 +277,42 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
     return { allowed: true, effect: "allow", requiresApproval: false };
   }
 
+  function evaluatePluginActivation(name: string, trust: TrustMetadata, options: PluginActivationDecisionOptions): PolicyDecision {
+    const trustDecision = evaluatePluginTrust(name, trust);
+    if (!trustDecision.allowed) {
+      return trustDecision;
+    }
+
+    if ((options.compatibilityIssues?.length ?? 0) > 0) {
+      return {
+        allowed: false,
+        effect: "deny",
+        requiresApproval: false,
+        reason: `Plugin compatibility check failed for ${name}: ${options.compatibilityIssues?.[0]?.message ?? "Unknown incompatibility"}`
+      };
+    }
+
+    if (options.activationSupport === "not-supported") {
+      return {
+        allowed: false,
+        effect: "deny",
+        requiresApproval: false,
+        reason: `Plugin activation is not supported for ${name}`
+      };
+    }
+
+    if (!options.approvalGranted) {
+      return {
+        allowed: true,
+        effect: "approval_required",
+        requiresApproval: true,
+        reason: `Plugin activation requires approval for ${name}`
+      };
+    }
+
+    return { allowed: true, effect: "allow", requiresApproval: false };
+  }
+
   function redactSecrets(value: string): string {
     return value
       .replaceAll(/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
@@ -314,6 +356,7 @@ export function createPolicyEngine(policy: EffectivePolicySnapshot, repoRoot: st
       return evaluatePath(pathValue, "write");
     },
     evaluatePluginTrust,
+    evaluatePluginActivation,
     evaluateToolRequest,
     filterBlockedPaths(paths: readonly string[]): string[] {
       return paths.filter((pathValue) => evaluatePath(pathValue, "read").allowed);

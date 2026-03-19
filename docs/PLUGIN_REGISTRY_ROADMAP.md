@@ -35,6 +35,7 @@ Available now:
 - internal `packages/registry-client` placeholder package
 - registry metadata contract for read-only catalog records
 - internal read-only catalog validation and compatibility verification in `packages/registry-client`
+- internal approval-gated catalog activation decisions with audit-ready activation records
 
 Not yet available:
 

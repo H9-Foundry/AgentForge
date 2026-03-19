@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import { agentManifestSchema, registryPluginCatalogSchema } from "@h9-foundry/agentforge-schemas";
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
-import type { RegistryPluginCatalog, RegistryPluginCatalogEntry } from "@h9-foundry/agentforge-shared-types";
+import type { AuditEntry, RegistryPluginCatalog, RegistryPluginCatalogEntry, TrustMetadata } from "@h9-foundry/agentforge-shared-types";
 
 const CURRENT_AGENT_MANIFEST_VERSION = 1;
 
@@ -30,6 +30,40 @@ export interface RegistryDiscoveryResult {
   readonly entry: RegistryPluginCatalogEntry;
   readonly compatible: boolean;
   readonly issues: RegistryCompatibilityIssue[];
+}
+
+export interface RegistryActivationPolicyDecision {
+  readonly allowed: boolean;
+  readonly effect: "allow" | "deny" | "approval_required";
+  readonly requiresApproval: boolean;
+  readonly reason?: string;
+}
+
+export interface RegistryActivationPolicyEvaluator {
+  evaluatePluginActivation(
+    name: string,
+    trust: TrustMetadata,
+    options: {
+      activationSupport: RegistryPluginCatalogEntry["distribution"]["activationSupport"];
+      compatibilityIssues?: readonly RegistryCompatibilityIssue[];
+      approvalGranted?: boolean;
+    }
+  ): RegistryActivationPolicyDecision;
+}
+
+export interface RegistryActivationOptions {
+  readonly approvalGranted?: boolean;
+  readonly agentforgeVersion?: string;
+  readonly manifestVersion?: number;
+  readonly workflowDomain?: RegistryPluginCatalogEntry["catalog"]["domain"];
+}
+
+export interface RegistryActivationDecision {
+  readonly entry: RegistryPluginCatalogEntry;
+  readonly compatibility: RegistryDiscoveryResult;
+  readonly policyDecision: RegistryActivationPolicyDecision;
+  readonly activated: boolean;
+  readonly auditEntry: AuditEntry;
 }
 
 interface WorkspacePackageRecord {
@@ -244,6 +278,30 @@ function evaluateCatalogEntryCompatibility(
   };
 }
 
+function createActivationAuditEntry(
+  decision: Pick<RegistryActivationDecision, "entry" | "policyDecision" | "activated">
+): AuditEntry {
+  const timestamp = new Date().toISOString();
+  const blockedReason = decision.policyDecision.reason ? [decision.policyDecision.reason] : [];
+
+  return {
+    id: `plugin-activation-${decision.entry.id}`,
+    nodeId: `plugin-activation:${decision.entry.id}`,
+    nodeName: decision.entry.displayName,
+    kind: "deterministic",
+    startedAt: timestamp,
+    completedAt: timestamp,
+    status: decision.activated ? "success" : "blocked",
+    summary: decision.activated
+      ? `Activated catalog plugin ${decision.entry.displayName}`
+      : `Did not activate catalog plugin ${decision.entry.displayName}`,
+    toolsRequested: [],
+    toolsExecuted: [],
+    blockedActions: blockedReason,
+    validationPassed: decision.activated
+  };
+}
+
 function isRuntimeAgent(value: unknown): value is RuntimeAgent {
   if (!isRecord(value)) {
     return false;
@@ -306,6 +364,50 @@ export class RegistryClient {
 
   discoverCatalogEntriesFromFile(catalogPath: string, options: RegistryDiscoveryOptions = {}): RegistryDiscoveryResult[] {
     return this.discoverCatalogEntries(this.loadCatalogFromFile(catalogPath), options);
+  }
+
+  prepareCatalogAgentActivation(
+    entry: RegistryPluginCatalogEntry,
+    policy: RegistryActivationPolicyEvaluator,
+    options: RegistryActivationOptions = {}
+  ): RegistryActivationDecision {
+    const compatibility = evaluateCatalogEntryCompatibility(entry, {
+      agentforgeVersion: options.agentforgeVersion ?? readAgentForgeVersion(this.repoRoot),
+      manifestVersion: options.manifestVersion ?? CURRENT_AGENT_MANIFEST_VERSION,
+      workflowDomain: options.workflowDomain,
+      pluginType: "agent"
+    });
+    const policyDecision = policy.evaluatePluginActivation(entry.displayName, entry.trust, {
+      activationSupport: entry.distribution.activationSupport,
+      compatibilityIssues: compatibility.issues,
+      approvalGranted: options.approvalGranted
+    });
+    const activated = policyDecision.allowed && !policyDecision.requiresApproval;
+    const decision = {
+      entry,
+      compatibility,
+      policyDecision,
+      activated
+    };
+
+    return {
+      ...decision,
+      auditEntry: createActivationAuditEntry(decision)
+    };
+  }
+
+  async activateCatalogAgentPlugin(
+    entry: RegistryPluginCatalogEntry,
+    policy: RegistryActivationPolicyEvaluator,
+    options: RegistryActivationOptions = {}
+  ): Promise<{ decision: RegistryActivationDecision; agent?: RuntimeAgent }> {
+    const decision = this.prepareCatalogAgentActivation(entry, policy, options);
+    if (!decision.activated) {
+      return { decision };
+    }
+
+    const agent = await this.loadLocalAgentPlugin(entry.distribution.packageName);
+    return { decision, agent };
   }
 
   listWorkspacePackages(): WorkspacePackageRecord[] {
