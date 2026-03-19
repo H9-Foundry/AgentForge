@@ -24,6 +24,16 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 That flow creates `.agentops/` locally and writes run artifacts under `.agentops/runs/<run-id>/`.
 
+## Start A Request-Driven Workflow From A Preset
+
+If you want the first request-driven success path without hand-writing YAML, the published CLI now supports one bounded startup preset:
+
+```bash
+npx @h9-foundry/agentforge-cli init --preset planning-discovery
+```
+
+That command keeps the normal local-first init behavior and also writes `.agentops/requests/planning.yaml` if it does not already exist. It never auto-runs a workflow and it will not overwrite an existing request file.
+
 ## What To Inspect After The First Run
 
 - `.agentops/runs/<run-id>/bundle.json`
@@ -40,7 +50,7 @@ For a small clean repository, a successful run should report:
 
 ## Run The Official Planning Workflow
 
-Create a bounded planning request:
+Create a bounded planning request. If you used `init --preset planning-discovery`, you can inspect and edit the generated `.agentops/requests/planning.yaml` instead of creating this file by hand:
 
 ```bash
 mkdir -p .agentops/requests
