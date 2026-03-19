@@ -68,6 +68,9 @@ export type { ReleaseCheckEntry, ReleaseCheckResult, ReleaseGuide } from "./inte
 export { verifyReleaseArtifacts } from "./internal/release-verification.js";
 export type { ReleaseVerifyEntry, ReleaseVerifyResult, ReleaseVerifyTarball } from "./internal/release-verification.js";
 
+export const startupPresetNames = ["planning-discovery"] as const;
+export type StartupPresetName = (typeof startupPresetNames)[number];
+
 const agentforgeConfigTemplate = `version: 1
 project:
   name: REPO_NAME
@@ -1927,10 +1930,60 @@ function validateWorkflowAgents(workflow: WorkflowDefinition, agents: Map<string
   }
 }
 
-export function initProject(cwd = process.cwd()): { root: string; created: string[] } {
+function createPlanningDiscoveryPresetRequest(root: string): PlanningRequest {
+  const repoName = root.split("/").at(-1) ?? "this repository";
+  const pathHints = ["README.md", "package.json", "src", "docs"].filter((pathHint) => existsSync(join(root, pathHint)));
+
+  return planningRequestSchema.parse({
+    problemStatement: `Plan the next safe local-first improvement for ${repoName}.`,
+    goals: ["Produce one planning brief artifact", "Identify a bounded next step before opening a pull request"],
+    constraints: ["Keep the default path local-first and read-only", "Prefer a small, reviewable next change"],
+    pathHints,
+    assumptions: ["This preset is a starter request that can be edited after initialization if the repository needs different focus."]
+  });
+}
+
+function applyStartupPreset(
+  root: string,
+  preset: StartupPresetName
+): { preset: StartupPresetName; workflow: string; requestPath: string; created: boolean } {
+  const requestsRoot = join(root, ".agentops", "requests");
+  ensureDirectory(requestsRoot);
+
+  switch (preset) {
+    case "planning-discovery": {
+      const requestPath = join(requestsRoot, "planning.yaml");
+      const created = !existsSync(requestPath);
+      if (created) {
+        writeYamlFile(requestPath, createPlanningDiscoveryPresetRequest(root));
+      }
+
+      return {
+        preset,
+        workflow: "planning-discovery",
+        requestPath,
+        created
+      };
+    }
+  }
+}
+
+export function initProject(
+  cwd = process.cwd(),
+  options?: { preset?: StartupPresetName }
+): {
+  root: string;
+  created: string[];
+  preset?: { preset: StartupPresetName; workflow: string; requestPath: string; created: boolean };
+} {
   const root = findWorkspaceRoot(cwd);
   const created = ensureInitFiles(root);
-  return { root, created };
+  const preset = options?.preset ? applyStartupPreset(root, options.preset) : undefined;
+  return {
+    root,
+    created,
+    ...(preset ? { preset } : {})
+  };
 }
 
 export function scanProject(cwd = process.cwd()): {

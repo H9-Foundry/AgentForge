@@ -10,6 +10,7 @@ import {
   renderReleaseGuide,
   runLocalWorkflow,
   scanProject,
+  startupPresetNames,
   verifyReleaseArtifacts
 } from "./index.js";
 
@@ -23,10 +24,21 @@ program
 program
   .command("init")
   .description("Scaffold .agentops configuration in the current repository.")
-  .action(() => {
-    const result = initProject();
+  .option("--preset <name>", `Create one starter request preset. Supported presets: ${startupPresetNames.join(", ")}`)
+  .action((options: { preset?: string }) => {
+    if (options.preset && !startupPresetNames.includes(options.preset as (typeof startupPresetNames)[number])) {
+      throw new Error(`Unsupported startup preset: ${options.preset}. Supported presets: ${startupPresetNames.join(", ")}`);
+    }
+
+    const result = initProject(process.cwd(), {
+      preset: options.preset as (typeof startupPresetNames)[number] | undefined
+    });
     console.log(`Initialized AgentForge in ${result.root}`);
     console.log(result.created.length > 0 ? `Created ${result.created.length} file(s).` : "Configuration already present.");
+    if (result.preset) {
+      console.log(result.preset.created ? `Created starter request: ${result.preset.requestPath}` : `Starter request already present: ${result.preset.requestPath}`);
+      console.log(`Next: run \`agentforge run ${result.preset.workflow} --json\``);
+    }
   });
 
 program

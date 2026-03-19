@@ -207,6 +207,28 @@ describe("cli smoke flows", () => {
     expect(explanation.artifactKinds).toEqual([]);
   });
 
+  it("scaffolds a planning-discovery starter preset without overwriting an existing request", () => {
+    const root = createGitFixture("agentops-cli-preset-");
+
+    const firstInit = initProject(root, { preset: "planning-discovery" });
+    expect(firstInit.preset?.preset).toBe("planning-discovery");
+    expect(firstInit.preset?.workflow).toBe("planning-discovery");
+    expect(firstInit.preset?.created).toBe(true);
+
+    const requestPath = join(root, ".agentops", "requests", "planning.yaml");
+    const firstRequest = yaml.load(readFileSync(requestPath, "utf8")) as Record<string, unknown>;
+    expect(firstRequest.problemStatement).toMatch(/^Plan the next safe local-first improvement for agentops-cli-preset-/);
+    expect(firstRequest.constraints).toContain("Keep the default path local-first and read-only");
+    expect(firstRequest.pathHints).toContain("package.json");
+
+    writeFileSync(requestPath, yaml.dump({ problemStatement: "Keep my custom request" }));
+    const secondInit = initProject(root, { preset: "planning-discovery" });
+    expect(secondInit.preset?.created).toBe(false);
+
+    const secondRequest = yaml.load(readFileSync(requestPath, "utf8")) as Record<string, unknown>;
+    expect(secondRequest.problemStatement).toBe("Keep my custom request");
+  });
+
   it("loads an allowed local plugin and executes it through a workflow", async () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-cli-plugin-"));
     execFileSync("git", ["init"], { cwd: root });

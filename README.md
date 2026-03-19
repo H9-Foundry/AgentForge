@@ -8,6 +8,7 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 
 - try the current official workflow wedge with the published CLI, without cloning this monorepo
 - initialize a repository, scan it, and run `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, and `maintenance-triage` with the latest published CLI
+- start the first request-driven workflow path with `npx @h9-foundry/agentforge-cli init --preset planning-discovery`, which generates an explicit starter request under `.agentops/requests/planning.yaml`
 - inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, `implementation-proposal`, `qa-report`, `security-report`, and `maintenance-report`
 - run `agentforge eval run` and `agentforge eval compare` locally against the deterministic workflow fixture corpus in the latest published CLI
 - evaluate the secure-by-default runtime model before broader SDLC workflow support lands
@@ -39,6 +40,15 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 That path creates `.agentops/` locally and writes run artifacts under `.agentops/runs/<run-id>/`.
+
+If you want one request-driven starter path without hand-authoring YAML, run:
+
+```bash
+npx @h9-foundry/agentforge-cli init --preset planning-discovery
+npx @h9-foundry/agentforge-cli run planning-discovery --json
+```
+
+The preset writes an explicit starter request to `.agentops/requests/planning.yaml` and never auto-runs the workflow.
 
 If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
 
