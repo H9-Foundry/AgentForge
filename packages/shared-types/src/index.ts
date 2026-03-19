@@ -37,8 +37,10 @@ import {
   benchmarkArtifactSchema,
   benchmarkComparedRunSchema,
   benchmarkDeterministicDeltaSchema,
+  ciArtifactEvidenceSchema,
   ciEvidenceSchema,
   ciJobEvidenceSchema,
+  genericCiEvidenceExportSchema,
   gitlabCiEvidenceExportSchema,
   gitlabCiJobEvidenceExportSchema,
   effectivePolicySnapshotSchema,
@@ -112,8 +114,10 @@ export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
+export type CiArtifactEvidence = Infer<typeof ciArtifactEvidenceSchema>;
 export type CiJobEvidence = Infer<typeof ciJobEvidenceSchema>;
 export type CiEvidence = Infer<typeof ciEvidenceSchema>;
+export type GenericCiEvidenceExport = Infer<typeof genericCiEvidenceExportSchema>;
 export type GitlabCiJobEvidenceExport = Infer<typeof gitlabCiJobEvidenceExportSchema>;
 export type GitlabCiEvidenceExport = Infer<typeof gitlabCiEvidenceExportSchema>;
 export type AdapterCapabilityMetadata = Infer<typeof adapterCapabilityMetadataSchema>;

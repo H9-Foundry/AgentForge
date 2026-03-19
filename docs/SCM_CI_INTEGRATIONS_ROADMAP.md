@@ -36,10 +36,11 @@ Implemented now:
 - adapter capability metadata for bounded host behavior
 - bounded GitLab issue and merge-request normalization into the shared SCM contract
 - bounded local GitLab CI evidence normalization into the shared CI contract
+- bounded generic CI evidence ingestion for local pipeline status and artifact exports
 
 Not yet available:
 
-- additional generic CI evidence adapters beyond the GitHub and GitLab wedges
+- additional generic CI evidence adapters beyond the initial generic local export surface
 - broad host-agnostic workflow surfaces across multiple providers
 - live remote SCM or CI reads on the default local path
 
@@ -68,6 +69,8 @@ The first additional target validates the host-agnostic model with one concrete 
 This provides a meaningful contrast to GitHub without exploding scope.
 
 ### Priority 3: Additional Generic CI Evidence
+
+Status: implemented as the first generic local CI evidence wedge.
 
 After the first new host pair:
 
@@ -114,4 +117,5 @@ This epic should be decomposed into at least:
 
 1. host-agnostic SCM and CI reference contracts plus adapter capability metadata
 2. implemented: GitLab issue/MR and CI evidence integration wedge as the first additional concrete host pair
-3. next: generic CI evidence adapter surface for bounded pipeline status and artifact ingestion
+3. implemented: generic CI evidence adapter surface for bounded local pipeline status and artifact ingestion
+4. next: additional provider-specific CI adapters and richer host-agnostic workflow consumption built on the shared contracts

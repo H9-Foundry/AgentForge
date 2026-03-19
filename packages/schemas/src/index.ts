@@ -477,8 +477,16 @@ export const ciJobEvidenceSchema = z.object({
   completedAt: z.string().datetime().optional()
 });
 
+export const ciArtifactEvidenceSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  htmlUrl: z.string().url().optional()
+});
+
 export const ciEvidenceSchema = z.object({
   platform: ciPlatformSchema,
+  providerName: z.string().min(1).optional(),
   host: z.string().min(1),
   repository: z.string().min(1),
   pipelineName: z.string().min(1),
@@ -491,6 +499,7 @@ export const ciEvidenceSchema = z.object({
   conclusion: githubActionsConclusionSchema.optional(),
   htmlUrl: z.string().url().optional(),
   jobs: z.array(ciJobEvidenceSchema).default([]),
+  artifacts: z.array(ciArtifactEvidenceSchema).default([]),
   provenanceSource: z.enum(["local-export", "adapter-read"]).default("local-export")
 });
 
@@ -517,6 +526,24 @@ export const gitlabCiEvidenceExportSchema = z.object({
   status: gitlabCiJobExportStatusSchema,
   webUrl: z.string().url().optional(),
   jobs: z.array(gitlabCiJobEvidenceExportSchema).default([])
+});
+
+export const genericCiEvidenceExportSchema = z.object({
+  sourcePath: z.string().min(1).optional(),
+  providerName: z.string().min(1),
+  host: z.string().min(1).default("local"),
+  repository: z.string().min(1),
+  pipelineName: z.string().min(1),
+  pipelineRunId: z.string().min(1),
+  runAttempt: z.number().int().positive().default(1),
+  event: z.string().min(1).optional(),
+  branch: z.string().min(1).optional(),
+  commitSha: z.string().min(1).optional(),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  htmlUrl: z.string().url().optional(),
+  jobs: z.array(ciJobEvidenceSchema).default([]),
+  artifacts: z.array(ciArtifactEvidenceSchema).default([])
 });
 
 export const adapterCapabilityKindSchema = z.enum([
@@ -992,6 +1019,7 @@ export const releaseEvidenceNormalizationSchema = z.object({
   securityReportRefs: z.array(z.string().min(1)).default([]),
   normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
   missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  ciEvidence: z.array(ciEvidenceSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
   localReadinessChecks: z.array(releaseVerificationCheckSchema).default([]),
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
@@ -1222,9 +1250,11 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   auditRedaction: auditRedactionSchema,
   scmReference: scmReferenceSchema,
   ciJobEvidence: ciJobEvidenceSchema,
+  ciArtifactEvidence: ciArtifactEvidenceSchema,
   ciEvidence: ciEvidenceSchema,
   gitlabCiJobEvidenceExport: gitlabCiJobEvidenceExportSchema,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportSchema,
+  genericCiEvidenceExport: genericCiEvidenceExportSchema,
   adapterCapabilityMetadata: adapterCapabilityMetadataSchema,
   githubReference: githubReferenceSchema,
   githubActionsJobEvidence: githubActionsJobEvidenceSchema,
@@ -1854,6 +1884,7 @@ const githubActionsEvidenceFixture = {
 
 const ciEvidenceFixture = {
   platform: "github-actions",
+  providerName: "GitHub Actions",
   host: "github.com",
   repository: "H9-Foundry/AgentForge",
   pipelineName: "CI",
@@ -1879,6 +1910,7 @@ const ciEvidenceFixture = {
       htmlUrl: "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789/job/2"
     }
   ],
+  artifacts: [],
   provenanceSource: "local-export"
 } as const;
 
@@ -1910,6 +1942,7 @@ const gitlabCiEvidenceExportFixture = {
 
 const gitlabCiEvidenceFixture = {
   platform: "gitlab-ci",
+  providerName: "GitLab CI",
   host: "gitlab.com",
   repository: "h9-foundry/platform/agentforge",
   pipelineName: "GitLab CI",
@@ -1933,6 +1966,82 @@ const gitlabCiEvidenceFixture = {
       status: "completed",
       conclusion: "failure",
       htmlUrl: "https://gitlab.com/h9-foundry/platform/agentforge/-/jobs/2"
+    }
+  ],
+  artifacts: [],
+  provenanceSource: "local-export"
+} as const;
+
+const genericCiEvidenceExportFixture = {
+  sourcePath: ".agentops/evidence/buildkite-ci.json",
+  providerName: "Buildkite",
+  host: "buildkite.local",
+  repository: "h9-foundry/platform/agentforge",
+  pipelineName: "Buildkite CI",
+  pipelineRunId: "bk-123",
+  runAttempt: 1,
+  event: "pull_request",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "failure",
+  htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/agentforge/builds/123",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/agentforge/builds/123/jobs/1"
+    },
+    {
+      name: "lint",
+      status: "completed",
+      conclusion: "failure",
+      htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/agentforge/builds/123/jobs/2"
+    }
+  ],
+  artifacts: [
+    {
+      name: "junit-report",
+      type: "junit-xml",
+      path: "artifacts/junit.xml"
+    }
+  ]
+} as const;
+
+const genericCiEvidenceFixture = {
+  platform: "generic-ci",
+  providerName: "Buildkite",
+  host: "buildkite.local",
+  repository: "h9-foundry/platform/agentforge",
+  pipelineName: "Buildkite CI",
+  pipelineRunId: "bk-123",
+  runAttempt: 1,
+  event: "pull_request",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "failure",
+  htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/agentforge/builds/123",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/agentforge/builds/123/jobs/1"
+    },
+    {
+      name: "lint",
+      status: "completed",
+      conclusion: "failure",
+      htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/agentforge/builds/123/jobs/2"
+    }
+  ],
+  artifacts: [
+    {
+      name: "junit-report",
+      type: "junit-xml",
+      path: "artifacts/junit.xml"
     }
   ],
   provenanceSource: "local-export"
@@ -1961,6 +2070,15 @@ const gitlabAdapterCapabilityMetadataFixture = {
     "merge-request-reference-normalization",
     "local-ci-evidence-ingestion"
   ],
+  trustBoundary: "local-only"
+} as const;
+
+const genericCiAdapterCapabilityMetadataFixture = {
+  platform: "generic",
+  host: "local-ci-export",
+  supportedScmReferenceKinds: [],
+  supportedCiPlatforms: ["generic-ci"],
+  capabilities: ["local-ci-evidence-ingestion"],
   trustBoundary: "local-only"
 } as const;
 
@@ -2334,9 +2452,11 @@ const releaseEvidenceNormalizationFixture = {
   normalizedEvidenceSources: [
     ".agentops/runs/run-789/bundle.json",
     ".agentops/runs/run-790/bundle.json",
-    ".agentops/runs/run-790/summary.md"
+    ".agentops/runs/run-790/summary.md",
+    ".agentops/evidence/buildkite-ci.json"
   ],
   missingEvidenceSources: [],
+  ciEvidence: [genericCiEvidenceFixture],
   versionResolutions: [
     {
       name: "@h9-foundry/agentforge-cli",
@@ -2556,8 +2676,11 @@ export const schemaFixtures = {
   ciEvidence: ciEvidenceFixture,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportFixture,
   gitlabCiEvidence: gitlabCiEvidenceFixture,
+  genericCiEvidenceExport: genericCiEvidenceExportFixture,
+  genericCiEvidence: genericCiEvidenceFixture,
   adapterCapabilityMetadata: adapterCapabilityMetadataFixture,
   gitlabAdapterCapabilityMetadata: gitlabAdapterCapabilityMetadataFixture,
+  genericCiAdapterCapabilityMetadata: genericCiAdapterCapabilityMetadataFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,
   githubWorkflowStatusMapping: githubWorkflowStatusMappingFixture,

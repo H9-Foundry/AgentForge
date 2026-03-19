@@ -5,6 +5,7 @@ import {
   agentManifestSchema,
   agentOutputSchema,
   ciEvidenceSchema,
+  genericCiEvidenceExportSchema,
   designArtifactSchema,
   githubActionsEvidenceSchema,
   gitlabCiEvidenceExportSchema,
@@ -33,6 +34,7 @@ import type {
   CiEvidence,
   DesignArtifact,
   DesignRequest,
+  GenericCiEvidenceExport,
   GithubActionsEvidence,
   GithubActionsEvidenceNormalization,
   GithubReference,
@@ -400,6 +402,17 @@ function loadGitLabCiEvidenceExport(bundlePath: string): GitlabCiEvidenceExport 
   return result.success ? result.data : undefined;
 }
 
+function loadGenericCiEvidenceExport(bundlePath: string): GenericCiEvidenceExport | undefined {
+  if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  const candidate = isRecord(parsed) ? { ...parsed, sourcePath: parsed.sourcePath ?? bundlePath } : parsed;
+  const result = genericCiEvidenceExportSchema.safeParse(candidate);
+  return result.success ? result.data : undefined;
+}
+
 function mapGitLabCiStatus(status: GitlabCiEvidenceExport["status"]): Pick<CiEvidence, "status" | "conclusion"> {
   switch (status) {
     case "pending":
@@ -458,11 +471,70 @@ function normalizeGitLabCiEvidence(
       conclusion: pipelineStatus.conclusion,
       htmlUrl: normalized.webUrl,
       jobs,
+      artifacts: [],
       provenanceSource: "local-export"
     });
 
     return [evidence];
   });
+}
+
+function normalizeGenericCiEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): CiEvidence[] {
+  return evidenceSources.flatMap((pathValue) => {
+    if (!repoRoot) {
+      return [];
+    }
+
+    const normalized = loadGenericCiEvidenceExport(join(repoRoot, pathValue));
+    if (!normalized) {
+      return [];
+    }
+
+    const evidence = ciEvidenceSchema.parse({
+      platform: "generic-ci",
+      providerName: normalized.providerName,
+      host: normalized.host,
+      repository: normalized.repository,
+      pipelineName: normalized.pipelineName,
+      pipelineRunId: normalized.pipelineRunId,
+      runAttempt: normalized.runAttempt,
+      event: normalized.event,
+      branch: normalized.branch,
+      commitSha: normalized.commitSha,
+      status: normalized.status,
+      conclusion: normalized.conclusion,
+      htmlUrl: normalized.htmlUrl,
+      jobs: normalized.jobs,
+      artifacts: normalized.artifacts,
+      provenanceSource: "local-export"
+    });
+
+    return [evidence];
+  });
+}
+
+function normalizeImportedCiEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): CiEvidence[] {
+  const seen = new Set<string>();
+  const combined = [...normalizeGitLabCiEvidence(repoRoot, evidenceSources), ...normalizeGenericCiEvidence(repoRoot, evidenceSources)];
+  const normalized: CiEvidence[] = [];
+
+  for (const evidence of combined) {
+    const key = `${evidence.platform}:${evidence.pipelineRunId}:${evidence.pipelineName}:${evidence.repository}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(evidence);
+  }
+
+  return normalized;
 }
 
 function summarizeCiEvidenceFailures(evidence: CiEvidence): string[] {
@@ -1994,6 +2066,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       ? asStringArray(intakeMetadata.evidenceSources)
       : releaseRequest.evidenceSources;
     const normalizedEvidenceSources = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
+    const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
     const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
     if (missingEvidenceSources.length > 0) {
       throw new Error(`Release evidence source not found: ${missingEvidenceSources[0]}`);
@@ -2047,6 +2120,13 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
           : "No additional local release evidence sources were supplied."
       },
       {
+        name: "imported-ci-evidence",
+        status: ciEvidence.length > 0 ? "passed" : "skipped",
+        detail: ciEvidence.length > 0
+          ? `Using ${ciEvidence.length} imported CI evidence export(s) across ${[...new Set(ciEvidence.map((entry) => entry.pipelineName))].length} pipeline(s).`
+          : "No imported CI evidence exports were supplied."
+      },
+      {
         name: "workspace-version-targets",
         status: versionCheckStatus,
         detail:
@@ -2093,6 +2173,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       securityReportRefs,
       normalizedEvidenceSources,
       missingEvidenceSources: [],
+      ciEvidence,
       versionResolutions: versionResolutions.map((entry) => ({
         name: entry.name,
         targetVersion: entry.targetVersion,
@@ -2183,6 +2264,9 @@ const releaseAnalystAgent: RuntimeAgent = {
       : releaseRequest.evidenceSources;
     const constraints = asStringArray(intakeMetadata.constraints);
     const allEvidenceRefs = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
+    const importedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
+    const importedCiProviders = [...new Set(importedCiEvidence.map((entry) => entry.providerName ?? entry.pipelineName))];
+    const importedCiFailures = [...new Set(importedCiEvidence.flatMap((entry) => summarizeCiEvidenceFailures(entry)))];
     const versionResolutions = normalizedEvidence?.versionResolutions ?? [];
     const verificationChecks = normalizedEvidence?.localReadinessChecks ?? [
       {
@@ -2205,6 +2289,13 @@ const releaseAnalystAgent: RuntimeAgent = {
         detail: evidenceSources.length > 0
           ? `Using ${evidenceSources.length} bounded local release evidence source(s).`
           : "No additional local release evidence sources were supplied."
+      },
+      {
+        name: "imported-ci-evidence",
+        status: importedCiEvidence.length > 0 ? "passed" : "skipped",
+        detail: importedCiEvidence.length > 0
+          ? `Using ${importedCiEvidence.length} imported CI evidence export(s).`
+          : "No imported CI evidence exports were supplied."
       }
     ];
     const readinessStatus = normalizedEvidence?.readinessStatus ??
@@ -2229,6 +2320,9 @@ const releaseAnalystAgent: RuntimeAgent = {
         ? [`Resolved ${versionResolutions.length} workspace version target(s) before any publish or promotion step.`]
         : []),
       "Review the bounded QA and security evidence before invoking any publish or promotion step.",
+      ...importedCiProviders.map(
+        (providerName) => `Review the imported CI evidence from \`${providerName}\` before any publish or promotion step.`
+      ),
       "Run `agentforge release check --json` and `agentforge release verify --json` before any release cut.",
       ...approvalRecommendations.map(
         (recommendation) => `${recommendation.action}: ${recommendation.classification.replaceAll("_", " ")} (${recommendation.reason})`
@@ -2241,7 +2335,8 @@ const releaseAnalystAgent: RuntimeAgent = {
     ];
     const externalDependencies = [
       ...(qaReportRefs.length > 0 ? ["Validated QA report inputs remain available for reviewer inspection."] : []),
-      ...(securityReportRefs.length > 0 ? ["Validated security report inputs remain available for reviewer inspection."] : [])
+      ...(securityReportRefs.length > 0 ? ["Validated security report inputs remain available for reviewer inspection."] : []),
+      ...importedCiProviders.map((providerName) => `Imported CI evidence from ${providerName} remains available for reviewer inspection.`)
     ];
     const releaseReport = releaseArtifactSchema.parse({
       ...buildLifecycleArtifactEnvelopeBase(
@@ -2288,6 +2383,7 @@ const releaseAnalystAgent: RuntimeAgent = {
           qaReportRefs,
           securityReportRefs,
           evidenceSources,
+          ciEvidence: importedCiEvidence,
           constraints,
           normalizedEvidence: normalizedEvidence ?? null
         },
@@ -2295,7 +2391,8 @@ const releaseAnalystAgent: RuntimeAgent = {
           readinessStatus,
           approvalRecommendations,
           publishingPlan,
-          rollbackNotes
+          rollbackNotes,
+          importedCiFailures
         }
       }
     });
@@ -2652,7 +2749,7 @@ const qaEvidenceNormalizationAgent: RuntimeAgent = {
     const allowlistedCommands = new Set(allowedValidationCommands.map((entry) => entry.command));
     const normalizedExecutedChecks = qaRequest.executedChecks.map(normalizeRequestedCommand);
     const unrecognizedExecutedChecks = normalizedExecutedChecks.filter((command) => !allowlistedCommands.has(command));
-    const ciEvidence = normalizeGitLabCiEvidence(repoRoot, normalizedEvidenceSources);
+    const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
     const githubActions = normalizeGitHubActionsEvidence(repoRoot, normalizedEvidenceSources);
     const normalization = qaEvidenceNormalizationSchema.parse({
       targetRef: qaRequest.targetRef,

@@ -1198,6 +1198,88 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("ingests bounded generic CI evidence exports during qa-review", async () => {
+    const root = createFixtureRepo();
+
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "evidence", "generic-ci.json"),
+      JSON.stringify(
+        {
+          providerName: "Buildkite",
+          host: "buildkite.local",
+          repository: "H9-Foundry/fixture",
+          pipelineName: "Buildkite CI",
+          pipelineRunId: "bk-123",
+          runAttempt: 1,
+          event: "pull_request",
+          branch: "main",
+          commitSha: "abc123",
+          status: "completed",
+          conclusion: "failure",
+          htmlUrl: "https://buildkite.example.com/builds/123",
+          jobs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://buildkite.example.com/builds/123/jobs/1"
+            },
+            {
+              name: "lint",
+              status: "completed",
+              conclusion: "failure",
+              htmlUrl: "https://buildkite.example.com/builds/123/jobs/2"
+            }
+          ],
+          artifacts: [
+            {
+              name: "junit-report",
+              type: "junit-xml",
+              path: "artifacts/junit.xml"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        "targetRef: package.json",
+        "evidenceSources:",
+        "  - .agentops/evidence/generic-ci.json",
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - release-readiness",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: { coverageGaps?: string[]; recommendedNextChecks?: string[]; releaseImpact?: string };
+      }>;
+    }>(qaRun.jsonPath);
+
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("qa-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.coverageGaps).toContain(
+      "Imported CI evidence still reports a failing check that needs manual review: Buildkite CI / lint"
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.recommendedNextChecks).toContain(
+      "Review the imported CI evidence for pipeline `Buildkite CI` before promotion."
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.releaseImpact).toContain(
+      "Imported CI evidence still shows failing checks: Buildkite CI / lint."
+    );
+  });
+
   it("allows bounded QA executed checks in a generic repo when the package manager is unknown", async () => {
     const root = createGitFixtureWithoutLockfile("agentops-qa-generic-");
     initProject(root);
@@ -1692,6 +1774,154 @@ describe("cli smoke flows", () => {
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.map((check) => check.name)).toEqual(
       expect.arrayContaining(["qa-report-refs", "security-report-refs", "local-release-evidence", "workspace-version-targets"])
+    );
+  });
+
+  it("consumes generic imported CI evidence during release-readiness", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(
+      join(root, "packages", "cli", "package.json"),
+      JSON.stringify(
+        {
+          name: "@h9-foundry/agentforge-cli",
+          version: "0.6.0",
+          type: "module"
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "generic-ci.json"),
+      JSON.stringify(
+        {
+          providerName: "Buildkite",
+          host: "buildkite.local",
+          repository: "H9-Foundry/fixture",
+          pipelineName: "Buildkite CI",
+          pipelineRunId: "bk-123",
+          runAttempt: 1,
+          event: "pull_request",
+          branch: "main",
+          commitSha: "abc123",
+          status: "completed",
+          conclusion: "failure",
+          htmlUrl: "https://buildkite.example.com/builds/123",
+          jobs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://buildkite.example.com/builds/123/jobs/1"
+            }
+          ],
+          artifacts: [
+            {
+              name: "junit-report",
+              type: "junit-xml",
+              path: "artifacts/junit.xml"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    const qaBundleDir = join(root, ".agentops", "runs", "run-qa");
+    mkdirSync(qaBundleDir, { recursive: true });
+    writeFileSync(join(qaBundleDir, "bundle.json"), JSON.stringify({
+      version: "1.0.0",
+      runId: "run-qa",
+      workflow: "qa-review",
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      status: "success",
+      policy: {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: schemaFixtures.policyDocument.defaults,
+        paths: schemaFixtures.policyDocument.paths,
+        plugins: schemaFixtures.policyDocument.plugins,
+        tools: schemaFixtures.policyDocument.tools
+      },
+      entries: [],
+      findings: [],
+      proposedActions: [],
+      blockedPlugins: [],
+      lifecycleArtifacts: [schemaFixtures.qaArtifact],
+      artifactPaths: { json: ".agentops/runs/run-qa/bundle.json", markdown: ".agentops/runs/run-qa/summary.md" },
+      provenance: { generatedBy: "agentforge-runtime", schemaVersion: "1.0.0", executionEnvironment: "local", repoRoot: root },
+      redaction: { applied: true, strategyVersion: "1.0.0", categories: ["github-token"] },
+      components: []
+    }, null, 2));
+    writeFileSync(join(qaBundleDir, "summary.md"), "# qa summary\n");
+
+    const securityBundleDir = join(root, ".agentops", "runs", "run-security");
+    mkdirSync(securityBundleDir, { recursive: true });
+    writeFileSync(join(securityBundleDir, "bundle.json"), JSON.stringify({
+      version: "1.0.0",
+      runId: "run-security",
+      workflow: "security-review",
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      status: "success",
+      policy: {
+        version: 1,
+        environment: "local",
+        resolvedAt: new Date().toISOString(),
+        defaults: schemaFixtures.policyDocument.defaults,
+        paths: schemaFixtures.policyDocument.paths,
+        plugins: schemaFixtures.policyDocument.plugins,
+        tools: schemaFixtures.policyDocument.tools
+      },
+      entries: [],
+      findings: [],
+      proposedActions: [],
+      blockedPlugins: [],
+      lifecycleArtifacts: [schemaFixtures.securityArtifact],
+      artifactPaths: { json: ".agentops/runs/run-security/bundle.json", markdown: ".agentops/runs/run-security/summary.md" },
+      provenance: { generatedBy: "agentforge-runtime", schemaVersion: "1.0.0", executionEnvironment: "local", repoRoot: root },
+      redaction: { applied: true, strategyVersion: "1.0.0", categories: ["github-token"] },
+      components: []
+    }, null, 2));
+    writeFileSync(join(securityBundleDir, "summary.md"), "# security summary\n");
+
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the 0.7.0 candidate for maintainer review",
+      versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      evidenceSources: [".agentops/evidence/generic-ci.json"],
+      constraints: ["Keep release readiness read-only by default"]
+    });
+
+    const releaseRun = await runLocalWorkflow("release-readiness", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          verificationChecks?: Array<{ name: string; status: string }>;
+          publishingPlan?: string[];
+          externalDependencies?: string[];
+        };
+      }>;
+    }>(releaseRun.jsonPath);
+
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("release-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.verificationChecks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "imported-ci-evidence", status: "passed" })])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.publishingPlan).toEqual(
+      expect.arrayContaining(["Review the imported CI evidence from `Buildkite` before any publish or promotion step."])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.externalDependencies).toEqual(
+      expect.arrayContaining(["Imported CI evidence from Buildkite remains available for reviewer inspection."])
     );
   });
 
