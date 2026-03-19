@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   agentManifestSchema,
   auditBundleSchema,
+  benchmarkArtifactSchema,
   designArtifactSchema,
   designRequestSchema,
   evalArtifactSchema,
@@ -65,6 +66,7 @@ describe("schema fixtures", () => {
     expect(() => implementationInventorySchema.parse(schemaFixtures.implementationInventory)).not.toThrow();
     expect(() => incidentArtifactSchema.parse(schemaFixtures.incidentArtifact)).not.toThrow();
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
+    expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
     expect(() => securityEvidenceNormalizationSchema.parse(schemaFixtures.securityEvidenceNormalization)).not.toThrow();
     expect(() => releaseEvidenceNormalizationSchema.parse(schemaFixtures.releaseEvidenceNormalization)).not.toThrow();
@@ -113,6 +115,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.qaArtifact).toBeDefined();
     expect(jsonSchemas.securityArtifact).toBeDefined();
     expect(jsonSchemas.evalArtifact).toBeDefined();
+    expect(jsonSchemas.benchmarkArtifact).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();
     expect(jsonSchemas.releaseArtifact).toBeDefined();
     expect(jsonSchemas.maintenanceArtifact).toBeDefined();
@@ -202,6 +205,7 @@ describe("schema fixtures", () => {
     expect(() => qaArtifactSchema.parse(schemaFixtures.qaArtifact)).not.toThrow();
     expect(() => securityArtifactSchema.parse(schemaFixtures.securityArtifact)).not.toThrow();
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
+    expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
     expect(() => reviewArtifactSchema.parse(schemaFixtures.reviewArtifact)).not.toThrow();
     expect(() => releaseArtifactSchema.parse(schemaFixtures.releaseArtifact)).not.toThrow();
     expect(() => maintenanceArtifactSchema.parse(schemaFixtures.maintenanceArtifact)).not.toThrow();

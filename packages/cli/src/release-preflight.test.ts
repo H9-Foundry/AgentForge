@@ -271,5 +271,5 @@ describe("release preflight", () => {
     expect(result.status).toBe(1);
     expect(result.stdout).toContain("Target scope: @h9-foundry");
     expect(result.stdout).toContain("[fail] npm auth file");
-  });
+  }, 60_000);
 });

@@ -1,6 +1,10 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type {
+  BenchmarkArtifact,
+  BenchmarkArtifactPayload,
+  BenchmarkComparedRun,
+  BenchmarkDeterministicDelta,
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
@@ -57,6 +61,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<SecurityArtifact["lifecycleDomain"]>().toEqualTypeOf<"security">();
     expectTypeOf<EvalArtifact["artifactKind"]>().toEqualTypeOf<"eval-result">();
     expectTypeOf<EvalArtifact["lifecycleDomain"]>().toEqualTypeOf<"evaluate">();
+    expectTypeOf<BenchmarkArtifact["artifactKind"]>().toEqualTypeOf<"benchmark-summary">();
+    expectTypeOf<BenchmarkArtifact["lifecycleDomain"]>().toEqualTypeOf<"evaluate">();
     expectTypeOf<ReviewArtifact["artifactKind"]>().toEqualTypeOf<"review-report">();
     expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
     expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();
@@ -85,6 +91,11 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<EvalArtifactPayload["deterministicChecks"]>().toEqualTypeOf<EvalDeterministicCheck[]>();
     expectTypeOf<EvalArtifactPayload["modelDependentChecks"]>().toEqualTypeOf<EvalModelDependentCheck[]>();
     expectTypeOf<EvalArtifactPayload["setupRuns"]>().toEqualTypeOf<EvalSetupRun[]>();
+    expectTypeOf<BenchmarkArtifactPayload["comparedRuns"]>().toEqualTypeOf<BenchmarkComparedRun[]>();
+    expectTypeOf<BenchmarkComparedRun["regressions"]>().toEqualTypeOf<BenchmarkDeterministicDelta[]>();
+    expectTypeOf<BenchmarkDeterministicDelta["classification"]>().toEqualTypeOf<
+      "regression" | "improvement" | "unchanged" | "non_comparable"
+    >();
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
     expectTypeOf<IncidentRequest["incidentSummary"]>().toEqualTypeOf<string>();

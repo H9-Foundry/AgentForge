@@ -11,6 +11,7 @@ import { runWorkflow } from "@h9-foundry/agentforge-runtime";
 import {
   agentforgeConfigSchema,
   auditBundleSchema,
+  benchmarkArtifactSchema,
   designArtifactSchema,
   designRequestSchema,
   evalArtifactSchema,
@@ -29,6 +30,8 @@ import {
 import type {
   AgentForgeConfig,
   AgentPluginRegistration,
+  BenchmarkComparedRun,
+  BenchmarkDeterministicDelta,
   BlockedPlugin,
   DesignArtifact,
   DesignRequest,
@@ -1094,6 +1097,22 @@ export interface EvalRunResult {
   artifactKinds: string[];
 }
 
+export interface BenchmarkCompareResult {
+  runId: string;
+  outputDir: string;
+  jsonPath: string;
+  markdownPath: string;
+  status: string;
+  baselineRunId: string;
+  comparedRunIds: string[];
+  comparableRunCount: number;
+  regressionCount: number;
+  improvementCount: number;
+  unchangedCount: number;
+  nonComparableCount: number;
+  artifactKinds: string[];
+}
+
 export interface LastRunExplanation {
   runId: string;
   status: string;
@@ -1182,6 +1201,35 @@ function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle
     });
 
   return candidates[0] ? { runDir: candidates[0].runDir, bundle: candidates[0].bundle } : undefined;
+}
+
+function readRunBundleByRef(root: string, runRef: string): { runId: string; bundlePath: string; bundle: ReturnType<typeof auditBundleSchema.parse> } {
+  const config = loadAgentForgeConfig(root);
+  const runsRoot = join(root, config.runtime.runsPath);
+  const bundlePath =
+    runRef.endsWith(".json") || runRef.includes("/")
+      ? (runRef.startsWith("/") ? runRef : join(root, runRef))
+      : join(runsRoot, runRef, "bundle.json");
+
+  if (!existsSync(bundlePath)) {
+    throw new Error(`Run bundle not found: ${runRef}`);
+  }
+
+  const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
+  return {
+    runId: typeof bundle.runId === "string" ? bundle.runId : runRef,
+    bundlePath,
+    bundle
+  };
+}
+
+function extractEvalArtifact(bundle: ReturnType<typeof auditBundleSchema.parse>, runRef: string): ReturnType<typeof evalArtifactSchema.parse> | never {
+  const artifact = bundle.lifecycleArtifacts.find((candidate) => candidate.artifactKind === "eval-result");
+  if (!artifact) {
+    throw new Error(`Run ${runRef} does not contain an eval-result artifact.`);
+  }
+
+  return evalArtifactSchema.parse(artifact);
 }
 
 function loadAgentForgeConfig(root: string): AgentForgeConfig {
@@ -1436,6 +1484,270 @@ function createEvalBundle(
     startedAt,
     finishedAt: new Date().toISOString(),
     status: passed ? "success" : "partial",
+    jsonPath,
+    markdownPath,
+    provenance: {
+      generatedBy: "agentforge-runtime",
+      schemaVersion: state.version,
+      executionEnvironment: state.context.ciExecution ? "ci" : "local",
+      repoRoot: state.repo.root
+    },
+    redaction: {
+      applied: true,
+      strategyVersion: "1.0.0",
+      categories: evalRedactionCategories()
+    },
+    components: []
+  });
+  writeFileSync(jsonPath, JSON.stringify(bundle, null, 2), "utf8");
+  writeFileSync(markdownPath, renderAuditBundleMarkdown(bundle), "utf8");
+  return { bundle, jsonPath, markdownPath, outputDir };
+}
+
+function compareDeterministicChecks(
+  baselineChecks: readonly EvalDeterministicCheck[],
+  candidateChecks: readonly EvalDeterministicCheck[]
+): {
+  regressions: BenchmarkDeterministicDelta[];
+  improvements: BenchmarkDeterministicDelta[];
+  unchangedCount: number;
+  nonComparableFindings: string[];
+} {
+  const regressions: BenchmarkDeterministicDelta[] = [];
+  const improvements: BenchmarkDeterministicDelta[] = [];
+  const nonComparableFindings: string[] = [];
+  let unchangedCount = 0;
+
+  const baselineByName = new Map(baselineChecks.map((check) => [check.name, check]));
+  const candidateByName = new Map(candidateChecks.map((check) => [check.name, check]));
+  const checkNames = [...new Set([...baselineByName.keys(), ...candidateByName.keys()])].sort();
+
+  for (const name of checkNames) {
+    const baselineCheck = baselineByName.get(name);
+    const candidateCheck = candidateByName.get(name);
+
+    if (!baselineCheck || !candidateCheck) {
+      nonComparableFindings.push(`Deterministic check \`${name}\` is missing from one of the eval results.`);
+      continue;
+    }
+
+    if (baselineCheck.status === candidateCheck.status) {
+      unchangedCount += 1;
+      continue;
+    }
+
+    if (baselineCheck.status === "not_applicable" || candidateCheck.status === "not_applicable") {
+      nonComparableFindings.push(
+        `Deterministic check \`${name}\` changed between comparable and not_applicable states (${baselineCheck.status} -> ${candidateCheck.status}).`
+      );
+      continue;
+    }
+
+    if (baselineCheck.status === "passed" && candidateCheck.status === "failed") {
+      regressions.push({
+        name,
+        classification: "regression",
+        baselineStatus: baselineCheck.status,
+        candidateStatus: candidateCheck.status,
+        details: candidateCheck.details ?? baselineCheck.details
+      });
+      continue;
+    }
+
+    if (baselineCheck.status === "failed" && candidateCheck.status === "passed") {
+      improvements.push({
+        name,
+        classification: "improvement",
+        baselineStatus: baselineCheck.status,
+        candidateStatus: candidateCheck.status,
+        details: candidateCheck.details ?? baselineCheck.details
+      });
+      continue;
+    }
+
+    nonComparableFindings.push(
+      `Deterministic check \`${name}\` changed in an unsupported way (${baselineCheck.status} -> ${candidateCheck.status}).`
+    );
+  }
+
+  return { regressions, improvements, unchangedCount, nonComparableFindings };
+}
+
+function compareEvalArtifacts(
+  baselineRunId: string,
+  baselineBundlePath: string,
+  baselineArtifact: ReturnType<typeof evalArtifactSchema.parse>,
+  candidateRunId: string,
+  candidateBundlePath: string,
+  candidateArtifact: ReturnType<typeof evalArtifactSchema.parse>
+): BenchmarkComparedRun {
+  if (baselineArtifact.payload.specId !== candidateArtifact.payload.specId) {
+    return {
+      runId: candidateRunId,
+      bundlePath: candidateBundlePath,
+      specId: candidateArtifact.payload.specId,
+      workflow: candidateArtifact.payload.workflow,
+      comparable: false,
+      passed: candidateArtifact.payload.passed,
+      failureCount: candidateArtifact.payload.failureCount,
+      deterministicCheckCount: candidateArtifact.payload.deterministicChecks.length,
+      regressions: [],
+      improvements: [],
+      unchangedCount: 0,
+      nonComparableFindings: [
+        `Spec mismatch: baseline ${baselineArtifact.payload.specId} vs candidate ${candidateArtifact.payload.specId}.`
+      ]
+    };
+  }
+
+  if (baselineArtifact.payload.workflow !== candidateArtifact.payload.workflow) {
+    return {
+      runId: candidateRunId,
+      bundlePath: candidateBundlePath,
+      specId: candidateArtifact.payload.specId,
+      workflow: candidateArtifact.payload.workflow,
+      comparable: false,
+      passed: candidateArtifact.payload.passed,
+      failureCount: candidateArtifact.payload.failureCount,
+      deterministicCheckCount: candidateArtifact.payload.deterministicChecks.length,
+      regressions: [],
+      improvements: [],
+      unchangedCount: 0,
+      nonComparableFindings: [
+        `Workflow mismatch: baseline ${baselineArtifact.payload.workflow} vs candidate ${candidateArtifact.payload.workflow}.`
+      ]
+    };
+  }
+
+  const comparison = compareDeterministicChecks(
+    baselineArtifact.payload.deterministicChecks,
+    candidateArtifact.payload.deterministicChecks
+  );
+
+  return {
+    runId: candidateRunId,
+    bundlePath: candidateBundlePath,
+    specId: candidateArtifact.payload.specId,
+    workflow: candidateArtifact.payload.workflow,
+    comparable: comparison.nonComparableFindings.length === 0,
+    passed: candidateArtifact.payload.passed,
+    failureCount: candidateArtifact.payload.failureCount,
+    deterministicCheckCount: candidateArtifact.payload.deterministicChecks.length,
+    regressions: comparison.regressions,
+    improvements: comparison.improvements,
+    unchangedCount: comparison.unchangedCount,
+    nonComparableFindings: comparison.nonComparableFindings
+  };
+}
+
+function createBenchmarkBundle(
+  root: string,
+  baselineRunId: string,
+  baselineBundlePath: string,
+  baselineArtifact: ReturnType<typeof evalArtifactSchema.parse>,
+  comparedRuns: readonly BenchmarkComparedRun[]
+): { bundle: ReturnType<typeof auditBundleSchema.parse>; jsonPath: string; markdownPath: string; outputDir: string } {
+  const config = loadAgentForgeConfig(root);
+  const policy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+  const state = createWorkflowState({
+    cwd: root,
+    workflow: "eval:compare",
+    mode: "inspect",
+    policy
+  });
+  const runsRoot = join(root, config.runtime.runsPath);
+  const outputDir = join(runsRoot, state.runId);
+  ensureDirectory(outputDir);
+  const jsonPath = join(outputDir, "bundle.json");
+  const markdownPath = join(outputDir, "summary.md");
+  const regressionCount = comparedRuns.reduce((total, candidate) => total + candidate.regressions.length, 0);
+  const improvementCount = comparedRuns.reduce((total, candidate) => total + candidate.improvements.length, 0);
+  const unchangedCount = comparedRuns.reduce((total, candidate) => total + candidate.unchangedCount, 0);
+  const nonComparableCount = comparedRuns.reduce((total, candidate) => total + candidate.nonComparableFindings.length, 0);
+  const summaryConclusion =
+    regressionCount > 0
+      ? `Detected ${regressionCount} deterministic regression(s) across compared eval results.`
+      : improvementCount > 0
+        ? `Detected ${improvementCount} deterministic improvement(s) with no regressions.`
+        : nonComparableCount > 0
+          ? `Compared eval results contain ${nonComparableCount} non-comparable difference(s) and no deterministic regressions.`
+          : "No deterministic regressions detected across compared eval results.";
+  const benchmarkArtifact = benchmarkArtifactSchema.parse({
+    schemaVersion: state.version,
+    artifactKind: "benchmark-summary",
+    lifecycleDomain: "evaluate",
+    workflow: {
+      name: state.workflow,
+      displayName: "Eval Benchmark Compare"
+    },
+    source: {
+      sourceType: "workflow-run",
+      runId: state.runId,
+      inputRefs: [baselineBundlePath, ...comparedRuns.map((candidate) => candidate.bundlePath)],
+      issueRefs: ["#166"],
+      githubRefs: []
+    },
+    status: "complete",
+    generatedAt: new Date().toISOString(),
+    repo: {
+      root: state.repo.root,
+      name: state.repo.name,
+      branch: state.repo.branch
+    },
+    provenance: {
+      generatedBy: "agentforge-runtime",
+      schemaVersion: state.version,
+      executionEnvironment: state.context.ciExecution ? "ci" : "local",
+      repoRoot: state.repo.root
+    },
+    redaction: {
+      applied: true,
+      strategyVersion: "1.0.0",
+      categories: evalRedactionCategories()
+    },
+    auditLink: {
+      bundlePath: jsonPath,
+      entryIds: [`${state.runId}-benchmark-compare`],
+      findingIds: [],
+      proposedActionIds: []
+    },
+    summary: summaryConclusion,
+    payload: {
+      baselineRunId,
+      baselineBundlePath,
+      baselineSpecId: baselineArtifact.payload.specId,
+      baselineWorkflow: baselineArtifact.payload.workflow,
+      comparedRuns,
+      regressionCount,
+      improvementCount,
+      unchangedCount,
+      nonComparableCount,
+      summaryConclusion
+    }
+  });
+
+  state.lifecycleArtifacts = [benchmarkArtifact];
+  state.auditTrail = [
+    createAuditEntry({
+      id: `${state.runId}-benchmark-compare`,
+      nodeId: "benchmark-compare",
+      nodeName: "benchmark-compare",
+      kind: "deterministic",
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      status: regressionCount > 0 ? "failed" : "success",
+      summary: benchmarkArtifact.summary,
+      toolsRequested: [],
+      toolsExecuted: [],
+      blockedActions: [],
+      validationPassed: regressionCount === 0
+    })
+  ];
+
+  const bundle = buildAuditBundle(state, {
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    status: regressionCount > 0 || nonComparableCount > 0 ? "partial" : "success",
     jsonPath,
     markdownPath,
     provenance: {
@@ -2051,6 +2363,53 @@ export async function runLocalEval(specId: string, cwd = process.cwd()): Promise
     setupRunCount: setupRuns.length,
     deterministicCheckCount: deterministicChecks.length,
     deterministicFailures: deterministicChecks.filter((check) => check.status === "failed").length,
+    artifactKinds: bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind)
+  };
+}
+
+export function compareLocalEvalRuns(baselineRunRef: string, candidateRunRefs: string[], cwd = process.cwd()): BenchmarkCompareResult {
+  if (candidateRunRefs.length === 0) {
+    throw new Error("Provide at least one candidate eval run to compare against the baseline.");
+  }
+
+  const root = findWorkspaceRoot(cwd);
+  ensureInitFiles(root);
+
+  const baseline = readRunBundleByRef(root, baselineRunRef);
+  const baselineArtifact = extractEvalArtifact(baseline.bundle, baselineRunRef);
+  const comparedRuns = candidateRunRefs.map((candidateRunRef) => {
+    const candidate = readRunBundleByRef(root, candidateRunRef);
+    const candidateArtifact = extractEvalArtifact(candidate.bundle, candidateRunRef);
+    return compareEvalArtifacts(
+      baseline.runId,
+      baseline.bundlePath,
+      baselineArtifact,
+      candidate.runId,
+      candidate.bundlePath,
+      candidateArtifact
+    );
+  });
+  const { bundle, jsonPath, markdownPath, outputDir } = createBenchmarkBundle(
+    root,
+    baseline.runId,
+    baseline.bundlePath,
+    baselineArtifact,
+    comparedRuns
+  );
+
+  return {
+    runId: bundle.runId,
+    outputDir,
+    jsonPath,
+    markdownPath,
+    status: bundle.status,
+    baselineRunId: baseline.runId,
+    comparedRunIds: comparedRuns.map((candidate) => candidate.runId),
+    comparableRunCount: comparedRuns.filter((candidate) => candidate.comparable).length,
+    regressionCount: comparedRuns.reduce((total, candidate) => total + candidate.regressions.length, 0),
+    improvementCount: comparedRuns.reduce((total, candidate) => total + candidate.improvements.length, 0),
+    unchangedCount: comparedRuns.reduce((total, candidate) => total + candidate.unchangedCount, 0),
+    nonComparableCount: comparedRuns.reduce((total, candidate) => total + candidate.nonComparableFindings.length, 0),
     artifactKinds: bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind)
   };
 }

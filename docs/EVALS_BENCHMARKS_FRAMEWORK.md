@@ -4,7 +4,7 @@ This document defines the design target for issue [#63](https://github.com/H9-Fo
 
 It describes how AgentForge should measure workflow quality, safety, and regression over time.
 
-It does **not** claim that benchmark comparison or hosted eval orchestration is implemented today.
+It does **not** claim that model-dependent scoring or hosted eval orchestration is implemented today.
 
 ## Why This Exists
 
@@ -36,13 +36,15 @@ Available now:
 - `eval-spec` schema plus a deterministic local fixture corpus for the current official workflow surface
 - local eval runner via `agentforge eval run <spec-id>`
 - `eval-result` lifecycle artifact emission for deterministic local evals
+- local benchmark comparison via `agentforge eval compare <baseline-run> <candidate-run...>`
+- `benchmark-summary` lifecycle artifact emission for deterministic local eval comparisons
 - support matrix and roadmap framing
 
 Not yet available:
 
 - workflow-scoring contracts
-- repeatable regression comparison across workflow versions
-- benchmark comparison and regression reporting
+- provider-scored evaluation layers
+- hosted benchmark orchestration or dashboards
 
 ## Framework Layers
 
@@ -100,6 +102,18 @@ Define how AgentForge should compare:
 
 This layer should consume the earlier artifacts rather than invent its own ad hoc output.
 
+The first implemented benchmark layer is intentionally narrow:
+
+- local-first only
+- consumes existing `eval-result` bundles
+- compares deterministic checks only
+- emits one `benchmark-summary` artifact per comparison run
+- treats spec or workflow mismatches as non-comparable instead of inventing scores
+
+The initial CLI surface is:
+
+- `agentforge eval compare <baseline-run> <candidate-run...>`
+
 ## Non-Goals
 
 This roadmap should not:
@@ -124,7 +138,7 @@ The roadmap should eventually introduce:
 - `eval-result`
 - `benchmark-summary`
 
-The first phase now defines `eval-spec`, a deterministic fixture corpus, and a bounded local eval runner that emits `eval-result`. The later phase still needs to implement `benchmark-summary` behavior.
+The first phase now defines `eval-spec`, a deterministic fixture corpus, a bounded local eval runner that emits `eval-result`, and a bounded local benchmark compare path that emits `benchmark-summary`.
 
 ## Relationship To Workflow Growth
 
@@ -143,3 +157,5 @@ This epic should be decomposed into at least:
 1. eval-spec schema and deterministic fixture corpus for core workflows
 2. local eval runner with deterministic expectation checks and `eval-result` artifact emission
 3. benchmark comparison and regression-reporting surface for workflow and agent variants
+
+The remaining follow-on work is to expand beyond deterministic local comparisons without weakening the current trust boundaries.
