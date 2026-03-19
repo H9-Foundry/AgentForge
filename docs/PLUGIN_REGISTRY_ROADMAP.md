@@ -110,6 +110,7 @@ Current truthful state:
 - local/manual plugin trust is real
 - registry integrations are planned
 - `packages/registry-client` remains internal
+- the supported external adoption path is still the CLI plus official workflows and presets, not standalone starter-agent packages
 
 The roadmap should keep those statements true until later implementation lands.
 
@@ -120,4 +121,3 @@ This epic should be decomposed into at least:
 1. registry metadata schema and plugin-catalog contract
 2. read-only registry-client discovery and compatibility verification surface
 3. verified third-party plugin activation flow with explicit approval and trust checks
-

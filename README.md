@@ -128,7 +128,7 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
   - `.agentops/workflows/qa-review.yaml`
   - `.agentops/workflows/security-review.yaml`
   - `.agentops/workflows/maintenance-triage.yaml`
-- official starter agents for context collection, planning analysis, design analysis, implementation planning, QA analysis, security analysis, maintenance analysis, security audit, code review, and test generation
+- official in-repo starter agents for context collection, planning analysis, design analysis, implementation planning, QA analysis, security analysis, maintenance analysis, security audit, code review, and test generation; these are bundled workflow assets, not separately supported external packages
 - internal starter adapters for filesystem, git, shell, and GitHub-aware mediation
 - public npm packages for the runtime core, CLI, contracts, and audit surfaces
 - GitHub Actions release automation, trusted publishing, and package verification tooling
@@ -210,6 +210,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/runtime-model.md](docs/r
 - `examples/*`: starter repositories and extension examples
 
 Internal packages remain private until their APIs stabilize and their support expectations are documented.
+
+See [docs/EXTERNAL_STARTER_AGENT_PACKAGING.md](docs/EXTERNAL_STARTER_AGENT_PACKAGING.md) for the current external support boundary for starter agents, presets, and registry-facing surfaces.
 
 ## Quickstart
 
