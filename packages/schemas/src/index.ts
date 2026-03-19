@@ -581,6 +581,18 @@ export const dependencyIntegrityEvidenceSchema = z.object({
   provenanceRefs: z.array(z.string().min(1)).default([])
 });
 
+export const attestationVerificationEvidenceSchema = z.object({
+  sourcePath: z.string().min(1).optional(),
+  verifier: z.enum(["github-artifact-attestation", "npm-provenance", "local-verifier"]),
+  subject: z.string().min(1),
+  issuer: z.string().min(1),
+  status: z.enum(["verified", "failed", "skipped"]),
+  detail: z.string().min(1),
+  predicateType: z.string().min(1).optional(),
+  verifiedAt: z.string().datetime().optional(),
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
 export const adapterCapabilityKindSchema = z.enum([
   "issue-reference-normalization",
   "pull-request-reference-normalization",
@@ -1058,10 +1070,12 @@ export const releaseEvidenceNormalizationSchema = z.object({
   missingEvidenceSources: z.array(z.string().min(1)).default([]),
   ciEvidence: z.array(ciEvidenceSchema).default([]),
   dependencyIntegrityEvidence: z.array(dependencyIntegrityEvidenceSchema).default([]),
+  attestationVerificationEvidence: z.array(attestationVerificationEvidenceSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
   localReadinessChecks: z.array(releaseVerificationCheckSchema).default([]),
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
   approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
+  trustSummary: z.array(z.string().min(1)).default([]),
   provenanceRefs: z.array(z.string().min(1)).default([])
 });
 
@@ -1072,6 +1086,7 @@ export const releaseArtifactPayloadSchema = z.object({
   verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
   dependencyIntegritySignals: z.array(z.string().min(1)).default([]),
+  trustSummary: z.array(z.string().min(1)).default([]),
   approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
   publishingPlan: z.array(z.string().min(1)).default([]),
   trustStatus: z.string().min(1),
@@ -1296,6 +1311,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   genericCiEvidenceExport: genericCiEvidenceExportSchema,
   dependencyInventoryEntry: dependencyInventoryEntrySchema,
   dependencyIntegrityEvidence: dependencyIntegrityEvidenceSchema,
+  attestationVerificationEvidence: attestationVerificationEvidenceSchema,
   adapterCapabilityMetadata: adapterCapabilityMetadataSchema,
   githubReference: githubReferenceSchema,
   githubActionsJobEvidence: githubActionsJobEvidenceSchema,
@@ -1627,6 +1643,10 @@ const releaseArtifactFixture = {
     dependencyIntegritySignals: [
       "Dependency inventory covers 2 manifest(s) with 4 declared dependency entries.",
       "Workspace dependency integrity is verified against pnpm-lock.yaml."
+    ],
+    trustSummary: [
+      "Verified 1 attestation or provenance evidence export.",
+      "Trusted publishing remains reviewed separately from bounded attestation verification."
     ],
     approvalRecommendations: [
       {
@@ -2248,6 +2268,21 @@ const dependencyIntegrityEvidenceFixture = {
   provenanceRefs: ["package.json", "packages/cli/package.json", "pnpm-lock.yaml"]
 } as const;
 
+const attestationVerificationEvidenceFixture = {
+  sourcePath: ".agentops/evidence/attestation-verification.json",
+  verifier: "github-artifact-attestation",
+  subject: "@h9-foundry/agentforge-cli@0.7.0",
+  issuer: "https://token.actions.githubusercontent.com",
+  status: "verified",
+  detail: "Verified GitHub artifact attestation for the release package artifact.",
+  predicateType: "https://slsa.dev/provenance/v1",
+  verifiedAt: "2026-03-19T12:45:00.000Z",
+  provenanceRefs: [
+    ".agentops/evidence/attestation-verification.json",
+    "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789"
+  ]
+} as const;
+
 const securityEvidenceNormalizationFixture = {
   targetRef: ".agentops/runs/run-790/bundle.json",
   targetType: "artifact-bundle",
@@ -2556,6 +2591,7 @@ const releaseEvidenceNormalizationFixture = {
   missingEvidenceSources: [],
   ciEvidence: [genericCiEvidenceFixture],
   dependencyIntegrityEvidence: [dependencyIntegrityEvidenceFixture],
+  attestationVerificationEvidence: [attestationVerificationEvidenceFixture],
   versionResolutions: [
     {
       name: "@h9-foundry/agentforge-cli",
@@ -2568,6 +2604,7 @@ const releaseEvidenceNormalizationFixture = {
     { name: "qa-report-refs", status: "passed", detail: "Using one validated QA report reference." },
     { name: "security-report-refs", status: "passed", detail: "Using one validated security report reference." },
     { name: "dependency-integrity", status: "passed", detail: "Dependency inventory is verified against pnpm-lock.yaml." },
+    { name: "attestation-verification", status: "passed", detail: "Verified 1 attestation or provenance evidence export." },
     { name: "workspace-version-targets", status: "passed", detail: "Resolved one workspace version target." }
   ],
   readinessStatus: "ready",
@@ -2583,12 +2620,18 @@ const releaseEvidenceNormalizationFixture = {
       reason: "Promotion remains a release-significant side effect and requires explicit maintainer approval."
     }
   ],
+  trustSummary: [
+    "Verified 1 attestation or provenance evidence export.",
+    "Trusted publishing remains reviewed separately from bounded attestation verification."
+  ],
   provenanceRefs: [
     ".agentops/runs/run-789/bundle.json",
     ".agentops/runs/run-790/bundle.json",
     ".agentops/runs/run-790/summary.md",
     "package.json",
-    "packages/cli/package.json"
+    "packages/cli/package.json",
+    ".agentops/evidence/attestation-verification.json",
+    "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789"
   ]
 } as const;
 
@@ -2776,6 +2819,7 @@ export const schemaFixtures = {
   gitlabMergeRequestScmReference: gitlabMergeRequestScmReferenceFixture,
   ciEvidence: ciEvidenceFixture,
   dependencyIntegrityEvidence: dependencyIntegrityEvidenceFixture,
+  attestationVerificationEvidence: attestationVerificationEvidenceFixture,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportFixture,
   gitlabCiEvidence: gitlabCiEvidenceFixture,
   genericCiEvidenceExport: genericCiEvidenceExportFixture,

@@ -1641,6 +1641,7 @@ describe("cli smoke flows", () => {
     initializeWorkspace(root);
     ensureRequestsDir(root);
     mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
     writeFileSync(
       join(root, "packages", "cli", "package.json"),
       JSON.stringify(
@@ -1751,13 +1752,36 @@ describe("cli smoke flows", () => {
       )
     );
     writeFileSync(join(securityBundleDir, "summary.md"), "# security summary\n");
+    writeFileSync(
+      join(root, ".agentops", "evidence", "attestation-verification.json"),
+      JSON.stringify(
+        {
+          verifier: "github-artifact-attestation",
+          subject: "@h9-foundry/agentforge-cli@0.7.0",
+          issuer: "https://token.actions.githubusercontent.com",
+          status: "verified",
+          detail: "Verified GitHub artifact attestation for the release package artifact.",
+          predicateType: "https://slsa.dev/provenance/v1",
+          verifiedAt: "2026-03-19T12:45:00.000Z",
+          provenanceRefs: [
+            ".agentops/evidence/attestation-verification.json",
+            "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789"
+          ]
+        },
+        null,
+        2
+      )
+    );
 
     writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
       releaseScope: "Prepare the 0.7.0 candidate for maintainer review",
       versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
       qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
       securityReportRefs: [".agentops/runs/run-security/bundle.json"],
-      evidenceSources: [".agentops/runs/run-security/summary.md"],
+      evidenceSources: [
+        ".agentops/runs/run-security/summary.md",
+        ".agentops/evidence/attestation-verification.json"
+      ],
       constraints: ["Keep release readiness read-only by default"]
     });
 
@@ -1777,6 +1801,8 @@ describe("cli smoke flows", () => {
           approvalRecommendations?: Array<{ action: string; classification: string }>;
           verificationChecks?: Array<{ name: string; status: string }>;
           dependencyIntegritySignals?: string[];
+          trustSummary?: string[];
+          trustStatus?: string;
         };
       }>;
     }>(releaseRun.jsonPath);
@@ -1808,6 +1834,15 @@ describe("cli smoke flows", () => {
         expect.stringContaining("Dependency inventory covers"),
         expect.stringContaining("pnpm-lock.yaml")
       ])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.trustSummary).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Verified 1 attestation or provenance evidence export."),
+        expect.stringContaining("Trusted publishing remains reviewed separately")
+      ])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.trustStatus).toBe(
+      "attestation-verified-trusted-publishing-reviewed-separately"
     );
   });
 

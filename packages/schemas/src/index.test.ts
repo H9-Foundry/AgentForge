@@ -4,6 +4,7 @@ import {
   agentManifestSchema,
   auditBundleSchema,
   benchmarkArtifactSchema,
+  attestationVerificationEvidenceSchema,
   ciArtifactEvidenceSchema,
   ciEvidenceSchema,
   dependencyIntegrityEvidenceSchema,
@@ -75,6 +76,7 @@ describe("schema fixtures", () => {
     expect(() => ciEvidenceSchema.parse(schemaFixtures.genericCiEvidence)).not.toThrow();
     expect(() => dependencyInventoryEntrySchema.parse(schemaFixtures.dependencyIntegrityEvidence.inventoryEntries[0])).not.toThrow();
     expect(() => dependencyIntegrityEvidenceSchema.parse(schemaFixtures.dependencyIntegrityEvidence)).not.toThrow();
+    expect(() => attestationVerificationEvidenceSchema.parse(schemaFixtures.attestationVerificationEvidence)).not.toThrow();
     expect(() => gitlabCiEvidenceExportSchema.parse(schemaFixtures.gitlabCiEvidenceExport)).not.toThrow();
     expect(() => genericCiEvidenceExportSchema.parse(schemaFixtures.genericCiEvidenceExport)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.adapterCapabilityMetadata)).not.toThrow();
@@ -128,6 +130,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.ciEvidence).toBeDefined();
     expect(jsonSchemas.dependencyInventoryEntry).toBeDefined();
     expect(jsonSchemas.dependencyIntegrityEvidence).toBeDefined();
+    expect(jsonSchemas.attestationVerificationEvidence).toBeDefined();
     expect(jsonSchemas.genericCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.gitlabCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.adapterCapabilityMetadata).toBeDefined();

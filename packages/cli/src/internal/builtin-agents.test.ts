@@ -856,13 +856,31 @@ describe("builtin release evidence normalizer", () => {
     const root = mkdtempSync(join(tmpdir(), "agentforge-release-evidence-"));
     mkdirSync(join(root, ".agentops", "runs", "run-qa"), { recursive: true });
     mkdirSync(join(root, ".agentops", "runs", "run-security"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
     mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    writeFileSync(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture-root",
+          devDependencies: {
+            typescript: "^5.8.0"
+          }
+        },
+        null,
+        2
+      )
+    );
     writeFileSync(
       join(root, "packages", "cli", "package.json"),
       JSON.stringify(
         {
           name: "@h9-foundry/agentforge-cli",
-          version: "0.6.0"
+          version: "0.6.0",
+          dependencies: {
+            "@h9-foundry/agentforge-schemas": "workspace:*"
+          }
         },
         null,
         2
@@ -898,6 +916,26 @@ describe("builtin release evidence normalizer", () => {
       )
     );
     writeFileSync(join(root, ".agentops", "runs", "run-security", "summary.md"), "# security summary\n");
+    writeFileSync(
+      join(root, ".agentops", "evidence", "attestation-verification.json"),
+      JSON.stringify(
+        {
+          verifier: "github-artifact-attestation",
+          subject: "@h9-foundry/agentforge-cli@0.7.0",
+          issuer: "https://token.actions.githubusercontent.com",
+          status: "verified",
+          detail: "Verified GitHub artifact attestation for the release package artifact.",
+          predicateType: "https://slsa.dev/provenance/v1",
+          verifiedAt: "2026-03-19T12:45:00.000Z",
+          provenanceRefs: [
+            ".agentops/evidence/attestation-verification.json",
+            "https://github.com/H9-Foundry/AgentForge/actions/runs/123456789"
+          ]
+        },
+        null,
+        2
+      )
+    );
 
     const agent = createBuiltinAgentRegistry().get("release-evidence-normalizer");
     expect(agent).toBeDefined();
@@ -920,7 +958,10 @@ describe("builtin release evidence normalizer", () => {
             versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
             qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
             securityReportRefs: [".agentops/runs/run-security/bundle.json"],
-            evidenceSources: [".agentops/runs/run-security/summary.md"],
+            evidenceSources: [
+              ".agentops/runs/run-security/summary.md",
+              ".agentops/evidence/attestation-verification.json"
+            ],
             constraints: ["Keep the workflow read-only"]
           }
         },
@@ -929,7 +970,10 @@ describe("builtin release evidence normalizer", () => {
             metadata: {
               qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
               securityReportRefs: [".agentops/runs/run-security/bundle.json"],
-              evidenceSources: [".agentops/runs/run-security/summary.md"]
+              evidenceSources: [
+                ".agentops/runs/run-security/summary.md",
+                ".agentops/evidence/attestation-verification.json"
+              ]
             }
           }
         }
@@ -941,7 +985,8 @@ describe("builtin release evidence normalizer", () => {
     expect(output.metadata?.normalizedEvidenceSources).toEqual([
       ".agentops/runs/run-qa/bundle.json",
       ".agentops/runs/run-security/bundle.json",
-      ".agentops/runs/run-security/summary.md"
+      ".agentops/runs/run-security/summary.md",
+      ".agentops/evidence/attestation-verification.json"
     ]);
     expect(output.metadata?.versionResolutions).toEqual([
       expect.objectContaining({
@@ -956,6 +1001,97 @@ describe("builtin release evidence normalizer", () => {
         expect.objectContaining({ action: "publish-packages", classification: "approval_required" }),
         expect.objectContaining({ action: "promote-release", classification: "approval_required" })
       ])
+    );
+    expect(output.metadata?.dependencyIntegrityEvidence).toEqual(
+      expect.arrayContaining([expect.objectContaining({ integrityStatus: "verified-lockfile", lockfilePath: "pnpm-lock.yaml" })])
+    );
+    expect(output.metadata?.attestationVerificationEvidence).toEqual(
+      expect.arrayContaining([expect.objectContaining({ verifier: "github-artifact-attestation", status: "verified" })])
+    );
+    expect(output.metadata?.trustSummary).toEqual(
+      expect.arrayContaining([expect.stringContaining("Verified 1 attestation or provenance evidence export.")])
+    );
+    expect(output.metadata?.localReadinessChecks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "attestation-verification", status: "passed" })])
+    );
+  });
+
+  it("blocks release readiness when supplied attestation verification evidence fails", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agentforge-release-attestation-fail-"));
+    mkdirSync(join(root, ".agentops", "runs", "run-qa"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "runs", "run-security"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    mkdirSync(join(root, "packages", "cli"), { recursive: true });
+    writeFileSync(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "fixture-root" }, null, 2));
+    writeFileSync(
+      join(root, "packages", "cli", "package.json"),
+      JSON.stringify({ name: "@h9-foundry/agentforge-cli", version: "0.6.0" }, null, 2)
+    );
+    writeFileSync(join(root, ".agentops", "runs", "run-qa", "bundle.json"), JSON.stringify({ lifecycleArtifacts: [{ artifactKind: "qa-report" }] }, null, 2));
+    writeFileSync(join(root, ".agentops", "runs", "run-security", "bundle.json"), JSON.stringify({ lifecycleArtifacts: [{ artifactKind: "security-report" }] }, null, 2));
+    writeFileSync(join(root, ".agentops", "runs", "run-security", "summary.md"), "# security summary\n");
+    writeFileSync(
+      join(root, ".agentops", "evidence", "attestation-verification.json"),
+      JSON.stringify(
+        {
+          verifier: "github-artifact-attestation",
+          subject: "@h9-foundry/agentforge-cli@0.7.0",
+          issuer: "https://token.actions.githubusercontent.com",
+          status: "failed",
+          detail: "The supplied attestation did not match the expected release subject.",
+          provenanceRefs: [".agentops/evidence/attestation-verification.json"]
+        },
+        null,
+        2
+      )
+    );
+
+    const agent = createBuiltinAgentRegistry().get("release-evidence-normalizer");
+    expect(agent).toBeDefined();
+
+    const output = await agent!.execute({
+      state: {} as never,
+      stateSlice: {
+        repo: {
+          root,
+          name: "fixture-root",
+          branch: "main",
+          packageManager: "pnpm",
+          languages: ["typescript"],
+          ci: false,
+          detectedFiles: []
+        },
+        workflowInputs: {
+          releaseRequest: {
+            releaseScope: "Prepare the next release candidate",
+            versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+            qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+            securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+            evidenceSources: [".agentops/evidence/attestation-verification.json"],
+            constraints: ["Keep the workflow read-only"]
+          }
+        },
+        agentResults: {
+          intake: {
+            metadata: {
+              qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+              securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+              evidenceSources: [".agentops/evidence/attestation-verification.json"]
+            }
+          }
+        }
+      } as never,
+      policy: {} as never,
+      invokeTool: async () => ({}) as never
+    });
+
+    expect(output.metadata?.readinessStatus).toBe("blocked");
+    expect(output.metadata?.localReadinessChecks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "attestation-verification", status: "failed" })])
+    );
+    expect(output.metadata?.trustSummary).toEqual(
+      expect.arrayContaining([expect.stringContaining("attestation verification failure")])
     );
   });
 });
