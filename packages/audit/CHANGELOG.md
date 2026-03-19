@@ -1,5 +1,14 @@
 # @h9-foundry/agentforge-audit
 
+## 0.8.0
+
+### Patch Changes
+
+- Updated dependencies [9ce38fa]
+- Updated dependencies [005e3ba]
+- Updated dependencies [ebf3f39]
+  - @h9-foundry/agentforge-shared-types@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes
