@@ -967,6 +967,23 @@ export const releaseApprovalRecommendationSchema = z.object({
   reason: z.string().min(1)
 });
 
+export const releaseCiEvidenceSummarySchema = z.object({
+  provider: z.string().min(1),
+  platform: ciPlatformSchema,
+  host: z.string().min(1),
+  repository: z.string().min(1),
+  pipelineName: z.string().min(1),
+  pipelineRunId: z.string().min(1),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  branch: z.string().min(1).optional(),
+  commitSha: z.string().min(1).optional(),
+  failingChecks: z.array(z.string().min(1)).default([]),
+  provenanceSource: z.enum(["local-export", "adapter-read"]).default("local-export"),
+  displayLabel: z.string().min(1),
+  statusSummary: z.string().min(1)
+});
+
 export const releaseRequestSchema = z.object({
   releaseScope: z.string().min(1),
   versionTargets: z.array(releaseVersionTargetSchema).min(1),
@@ -1089,6 +1106,7 @@ export const releaseEvidenceNormalizationSchema = z.object({
   normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
   missingEvidenceSources: z.array(z.string().min(1)).default([]),
   ciEvidence: z.array(ciEvidenceSchema).default([]),
+  ciEvidenceSummary: z.array(releaseCiEvidenceSummarySchema).default([]),
   dependencyIntegrityEvidence: z.array(dependencyIntegrityEvidenceSchema).default([]),
   attestationVerificationEvidence: z.array(attestationVerificationEvidenceSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
@@ -1105,6 +1123,7 @@ export const releaseArtifactPayloadSchema = z.object({
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
   verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
+  ciEvidenceSummary: z.array(releaseCiEvidenceSummarySchema).default([]),
   dependencyIntegritySignals: z.array(z.string().min(1)).default([]),
   trustSummary: z.array(z.string().min(1)).default([]),
   approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
@@ -1371,6 +1390,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   releaseVersionTarget: releaseVersionTargetSchema,
   releaseVersionResolution: releaseVersionResolutionSchema,
   releaseApprovalRecommendation: releaseApprovalRecommendationSchema,
+  releaseCiEvidenceSummary: releaseCiEvidenceSummarySchema,
   releaseEvidenceNormalization: releaseEvidenceNormalizationSchema,
   releaseArtifactPayload: releaseArtifactPayloadSchema,
   maintenanceArtifactPayload: maintenanceArtifactPayloadSchema,
@@ -1659,6 +1679,24 @@ const releaseArtifactFixture = {
         targetVersion: "0.4.1",
         currentVersion: "0.4.0",
         status: "pending-version-bump"
+      }
+    ],
+    ciEvidenceSummary: [
+      {
+        provider: "GitHub Actions",
+        platform: "github-actions",
+        host: "github.com",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "publish",
+        pipelineRunId: "321",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "adapter-read",
+        displayLabel: "GitHub Actions (github-actions) pipeline `publish` run `321`",
+        statusSummary: "GitHub Actions (github-actions) pipeline `publish` run `321` completed from adapter-read evidence with success."
       }
     ],
     dependencyIntegritySignals: [
@@ -2683,6 +2721,40 @@ const releaseEvidenceNormalizationFixture = {
   ],
   missingEvidenceSources: [],
   ciEvidence: [buildkiteCiEvidenceFixture, genericCiEvidenceFixture],
+  ciEvidenceSummary: [
+    {
+      provider: "Buildkite",
+      platform: "buildkite",
+      host: "buildkite.com",
+      repository: "H9-Foundry/AgentForge",
+      pipelineName: "release",
+      pipelineRunId: "bk-42",
+      status: "completed",
+      conclusion: "success",
+      branch: "main",
+      commitSha: "abc123",
+      failingChecks: [],
+      provenanceSource: "local-export",
+      displayLabel: "Buildkite (buildkite) pipeline `release` run `bk-42`",
+      statusSummary: "Buildkite (buildkite) pipeline `release` run `bk-42` completed from local-export evidence with success."
+    },
+    {
+      provider: "Jenkins",
+      platform: "generic-ci",
+      host: "jenkins.local",
+      repository: "H9-Foundry/AgentForge",
+      pipelineName: "Jenkins CI",
+      pipelineRunId: "jenkins-42",
+      status: "completed",
+      conclusion: "success",
+      branch: "main",
+      commitSha: "abc123",
+      failingChecks: [],
+      provenanceSource: "local-export",
+      displayLabel: "Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42`",
+      statusSummary: "Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success."
+    }
+  ],
   dependencyIntegrityEvidence: [dependencyIntegrityEvidenceFixture],
   attestationVerificationEvidence: [attestationVerificationEvidenceFixture],
   versionResolutions: [

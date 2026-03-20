@@ -77,6 +77,7 @@ import {
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
   releaseApprovalRecommendationSchema,
+  releaseCiEvidenceSummarySchema,
   securityEvidenceNormalizationSchema,
   securityArtifactPayloadSchema,
   securityArtifactSchema,
@@ -138,6 +139,7 @@ export type GithubHandoffSummary = Infer<typeof githubHandoffSummarySchema>;
 export type GithubReference = Infer<typeof githubReferenceSchema>;
 export type ScmReference = Infer<typeof scmReferenceSchema>;
 export type GithubWorkflowStatusMapping = Infer<typeof githubWorkflowStatusMappingSchema>;
+export type ReleaseCiEvidenceSummary = Infer<typeof releaseCiEvidenceSummarySchema>;
 export type LifecycleArtifactWorkflowReference = Infer<typeof lifecycleArtifactWorkflowReferenceSchema>;
 export type LifecycleArtifactSourceReference = Infer<typeof lifecycleArtifactSourceReferenceSchema>;
 export type LifecycleArtifactRepoReference = Infer<typeof lifecycleArtifactRepoReferenceSchema>;
