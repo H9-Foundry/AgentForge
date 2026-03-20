@@ -873,6 +873,7 @@ function normalizeImportedCiEvidence(
   evidenceSources: readonly string[]
 ): CiEvidence[] {
   const seen = new Set<string>();
+  // Provider-specific local exports are schema-disambiguated before they reach this shared aggregation step.
   const combined = [
     ...normalizeGitLabCiEvidence(repoRoot, evidenceSources),
     ...normalizeBuildkiteCiEvidence(repoRoot, evidenceSources),
