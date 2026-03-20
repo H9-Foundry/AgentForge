@@ -1207,6 +1207,7 @@ describe("cli smoke flows", () => {
       join(root, ".agentops", "evidence", "buildkite-ci.json"),
       JSON.stringify(
         {
+          providerName: "Buildkite",
           host: "buildkite.local",
           repository: "H9-Foundry/fixture",
           pipelineName: "Buildkite CI",
@@ -1288,6 +1289,7 @@ describe("cli smoke flows", () => {
       join(root, ".agentops", "evidence", "jenkins-ci.json"),
       JSON.stringify(
         {
+          providerName: "Jenkins",
           host: "jenkins.local",
           repository: "H9-Foundry/fixture",
           pipelineName: "Jenkins CI",
@@ -1956,6 +1958,7 @@ describe("cli smoke flows", () => {
       join(root, ".agentops", "evidence", "buildkite-ci.json"),
       JSON.stringify(
         {
+          providerName: "Buildkite",
           host: "buildkite.com",
           repository: "H9-Foundry/fixture",
           pipelineName: "release",

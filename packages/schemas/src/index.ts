@@ -533,6 +533,7 @@ export const gitlabCiEvidenceExportSchema = z.object({
 
 export const buildkiteCiEvidenceExportSchema = z.object({
   sourcePath: z.string().min(1).optional(),
+  providerName: z.literal("Buildkite"),
   host: z.string().min(1).default("buildkite.com"),
   repository: z.string().min(1),
   pipelineName: z.string().min(1).default("Buildkite"),
@@ -550,6 +551,7 @@ export const buildkiteCiEvidenceExportSchema = z.object({
 
 export const jenkinsCiEvidenceExportSchema = z.object({
   sourcePath: z.string().min(1).optional(),
+  providerName: z.literal("Jenkins"),
   host: z.string().min(1).default("jenkins.local"),
   repository: z.string().min(1),
   pipelineName: z.string().min(1).default("Jenkins CI"),
@@ -2139,6 +2141,7 @@ const gitlabCiEvidenceFixture = {
 
 const buildkiteCiEvidenceExportFixture = {
   sourcePath: ".agentops/evidence/buildkite-ci.json",
+  providerName: "Buildkite",
   host: "buildkite.local",
   repository: "h9-foundry/platform/agentforge",
   pipelineName: "Buildkite CI",
@@ -2213,6 +2216,7 @@ const buildkiteCiEvidenceFixture = {
 
 const jenkinsCiEvidenceExportFixture = {
   sourcePath: ".agentops/evidence/jenkins-ci.json",
+  providerName: "Jenkins",
   host: "jenkins.local",
   repository: "h9-foundry/platform/agentforge",
   pipelineName: "Jenkins CI",
