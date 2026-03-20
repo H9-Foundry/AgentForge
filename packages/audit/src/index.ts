@@ -9,7 +9,9 @@ import type {
   IncidentArtifact,
   PlanningArtifact,
   QaArtifact,
+  ReleaseCiEvidenceSummary,
   ReleaseArtifact,
+  ScmReference,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
 
@@ -113,8 +115,46 @@ function renderReleaseSections(artifact: ReleaseArtifact): GithubHandoffSection[
   ].filter((section) => section.lines.length > 0);
 }
 
-function buildGitHubHandoffSections(artifact: GitHubRenderableArtifact): GithubHandoffSection[] {
+function renderSharedScmSection(artifact: GitHubRenderableArtifact): GithubHandoffSection[] {
+  const githubCanonicals = new Set((artifact.source.githubRefs ?? []).map((entry) => entry.canonical));
+  const lines = [...new Set(
+    (artifact.source.scmRefs ?? [])
+      .filter((entry) => !githubCanonicals.has(entry.canonical))
+      .map((entry: ScmReference) => `${entry.platform} ${entry.kind}: ${entry.canonical}`)
+  )];
+
+  return lines.length > 0 ? [{ heading: "SCM References", lines }] : [];
+}
+
+function readArtifactCiEvidenceSummary(artifact: GitHubRenderableArtifact): ReleaseCiEvidenceSummary[] {
   switch (artifact.artifactKind) {
+    case "qa-report":
+      return artifact.payload.ciEvidenceSummary ?? [];
+    case "release-report":
+      return artifact.payload.ciEvidenceSummary ?? [];
+    default:
+      return [];
+  }
+}
+
+function renderSharedCiSection(artifact: GitHubRenderableArtifact): GithubHandoffSection[] {
+  const ciEvidenceSummary = readArtifactCiEvidenceSummary(artifact);
+  if (ciEvidenceSummary.length === 0) {
+    return [];
+  }
+
+  const lines = ciEvidenceSummary.flatMap((entry) =>
+    entry.failingChecks.length > 0
+      ? [entry.statusSummary, `Failing checks: ${entry.failingChecks.join(", ")}`]
+      : [entry.statusSummary]
+  );
+
+  return [{ heading: "CI Evidence", lines }];
+}
+
+function buildGitHubHandoffSections(artifact: GitHubRenderableArtifact): GithubHandoffSection[] {
+  const baseSections = (() => {
+    switch (artifact.artifactKind) {
     case "planning-brief":
       return renderPlanningSections(artifact);
     case "design-record":
@@ -125,7 +165,10 @@ function buildGitHubHandoffSections(artifact: GitHubRenderableArtifact): GithubH
       return renderQaSections(artifact);
     case "release-report":
       return renderReleaseSections(artifact);
-  }
+    }
+  })();
+
+  return [...baseSections, ...renderSharedScmSection(artifact), ...renderSharedCiSection(artifact)];
 }
 
 function buildHandoffTitle(artifact: GitHubRenderableArtifact, issueRefs: readonly GithubReference[], pullRequestRefs: readonly GithubReference[]): string {

@@ -906,6 +906,7 @@ export const qaArtifactPayloadSchema = z.object({
   targetRef: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
   executedChecks: z.array(z.string().min(1)).default([]),
+  ciEvidenceSummary: z.array(z.lazy(() => releaseCiEvidenceSummarySchema)).default([]),
   findings: z.array(findingSchema).default([]),
   coverageGaps: z.array(z.string().min(1)).default([]),
   recommendedNextChecks: z.array(z.string().min(1)).default([]),
@@ -1589,6 +1590,24 @@ const qaArtifactFixture = {
     targetRef: ".agentops/runs/run-789/bundle.json",
     evidenceSources: [".agentops/runs/run-789/summary.md"],
     executedChecks: ["pnpm test"],
+    ciEvidenceSummary: [
+      {
+        provider: "Buildkite",
+        platform: "buildkite",
+        host: "buildkite.com",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "qa",
+        pipelineRunId: "bk-41",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "local-export",
+        displayLabel: "Buildkite (buildkite) pipeline `qa` run `bk-41`",
+        statusSummary: "Buildkite (buildkite) pipeline `qa` run `bk-41` completed from local-export evidence with success."
+      }
+    ],
     findings: [
       {
         id: "qa-finding-1",
