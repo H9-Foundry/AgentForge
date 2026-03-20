@@ -75,4 +75,65 @@ describe("renderGitHubHandoffSummary", () => {
     expect(summary.body).toContain("gitlab issue: gitlab.com/h9-foundry/platform/agentforge#123");
     expect(summary.body).toContain("GitHub Actions (github-actions) pipeline `publish` run `321` completed from adapter-read evidence with success.");
   });
+
+  it("renders Jenkins-backed CI summaries through the shared handoff path", () => {
+    const artifact = cloneFixture(schemaFixtures.releaseArtifact) as unknown as ReleaseArtifact;
+    artifact.payload.ciEvidenceSummary = [
+      {
+        provider: "Buildkite",
+        platform: "buildkite",
+        host: "buildkite.com",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "release",
+        pipelineRunId: "bk-42",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "local-export",
+        displayLabel: "Buildkite (buildkite) pipeline `release` run `bk-42`",
+        statusSummary: "Buildkite (buildkite) pipeline `release` run `bk-42` completed from local-export evidence with success."
+      },
+      {
+        provider: "Jenkins",
+        platform: "jenkins-ci",
+        host: "jenkins.local",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "Jenkins CI",
+        pipelineRunId: "jenkins-42",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "local-export",
+        displayLabel: "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42`",
+        statusSummary: "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success."
+      },
+      {
+        provider: "CircleCI",
+        platform: "generic-ci",
+        host: "circleci.local",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "CircleCI",
+        pipelineRunId: "circleci-42",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "local-export",
+        displayLabel: "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42`",
+        statusSummary: "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success."
+      }
+    ];
+
+    const summary = renderGitHubHandoffSummary(artifact);
+
+    expect(summary.sections.some((section) => section.heading === "CI Evidence")).toBe(true);
+    expect(summary.body).toContain("Buildkite (buildkite) pipeline `release` run `bk-42` completed from local-export evidence with success.");
+    expect(summary.body).toContain("Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success.");
+    expect(summary.body).toContain("CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success.");
+  });
 });
