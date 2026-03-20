@@ -2829,10 +2829,11 @@ const releaseEvidenceNormalizationFixture = {
     ".agentops/runs/run-790/bundle.json",
     ".agentops/runs/run-790/summary.md",
     ".agentops/evidence/buildkite-ci.json",
+    ".agentops/evidence/jenkins-ci.json",
     ".agentops/evidence/generic-ci.json"
   ],
   missingEvidenceSources: [],
-  ciEvidence: [buildkiteCiEvidenceFixture, genericCiEvidenceFixture],
+  ciEvidence: [buildkiteCiEvidenceFixture, jenkinsCiEvidenceFixture, genericCiEvidenceFixture],
   ciEvidenceSummary: [
     {
       provider: "Buildkite",
@@ -2852,7 +2853,7 @@ const releaseEvidenceNormalizationFixture = {
     },
     {
       provider: "Jenkins",
-      platform: "generic-ci",
+      platform: "jenkins-ci",
       host: "jenkins.local",
       repository: "H9-Foundry/AgentForge",
       pipelineName: "Jenkins CI",
@@ -2863,8 +2864,24 @@ const releaseEvidenceNormalizationFixture = {
       commitSha: "abc123",
       failingChecks: [],
       provenanceSource: "local-export",
-      displayLabel: "Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42`",
-      statusSummary: "Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success."
+      displayLabel: "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42`",
+      statusSummary: "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success."
+    },
+    {
+      provider: "CircleCI",
+      platform: "generic-ci",
+      host: "circleci.local",
+      repository: "H9-Foundry/AgentForge",
+      pipelineName: "CircleCI",
+      pipelineRunId: "circleci-42",
+      status: "completed",
+      conclusion: "success",
+      branch: "main",
+      commitSha: "abc123",
+      failingChecks: [],
+      provenanceSource: "local-export",
+      displayLabel: "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42`",
+      statusSummary: "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success."
     }
   ],
   dependencyIntegrityEvidence: [dependencyIntegrityEvidenceFixture],

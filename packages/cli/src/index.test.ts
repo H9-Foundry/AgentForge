@@ -1991,10 +1991,9 @@ describe("cli smoke flows", () => {
       )
     );
     writeFileSync(
-      join(root, ".agentops", "evidence", "generic-ci.json"),
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
       JSON.stringify(
         {
-          providerName: "Jenkins",
           host: "jenkins.local",
           repository: "H9-Foundry/fixture",
           pipelineName: "Jenkins CI",
@@ -2012,6 +2011,42 @@ describe("cli smoke flows", () => {
               status: "completed",
               conclusion: "success",
               htmlUrl: "https://jenkins.example.com/job/agentforge/42/test"
+            }
+          ],
+          artifacts: [
+            {
+              name: "coverage-report",
+              type: "html-report",
+              path: "artifacts/coverage/index.html"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "generic-ci.json"),
+      JSON.stringify(
+        {
+          providerName: "CircleCI",
+          host: "circleci.local",
+          repository: "H9-Foundry/fixture",
+          pipelineName: "CircleCI",
+          pipelineRunId: "circleci-42",
+          runAttempt: 1,
+          event: "push",
+          branch: "main",
+          commitSha: "abc123",
+          status: "completed",
+          conclusion: "success",
+          htmlUrl: "https://circleci.example.com/pipelines/github/H9-Foundry/fixture/42",
+          jobs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://circleci.example.com/pipelines/github/H9-Foundry/fixture/42/workflows/test"
             }
           ],
           artifacts: [
@@ -2092,7 +2127,11 @@ describe("cli smoke flows", () => {
       versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
       qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
       securityReportRefs: [".agentops/runs/run-security/bundle.json"],
-      evidenceSources: [".agentops/evidence/buildkite-ci.json", ".agentops/evidence/generic-ci.json"],
+      evidenceSources: [
+        ".agentops/evidence/buildkite-ci.json",
+        ".agentops/evidence/jenkins-ci.json",
+        ".agentops/evidence/generic-ci.json"
+      ],
       constraints: ["Keep release readiness read-only by default"]
     });
 
@@ -2122,6 +2161,11 @@ describe("cli smoke flows", () => {
         }),
         expect.objectContaining({
           provider: "Jenkins",
+          platform: "jenkins-ci",
+          statusSummary: expect.stringContaining("completed from local-export evidence with success")
+        }),
+        expect.objectContaining({
+          provider: "CircleCI",
           platform: "generic-ci",
           statusSummary: expect.stringContaining("completed from local-export evidence with success")
         })
@@ -2130,13 +2174,15 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.payload?.publishingPlan).toEqual(
       expect.arrayContaining([
         expect.stringContaining("Buildkite (buildkite) pipeline `release` run `bk-42`"),
-        expect.stringContaining("Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42`")
+        expect.stringContaining("Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42`"),
+        expect.stringContaining("CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42`")
       ])
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.externalDependencies).toEqual(
       expect.arrayContaining([
         "Buildkite (buildkite) pipeline `release` run `bk-42` remains available for reviewer inspection.",
-        "Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42` remains available for reviewer inspection."
+        "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` remains available for reviewer inspection.",
+        "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` remains available for reviewer inspection."
       ])
     );
   });
