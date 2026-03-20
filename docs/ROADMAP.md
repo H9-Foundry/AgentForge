@@ -24,10 +24,11 @@ This roadmap separates current implementation from near-term platform work and l
 The current shipped baseline is:
 
 - secure runtime, policy, context, schema, audit, and CLI core
-- one official local `pr-review` workflow
-- one set of official starter agents
+- nine official local workflow wedges across review, planning, design, implementation, QA, security, release, incident handoff, and maintenance
+- one set of official in-repo starter agents for those workflows
 - internal starter adapters
 - release, package verification, and trusted publishing automation
+- published eval runner and compare flow
 
 ## Phase 1: Platform Foundation
 
@@ -85,11 +86,13 @@ The current shipped baseline is:
 
 The backlog execution model is documented in [docs/QUEUE_EXECUTION_FLOW.md](QUEUE_EXECUTION_FLOW.md).
 
-Use [#83](https://github.com/H9-Foundry/AgentForge/issues/83) as the live execution tracker for:
+Use [#245](https://github.com/H9-Foundry/AgentForge/issues/245) as the live execution tracker for:
 
 - active versus ready versus mapped versus deferred queue lanes
 - dependency ordering across the next slices
 - dogfooding and validation gates for each slice
+
+Treat [#83](https://github.com/H9-Foundry/AgentForge/issues/83) as the completed Phase 1 baseline tracker.
 
 The first Phase 1 newcomer-usability lane was completed under [#97](https://github.com/H9-Foundry/AgentForge/issues/97).
 

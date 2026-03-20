@@ -1,6 +1,6 @@
 # AgentForge Architecture
 
-AgentForge is currently an early SDLC platform core with one official workflow wedge: secure local repository review. The architecture is intentionally broader than that single workflow so the platform can expand across more lifecycle domains without abandoning deterministic control.
+AgentForge is currently an early SDLC platform core with an official local workflow surface that spans review, planning, design, implementation, QA, security, release readiness, incident handoff, and maintenance. The architecture is intentionally broader than the current workflow set so the platform can expand across more lifecycle domains without abandoning deterministic control.
 
 ## Package Map
 
@@ -35,8 +35,16 @@ AgentForge is currently an early SDLC platform core with one official workflow w
 ## Current Official Workflow Surface
 
 - `.agentops/workflows/pr-review.yaml`
+- `.agentops/workflows/planning-discovery.yaml`
+- `.agentops/workflows/architecture-design-review.yaml`
+- `.agentops/workflows/implementation-proposal.yaml`
+- `.agentops/workflows/qa-review.yaml`
+- `.agentops/workflows/security-review.yaml`
+- `.agentops/workflows/release-readiness.yaml`
+- `.agentops/workflows/incident-handoff.yaml`
+- `.agentops/workflows/maintenance-triage.yaml`
 
-That is the only official workflow asset today. Broader workflow coverage belongs to the roadmap, not to the current implementation claim.
+Broader workflow coverage beyond those bundled assets still belongs to the roadmap rather than the current implementation claim.
 
 ## Extension Surfaces
 
