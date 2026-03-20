@@ -165,9 +165,9 @@ Implemented on current `main`:
 1. release request schema and official `release-readiness` workflow asset
 2. `release-analyst` starter agent and `release-report` artifact emission
 3. deterministic CI evidence ingestion and release-state normalization across bounded local evidence
+4. richer host-agnostic CI provenance and status summaries in `release-report`
 
 Next release-family follow-ons:
 
-1. richer host-agnostic CI evidence consumption in `release-readiness`
-2. additional release and deployment-gate variants built on the bounded release wedge
-3. approval-gated publish/promotion orchestration aligned to release-trust controls
+1. additional release and deployment-gate variants built on the bounded release wedge
+2. approval-gated publish/promotion orchestration aligned to release-trust controls

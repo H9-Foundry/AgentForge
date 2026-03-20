@@ -1845,7 +1845,7 @@ describe("cli smoke flows", () => {
     );
   });
 
-  it("consumes generic imported CI evidence during release-readiness", async () => {
+  it("consumes host-agnostic imported CI evidence during release-readiness", async () => {
     const root = createFixtureRepo();
     initializeWorkspace(root);
     ensureRequestsDir(root);
@@ -1858,6 +1858,41 @@ describe("cli smoke flows", () => {
           name: "@h9-foundry/agentforge-cli",
           version: "0.6.0",
           type: "module"
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "buildkite-ci.json"),
+      JSON.stringify(
+        {
+          host: "buildkite.com",
+          repository: "H9-Foundry/fixture",
+          pipelineName: "release",
+          pipelineRunId: "bk-42",
+          runAttempt: 1,
+          event: "push",
+          branch: "main",
+          commitSha: "abc123",
+          status: "completed",
+          conclusion: "success",
+          htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/release/builds/42",
+          jobs: [
+            {
+              name: "publish-check",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://buildkite.example.com/organizations/h9-foundry/pipelines/release/builds/42#job-publish-check"
+            }
+          ],
+          artifacts: [
+            {
+              name: "build-log",
+              type: "text-log",
+              path: "artifacts/build.log"
+            }
+          ]
         },
         null,
         2
@@ -1965,7 +2000,7 @@ describe("cli smoke flows", () => {
       versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
       qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
       securityReportRefs: [".agentops/runs/run-security/bundle.json"],
-      evidenceSources: [".agentops/evidence/generic-ci.json"],
+      evidenceSources: [".agentops/evidence/buildkite-ci.json", ".agentops/evidence/generic-ci.json"],
       constraints: ["Keep release readiness read-only by default"]
     });
 
@@ -1975,6 +2010,7 @@ describe("cli smoke flows", () => {
         artifactKind: string;
         payload?: {
           verificationChecks?: Array<{ name: string; status: string }>;
+          ciEvidenceSummary?: Array<{ provider: string; platform: string; statusSummary: string }>;
           publishingPlan?: string[];
           externalDependencies?: string[];
         };
@@ -1985,11 +2021,31 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.payload?.verificationChecks).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "imported-ci-evidence", status: "passed" })])
     );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.ciEvidenceSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "Buildkite",
+          platform: "buildkite",
+          statusSummary: expect.stringContaining("completed from local-export evidence with success")
+        }),
+        expect.objectContaining({
+          provider: "Jenkins",
+          platform: "generic-ci",
+          statusSummary: expect.stringContaining("completed from local-export evidence with success")
+        })
+      ])
+    );
     expect(bundle.lifecycleArtifacts[0]?.payload?.publishingPlan).toEqual(
-      expect.arrayContaining(["Review the imported CI evidence from `Jenkins` before any publish or promotion step."])
+      expect.arrayContaining([
+        expect.stringContaining("Buildkite (buildkite) pipeline `release` run `bk-42`"),
+        expect.stringContaining("Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42`")
+      ])
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.externalDependencies).toEqual(
-      expect.arrayContaining(["Imported CI evidence from Jenkins remains available for reviewer inspection."])
+      expect.arrayContaining([
+        "Buildkite (buildkite) pipeline `release` run `bk-42` remains available for reviewer inspection.",
+        "Jenkins (generic-ci) pipeline `Jenkins CI` run `jenkins-42` remains available for reviewer inspection."
+      ])
     );
   });
 

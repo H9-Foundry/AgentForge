@@ -25,6 +25,7 @@ import {
   qaRequestSchema,
   releaseApprovalRecommendationSchema,
   releaseArtifactSchema,
+  releaseCiEvidenceSummarySchema,
   releaseEvidenceNormalizationSchema,
   releaseRequestSchema,
   securityArtifactSchema,
@@ -62,6 +63,7 @@ import type {
   QaEvidenceNormalization,
   QaRequest,
   ReleaseArtifact,
+  ReleaseCiEvidenceSummary,
   ReleaseEvidenceNormalization,
   ReleaseRequest,
   ScmReference,
@@ -853,6 +855,36 @@ function summarizeCiEvidenceFailures(evidence: CiEvidence): string[] {
       : [];
 
   return [...failedJobs, ...runLevelFailure];
+}
+
+function formatCiEvidenceStatus(evidence: Pick<CiEvidence, "status" | "conclusion">): string {
+  if (evidence.status === "completed" && evidence.conclusion) {
+    return evidence.conclusion;
+  }
+
+  return evidence.status;
+}
+
+function summarizeCiEvidenceForRelease(evidence: CiEvidence): ReleaseCiEvidenceSummary {
+  const provider = evidence.providerName ?? evidence.pipelineName;
+  const displayLabel = `${provider} (${evidence.platform}) pipeline \`${evidence.pipelineName}\` run \`${evidence.pipelineRunId}\``;
+
+  return releaseCiEvidenceSummarySchema.parse({
+    provider,
+    platform: evidence.platform,
+    host: evidence.host,
+    repository: evidence.repository,
+    pipelineName: evidence.pipelineName,
+    pipelineRunId: evidence.pipelineRunId,
+    status: evidence.status,
+    conclusion: evidence.conclusion,
+    branch: evidence.branch,
+    commitSha: evidence.commitSha,
+    failingChecks: summarizeCiEvidenceFailures(evidence),
+    provenanceSource: evidence.provenanceSource,
+    displayLabel,
+    statusSummary: `${displayLabel} completed from ${evidence.provenanceSource} evidence with ${formatCiEvidenceStatus(evidence)}.`
+  });
 }
 
 function derivePackageScope(pathValue: string): string | undefined {
@@ -2371,6 +2403,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       : releaseRequest.evidenceSources;
     const normalizedEvidenceSources = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
     const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
+    const ciEvidenceSummary = ciEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
     const attestationVerificationEvidence = normalizeAttestationVerificationEvidence(repoRoot, normalizedEvidenceSources);
     const trustSummary = buildReleaseTrustSummary(attestationVerificationEvidence);
     const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
@@ -2526,6 +2559,7 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       normalizedEvidenceSources,
       missingEvidenceSources: [],
       ciEvidence,
+      ciEvidenceSummary,
       dependencyIntegrityEvidence,
       attestationVerificationEvidence,
       versionResolutions: versionResolutions.map((entry) => ({
@@ -2620,12 +2654,12 @@ const releaseAnalystAgent: RuntimeAgent = {
     const constraints = asStringArray(intakeMetadata.constraints);
     const allEvidenceRefs = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
     const importedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
+    const ciEvidenceSummary = normalizedEvidence?.ciEvidenceSummary ?? importedCiEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
     const dependencyIntegrityEvidence = normalizedEvidence?.dependencyIntegrityEvidence ?? [];
     const dependencyIntegritySignals = buildDependencyIntegritySignals(dependencyIntegrityEvidence);
     const attestationVerificationEvidence = normalizedEvidence?.attestationVerificationEvidence ?? [];
     const trustSummary = normalizedEvidence?.trustSummary ?? buildReleaseTrustSummary(attestationVerificationEvidence);
-    const importedCiProviders = [...new Set(importedCiEvidence.map((entry) => entry.providerName ?? entry.pipelineName))];
-    const importedCiFailures = [...new Set(importedCiEvidence.flatMap((entry) => summarizeCiEvidenceFailures(entry)))];
+    const importedCiFailures = [...new Set(ciEvidenceSummary.flatMap((entry) => entry.failingChecks))];
     const versionResolutions = normalizedEvidence?.versionResolutions ?? [];
     const verificationChecks = normalizedEvidence?.localReadinessChecks ?? [
       {
@@ -2653,7 +2687,7 @@ const releaseAnalystAgent: RuntimeAgent = {
         name: "imported-ci-evidence",
         status: importedCiEvidence.length > 0 ? "passed" : "skipped",
         detail: importedCiEvidence.length > 0
-          ? `Using ${importedCiEvidence.length} imported CI evidence export(s).`
+          ? `Using ${importedCiEvidence.length} imported CI evidence export(s) across ${ciEvidenceSummary.map((entry) => entry.provider).join(", ")}.`
           : "No imported CI evidence exports were supplied."
       }
     ];
@@ -2681,8 +2715,8 @@ const releaseAnalystAgent: RuntimeAgent = {
       ...dependencyIntegritySignals.map((signal) => `${signal} Review dependency integrity before any publish or promotion step.`),
       ...trustSummary.map((line) => `${line} Keep publish execution separate from verification.`),
       "Review the bounded QA and security evidence before invoking any publish or promotion step.",
-      ...importedCiProviders.map(
-        (providerName) => `Review the imported CI evidence from \`${providerName}\` before any publish or promotion step.`
+      ...ciEvidenceSummary.map(
+        (entry) => `Review ${entry.displayLabel} (${formatCiEvidenceStatus(entry)}) before any publish or promotion step.`
       ),
       "Run `agentforge release check --json` and `agentforge release verify --json` before any release cut.",
       ...approvalRecommendations.map(
@@ -2697,7 +2731,7 @@ const releaseAnalystAgent: RuntimeAgent = {
     const externalDependencies = [
       ...(qaReportRefs.length > 0 ? ["Validated QA report inputs remain available for reviewer inspection."] : []),
       ...(securityReportRefs.length > 0 ? ["Validated security report inputs remain available for reviewer inspection."] : []),
-      ...importedCiProviders.map((providerName) => `Imported CI evidence from ${providerName} remains available for reviewer inspection.`)
+      ...ciEvidenceSummary.map((entry) => `${entry.displayLabel} remains available for reviewer inspection.`)
     ];
     const releaseReport = releaseArtifactSchema.parse({
       ...buildLifecycleArtifactEnvelopeBase(
@@ -2717,6 +2751,7 @@ const releaseAnalystAgent: RuntimeAgent = {
         readinessStatus,
         verificationChecks: verificationChecks.map((check) => ({ ...check })),
         versionResolutions,
+        ciEvidenceSummary,
         dependencyIntegritySignals,
         trustSummary,
         approvalRecommendations: approvalRecommendations.map((recommendation) =>
@@ -2747,6 +2782,7 @@ const releaseAnalystAgent: RuntimeAgent = {
           securityReportRefs,
           evidenceSources,
           ciEvidence: importedCiEvidence,
+          ciEvidenceSummary,
           dependencyIntegrityEvidence,
           attestationVerificationEvidence,
           constraints,

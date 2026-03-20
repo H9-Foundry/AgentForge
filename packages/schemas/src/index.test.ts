@@ -38,6 +38,7 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  releaseCiEvidenceSummarySchema,
   releaseEvidenceNormalizationSchema,
   releaseRequestSchema,
   registryPluginCatalogEntrySchema,
@@ -103,6 +104,7 @@ describe("schema fixtures", () => {
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
     expect(() => securityEvidenceNormalizationSchema.parse(schemaFixtures.securityEvidenceNormalization)).not.toThrow();
     expect(() => releaseEvidenceNormalizationSchema.parse(schemaFixtures.releaseEvidenceNormalization)).not.toThrow();
+    expect(() => releaseCiEvidenceSummarySchema.parse(schemaFixtures.releaseArtifact.payload.ciEvidenceSummary[0])).not.toThrow();
     expect(() => maintenanceEvidenceNormalizationSchema.parse(schemaFixtures.maintenanceEvidenceNormalization)).not.toThrow();
   });
 
@@ -151,6 +153,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.qaEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.securityEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.maintenanceEvidenceNormalization).toBeDefined();
+    expect(jsonSchemas.releaseCiEvidenceSummary).toBeDefined();
     expect(jsonSchemas.releaseEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.lifecycleArtifactEnvelope).toBeDefined();
     expect(jsonSchemas.planningArtifact).toBeDefined();
