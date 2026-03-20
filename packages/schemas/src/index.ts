@@ -456,7 +456,7 @@ export const githubActionsEvidenceNormalizationSchema = z.object({
 
 export const scmPlatformSchema = z.enum(["github", "gitlab", "generic"]);
 export const scmReferenceKindSchema = z.enum(["issue", "pull_request", "merge_request", "commit", "branch"]);
-export const ciPlatformSchema = z.enum(["github-actions", "gitlab-ci", "generic-ci"]);
+export const ciPlatformSchema = z.enum(["github-actions", "gitlab-ci", "buildkite", "generic-ci"]);
 
 export const scmReferenceSchema = z.object({
   platform: scmPlatformSchema,
@@ -529,6 +529,23 @@ export const gitlabCiEvidenceExportSchema = z.object({
   status: gitlabCiJobExportStatusSchema,
   webUrl: z.string().url().optional(),
   jobs: z.array(gitlabCiJobEvidenceExportSchema).default([])
+});
+
+export const buildkiteCiEvidenceExportSchema = z.object({
+  sourcePath: z.string().min(1).optional(),
+  host: z.string().min(1).default("buildkite.com"),
+  repository: z.string().min(1),
+  pipelineName: z.string().min(1).default("Buildkite"),
+  pipelineRunId: z.string().min(1),
+  runAttempt: z.number().int().positive().default(1),
+  event: z.string().min(1).optional(),
+  branch: z.string().min(1).optional(),
+  commitSha: z.string().min(1).optional(),
+  status: githubActionsRunStatusSchema,
+  conclusion: githubActionsConclusionSchema.optional(),
+  htmlUrl: z.string().url().optional(),
+  jobs: z.array(ciJobEvidenceSchema).default([]),
+  artifacts: z.array(ciArtifactEvidenceSchema).default([])
 });
 
 export const genericCiEvidenceExportSchema = z.object({
@@ -1311,6 +1328,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   ciEvidence: ciEvidenceSchema,
   gitlabCiJobEvidenceExport: gitlabCiJobEvidenceExportSchema,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportSchema,
+  buildkiteCiEvidenceExport: buildkiteCiEvidenceExportSchema,
   genericCiEvidenceExport: genericCiEvidenceExportSchema,
   dependencyInventoryEntry: dependencyInventoryEntrySchema,
   dependencyIntegrityEvidence: dependencyIntegrityEvidenceSchema,
@@ -2044,9 +2062,8 @@ const gitlabCiEvidenceFixture = {
   provenanceSource: "local-export"
 } as const;
 
-const genericCiEvidenceExportFixture = {
+const buildkiteCiEvidenceExportFixture = {
   sourcePath: ".agentops/evidence/buildkite-ci.json",
-  providerName: "Buildkite",
   host: "buildkite.local",
   repository: "h9-foundry/platform/agentforge",
   pipelineName: "Buildkite CI",
@@ -2081,8 +2098,8 @@ const genericCiEvidenceExportFixture = {
   ]
 } as const;
 
-const genericCiEvidenceFixture = {
-  platform: "generic-ci",
+const buildkiteCiEvidenceFixture = {
+  platform: "buildkite",
   providerName: "Buildkite",
   host: "buildkite.local",
   repository: "h9-foundry/platform/agentforge",
@@ -2119,6 +2136,69 @@ const genericCiEvidenceFixture = {
   provenanceSource: "local-export"
 } as const;
 
+const genericCiEvidenceExportFixture = {
+  sourcePath: ".agentops/evidence/generic-ci.json",
+  providerName: "Jenkins",
+  host: "jenkins.local",
+  repository: "h9-foundry/platform/agentforge",
+  pipelineName: "Jenkins CI",
+  pipelineRunId: "jenkins-42",
+  runAttempt: 1,
+  event: "push",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "success",
+  htmlUrl: "https://jenkins.example.com/job/agentforge/42",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://jenkins.example.com/job/agentforge/42/test"
+    }
+  ],
+  artifacts: [
+    {
+      name: "coverage-report",
+      type: "html-report",
+      path: "artifacts/coverage/index.html"
+    }
+  ]
+} as const;
+
+const genericCiEvidenceFixture = {
+  platform: "generic-ci",
+  providerName: "Jenkins",
+  host: "jenkins.local",
+  repository: "h9-foundry/platform/agentforge",
+  pipelineName: "Jenkins CI",
+  pipelineRunId: "jenkins-42",
+  runAttempt: 1,
+  event: "push",
+  branch: "main",
+  commitSha: "caf36447a49fc6e9fc308c34b98424958237aa1e",
+  status: "completed",
+  conclusion: "success",
+  htmlUrl: "https://jenkins.example.com/job/agentforge/42",
+  jobs: [
+    {
+      name: "test",
+      status: "completed",
+      conclusion: "success",
+      htmlUrl: "https://jenkins.example.com/job/agentforge/42/test"
+    }
+  ],
+  artifacts: [
+    {
+      name: "coverage-report",
+      type: "html-report",
+      path: "artifacts/coverage/index.html"
+    }
+  ],
+  provenanceSource: "local-export"
+} as const;
+
 const adapterCapabilityMetadataFixture = {
   platform: "github",
   host: "github.com",
@@ -2142,6 +2222,15 @@ const gitlabAdapterCapabilityMetadataFixture = {
     "merge-request-reference-normalization",
     "local-ci-evidence-ingestion"
   ],
+  trustBoundary: "local-only"
+} as const;
+
+const buildkiteAdapterCapabilityMetadataFixture = {
+  platform: "generic",
+  host: "buildkite.local",
+  supportedScmReferenceKinds: [],
+  supportedCiPlatforms: ["buildkite"],
+  capabilities: ["local-ci-evidence-ingestion"],
   trustBoundary: "local-only"
 } as const;
 
@@ -2589,10 +2678,11 @@ const releaseEvidenceNormalizationFixture = {
     ".agentops/runs/run-789/bundle.json",
     ".agentops/runs/run-790/bundle.json",
     ".agentops/runs/run-790/summary.md",
-    ".agentops/evidence/buildkite-ci.json"
+    ".agentops/evidence/buildkite-ci.json",
+    ".agentops/evidence/generic-ci.json"
   ],
   missingEvidenceSources: [],
-  ciEvidence: [genericCiEvidenceFixture],
+  ciEvidence: [buildkiteCiEvidenceFixture, genericCiEvidenceFixture],
   dependencyIntegrityEvidence: [dependencyIntegrityEvidenceFixture],
   attestationVerificationEvidence: [attestationVerificationEvidenceFixture],
   versionResolutions: [
@@ -2861,10 +2951,13 @@ export const schemaFixtures = {
   attestationVerificationEvidence: attestationVerificationEvidenceFixture,
   gitlabCiEvidenceExport: gitlabCiEvidenceExportFixture,
   gitlabCiEvidence: gitlabCiEvidenceFixture,
+  buildkiteCiEvidenceExport: buildkiteCiEvidenceExportFixture,
+  buildkiteCiEvidence: buildkiteCiEvidenceFixture,
   genericCiEvidenceExport: genericCiEvidenceExportFixture,
   genericCiEvidence: genericCiEvidenceFixture,
   adapterCapabilityMetadata: adapterCapabilityMetadataFixture,
   gitlabAdapterCapabilityMetadata: gitlabAdapterCapabilityMetadataFixture,
+  buildkiteAdapterCapabilityMetadata: buildkiteAdapterCapabilityMetadataFixture,
   genericCiAdapterCapabilityMetadata: genericCiAdapterCapabilityMetadataFixture,
   githubActionsEvidence: githubActionsEvidenceFixture,
   githubHandoffSummary: githubHandoffSummaryFixture,

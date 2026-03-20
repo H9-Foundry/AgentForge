@@ -1198,16 +1198,15 @@ describe("cli smoke flows", () => {
     );
   });
 
-  it("ingests bounded generic CI evidence exports during qa-review", async () => {
+  it("ingests bounded Buildkite CI evidence exports during qa-review", async () => {
     const root = createFixtureRepo();
 
     initProject(root);
     mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
     writeFileSync(
-      join(root, ".agentops", "evidence", "generic-ci.json"),
+      join(root, ".agentops", "evidence", "buildkite-ci.json"),
       JSON.stringify(
         {
-          providerName: "Buildkite",
           host: "buildkite.local",
           repository: "H9-Foundry/fixture",
           pipelineName: "Buildkite CI",
@@ -1251,7 +1250,7 @@ describe("cli smoke flows", () => {
       [
         "targetRef: package.json",
         "evidenceSources:",
-        "  - .agentops/evidence/generic-ci.json",
+        "  - .agentops/evidence/buildkite-ci.json",
         "executedChecks:",
         "  - pnpm test",
         "focusAreas:",
@@ -1868,31 +1867,31 @@ describe("cli smoke flows", () => {
       join(root, ".agentops", "evidence", "generic-ci.json"),
       JSON.stringify(
         {
-          providerName: "Buildkite",
-          host: "buildkite.local",
+          providerName: "Jenkins",
+          host: "jenkins.local",
           repository: "H9-Foundry/fixture",
-          pipelineName: "Buildkite CI",
-          pipelineRunId: "bk-123",
+          pipelineName: "Jenkins CI",
+          pipelineRunId: "jenkins-42",
           runAttempt: 1,
-          event: "pull_request",
+          event: "push",
           branch: "main",
           commitSha: "abc123",
           status: "completed",
-          conclusion: "failure",
-          htmlUrl: "https://buildkite.example.com/builds/123",
+          conclusion: "success",
+          htmlUrl: "https://jenkins.example.com/job/agentforge/42",
           jobs: [
             {
               name: "test",
               status: "completed",
               conclusion: "success",
-              htmlUrl: "https://buildkite.example.com/builds/123/jobs/1"
+              htmlUrl: "https://jenkins.example.com/job/agentforge/42/test"
             }
           ],
           artifacts: [
             {
-              name: "junit-report",
-              type: "junit-xml",
-              path: "artifacts/junit.xml"
+              name: "coverage-report",
+              type: "html-report",
+              path: "artifacts/coverage/index.html"
             }
           ]
         },
@@ -1987,10 +1986,10 @@ describe("cli smoke flows", () => {
       expect.arrayContaining([expect.objectContaining({ name: "imported-ci-evidence", status: "passed" })])
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.publishingPlan).toEqual(
-      expect.arrayContaining(["Review the imported CI evidence from `Buildkite` before any publish or promotion step."])
+      expect.arrayContaining(["Review the imported CI evidence from `Jenkins` before any publish or promotion step."])
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.externalDependencies).toEqual(
-      expect.arrayContaining(["Imported CI evidence from Buildkite remains available for reviewer inspection."])
+      expect.arrayContaining(["Imported CI evidence from Jenkins remains available for reviewer inspection."])
     );
   });
 

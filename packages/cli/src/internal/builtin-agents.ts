@@ -5,6 +5,7 @@ import {
   agentManifestSchema,
   agentOutputSchema,
   attestationVerificationEvidenceSchema,
+  buildkiteCiEvidenceExportSchema,
   ciEvidenceSchema,
   dependencyIntegrityEvidenceSchema,
   genericCiEvidenceExportSchema,
@@ -34,6 +35,7 @@ import {
 import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type {
   AttestationVerificationEvidence,
+  BuildkiteCiEvidenceExport,
   CiEvidence,
   DependencyIntegrityEvidence,
   DependencyInventoryEntry,
@@ -652,6 +654,17 @@ function loadGitLabCiEvidenceExport(bundlePath: string): GitlabCiEvidenceExport 
   return result.success ? result.data : undefined;
 }
 
+function loadBuildkiteCiEvidenceExport(bundlePath: string): BuildkiteCiEvidenceExport | undefined {
+  if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  const candidate = isRecord(parsed) ? { ...parsed, sourcePath: parsed.sourcePath ?? bundlePath } : parsed;
+  const result = buildkiteCiEvidenceExportSchema.safeParse(candidate);
+  return result.success ? result.data : undefined;
+}
+
 function loadGenericCiEvidenceExport(bundlePath: string): GenericCiEvidenceExport | undefined {
   if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
     return undefined;
@@ -766,12 +779,53 @@ function normalizeGenericCiEvidence(
   });
 }
 
+function normalizeBuildkiteCiEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): CiEvidence[] {
+  return evidenceSources.flatMap((pathValue) => {
+    if (!repoRoot) {
+      return [];
+    }
+
+    const normalized = loadBuildkiteCiEvidenceExport(join(repoRoot, pathValue));
+    if (!normalized) {
+      return [];
+    }
+
+    const evidence = ciEvidenceSchema.parse({
+      platform: "buildkite",
+      providerName: "Buildkite",
+      host: normalized.host,
+      repository: normalized.repository,
+      pipelineName: normalized.pipelineName,
+      pipelineRunId: normalized.pipelineRunId,
+      runAttempt: normalized.runAttempt,
+      event: normalized.event,
+      branch: normalized.branch,
+      commitSha: normalized.commitSha,
+      status: normalized.status,
+      conclusion: normalized.conclusion,
+      htmlUrl: normalized.htmlUrl,
+      jobs: normalized.jobs,
+      artifacts: normalized.artifacts,
+      provenanceSource: "local-export"
+    });
+
+    return [evidence];
+  });
+}
+
 function normalizeImportedCiEvidence(
   repoRoot: string | undefined,
   evidenceSources: readonly string[]
 ): CiEvidence[] {
   const seen = new Set<string>();
-  const combined = [...normalizeGitLabCiEvidence(repoRoot, evidenceSources), ...normalizeGenericCiEvidence(repoRoot, evidenceSources)];
+  const combined = [
+    ...normalizeGitLabCiEvidence(repoRoot, evidenceSources),
+    ...normalizeBuildkiteCiEvidence(repoRoot, evidenceSources),
+    ...normalizeGenericCiEvidence(repoRoot, evidenceSources)
+  ];
   const normalized: CiEvidence[] = [];
 
   for (const evidence of combined) {
