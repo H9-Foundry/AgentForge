@@ -874,16 +874,17 @@ function normalizeImportedCiEvidence(
 ): CiEvidence[] {
   const seen = new Set<string>();
   // Provider-specific local exports are schema-disambiguated before they reach this shared aggregation step.
-  const combined = [
-    ...normalizeGitLabCiEvidence(repoRoot, evidenceSources),
-    ...normalizeBuildkiteCiEvidence(repoRoot, evidenceSources),
-    ...normalizeJenkinsCiEvidence(repoRoot, evidenceSources),
-    ...normalizeGenericCiEvidence(repoRoot, evidenceSources)
+  const providerSpecificEvidence = [
+    normalizeGitLabCiEvidence(repoRoot, evidenceSources),
+    normalizeBuildkiteCiEvidence(repoRoot, evidenceSources),
+    normalizeJenkinsCiEvidence(repoRoot, evidenceSources),
+    normalizeGenericCiEvidence(repoRoot, evidenceSources)
   ];
+  const combined = providerSpecificEvidence.flat();
   const normalized: CiEvidence[] = [];
 
   for (const evidence of combined) {
-    const key = `${evidence.platform}:${evidence.pipelineRunId}:${evidence.pipelineName}:${evidence.repository}`;
+    const key = `${evidence.platform}:${evidence.host}:${evidence.pipelineRunId}:${evidence.pipelineName}:${evidence.repository}`;
     if (seen.has(key)) {
       continue;
     }
