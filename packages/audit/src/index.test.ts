@@ -34,11 +34,17 @@ describe("renderGitHubHandoffSummary", () => {
   });
 
   it("renders a bounded QA handoff summary", () => {
-    const summary = renderGitHubHandoffSummary(cloneFixture(schemaFixtures.qaArtifact) as unknown as QaArtifact);
+    const artifact = cloneFixture(schemaFixtures.qaArtifact) as unknown as QaArtifact;
+    artifact.source.scmRefs = [cloneFixture(schemaFixtures.gitlabMergeRequestScmReference)];
+    const summary = renderGitHubHandoffSummary(artifact);
 
     expect(summary.artifactKind).toBe("qa-report");
     expect(summary.sections.some((section) => section.heading === "Findings")).toBe(true);
     expect(summary.sections.some((section) => section.heading === "Coverage Gaps")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "SCM References")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "CI Evidence")).toBe(true);
+    expect(summary.body).toContain("gitlab merge_request: gitlab.com/h9-foundry/platform/agentforge!45");
+    expect(summary.body).toContain("Buildkite (buildkite) pipeline `qa` run `bk-41` completed from local-export evidence with success.");
   });
 
   it("renders a bounded incident handoff summary", () => {
@@ -50,7 +56,9 @@ describe("renderGitHubHandoffSummary", () => {
   });
 
   it("renders a bounded release handoff summary with overrideable status mapping", () => {
-    const summary = renderGitHubHandoffSummary(cloneFixture(schemaFixtures.releaseArtifact) as unknown as ReleaseArtifact, {
+    const artifact = cloneFixture(schemaFixtures.releaseArtifact) as unknown as ReleaseArtifact;
+    artifact.source.scmRefs = [cloneFixture(schemaFixtures.gitlabIssueScmReference)];
+    const summary = renderGitHubHandoffSummary(artifact, {
       statusMapping: {
         workflow: "release-readiness",
         localRunStatus: "partial",
@@ -62,5 +70,9 @@ describe("renderGitHubHandoffSummary", () => {
     expect(summary.artifactKind).toBe("release-report");
     expect(summary.githubStatus).toBe("blocked");
     expect(summary.sections.some((section) => section.heading === "Verification Checks")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "SCM References")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "CI Evidence")).toBe(true);
+    expect(summary.body).toContain("gitlab issue: gitlab.com/h9-foundry/platform/agentforge#123");
+    expect(summary.body).toContain("GitHub Actions (github-actions) pipeline `publish` run `321` completed from adapter-read evidence with success.");
   });
 });

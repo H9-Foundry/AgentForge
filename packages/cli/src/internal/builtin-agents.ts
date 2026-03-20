@@ -3257,6 +3257,7 @@ const qaAnalystAgent: RuntimeAgent = {
           provenanceRefs: []
         };
     const normalizedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
+    const normalizedCiEvidenceSummary = normalizedCiEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
     const normalizedCiWorkflowNames = [...new Set(normalizedCiEvidence.map((entry) => entry.pipelineName))];
     const normalizedCiFailingChecks = [...new Set(normalizedCiEvidence.flatMap((entry) => summarizeCiEvidenceFailures(entry)))];
     const targetType =
@@ -3345,6 +3346,7 @@ const qaAnalystAgent: RuntimeAgent = {
         targetRef: qaRequest.targetRef,
         evidenceSources,
         executedChecks,
+        ciEvidenceSummary: normalizedCiEvidenceSummary,
         findings,
         coverageGaps,
         recommendedNextChecks:

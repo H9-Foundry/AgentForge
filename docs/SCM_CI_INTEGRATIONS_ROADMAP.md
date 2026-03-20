@@ -38,6 +38,7 @@ Implemented now:
 - bounded local GitLab CI evidence normalization into the shared CI contract
 - bounded local Buildkite CI evidence normalization into the shared CI contract
 - bounded generic CI evidence ingestion for local pipeline status and artifact exports
+- shared SCM and CI handoff summary rendering across lifecycle artifacts where normalized host-agnostic evidence is available
 
 Not yet available:
 
@@ -71,7 +72,7 @@ This provides a meaningful contrast to GitHub without exploding scope.
 
 ### Priority 3: Additional Provider And Generic CI Evidence
 
-Status: Buildkite wedge next, with the first generic local CI evidence wedge already implemented.
+Status: implemented for Buildkite and the first generic local CI evidence wedge.
 
 After the first new host pair:
 
@@ -120,5 +121,5 @@ This epic should be decomposed into at least:
 1. host-agnostic SCM and CI reference contracts plus adapter capability metadata
 2. implemented: GitLab issue/MR and CI evidence integration wedge as the first additional concrete host pair
 3. implemented: generic CI evidence adapter surface for bounded local pipeline status and artifact ingestion
-4. next: Buildkite CI evidence adapter wedge as the next additional bounded provider
-5. next: richer host-agnostic workflow consumption built on the shared contracts
+4. implemented: Buildkite CI evidence adapter wedge as the next additional bounded provider
+5. implemented: richer host-agnostic workflow consumption and handoff rendering built on the shared contracts
