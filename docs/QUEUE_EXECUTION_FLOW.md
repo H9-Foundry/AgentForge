@@ -50,8 +50,7 @@ Rules:
 Current active lane:
 
 1. [#245](https://github.com/H9-Foundry/AgentForge/issues/245) Phase 2 provider and integration expansion tracker
-2. [#246](https://github.com/H9-Foundry/AgentForge/issues/246) Buildkite CI evidence adapter wedge
-3. [#247](https://github.com/H9-Foundry/AgentForge/issues/247) host-agnostic CI evidence consumption in `release-readiness`
+2. [#253](https://github.com/H9-Foundry/AgentForge/issues/253) Jenkins CI evidence adapter wedge
 
 ### Ready Lane
 
@@ -59,8 +58,9 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-4. [#248](https://github.com/H9-Foundry/AgentForge/issues/248) host-agnostic SCM and CI handoff summary rendering across lifecycle artifacts
-5. additional provider-specific SCM and CI wedges after the first Phase 2 CI follow-ons land
+3. [#254](https://github.com/H9-Foundry/AgentForge/issues/254) Consume Jenkins-backed shared CI evidence in QA and release workflows
+4. [#255](https://github.com/H9-Foundry/AgentForge/issues/255) Jenkins-aware shared rendering and reporting follow-on if the shared model still has a gap
+5. additional provider-specific SCM and CI wedges after the Jenkins CI follow-ons land
 6. deeper supply-chain and enterprise trust work reopened only after the next provider/integration family is defined explicitly
 
 ### Parallel Safe Lane

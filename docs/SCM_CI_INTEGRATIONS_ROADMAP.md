@@ -72,7 +72,7 @@ This provides a meaningful contrast to GitHub without exploding scope.
 
 ### Priority 3: Additional Provider And Generic CI Evidence
 
-Status: implemented for Buildkite and the first generic local CI evidence wedge.
+Status: implemented for Buildkite and the first generic local CI evidence wedge, with Jenkins next as the active CI-only provider wedge.
 
 After the first new host pair:
 
@@ -123,3 +123,4 @@ This epic should be decomposed into at least:
 3. implemented: generic CI evidence adapter surface for bounded local pipeline status and artifact ingestion
 4. implemented: Buildkite CI evidence adapter wedge as the next additional bounded provider
 5. implemented: richer host-agnostic workflow consumption and handoff rendering built on the shared contracts
+6. next: Jenkins CI evidence adapter wedge as the next bounded CI-only provider follow-on

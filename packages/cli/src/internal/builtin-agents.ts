@@ -12,6 +12,7 @@ import {
   designArtifactSchema,
   githubActionsEvidenceSchema,
   gitlabCiEvidenceExportSchema,
+  jenkinsCiEvidenceExportSchema,
   implementationArtifactSchema,
   implementationInventorySchema,
   incidentArtifactSchema,
@@ -47,6 +48,7 @@ import type {
   GithubActionsEvidenceNormalization,
   GithubReference,
   GitlabCiEvidenceExport,
+  JenkinsCiEvidenceExport,
   ImplementationArtifact,
   ImplementationInventory,
   ImplementationRequest,
@@ -678,6 +680,17 @@ function loadGenericCiEvidenceExport(bundlePath: string): GenericCiEvidenceExpor
   return result.success ? result.data : undefined;
 }
 
+function loadJenkinsCiEvidenceExport(bundlePath: string): JenkinsCiEvidenceExport | undefined {
+  if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  const candidate = isRecord(parsed) ? { ...parsed, sourcePath: parsed.sourcePath ?? bundlePath } : parsed;
+  const result = jenkinsCiEvidenceExportSchema.safeParse(candidate);
+  return result.success ? result.data : undefined;
+}
+
 function mapGitLabCiStatus(status: GitlabCiEvidenceExport["status"]): Pick<CiEvidence, "status" | "conclusion"> {
   switch (status) {
     case "pending":
@@ -818,6 +831,43 @@ function normalizeBuildkiteCiEvidence(
   });
 }
 
+function normalizeJenkinsCiEvidence(
+  repoRoot: string | undefined,
+  evidenceSources: readonly string[]
+): CiEvidence[] {
+  return evidenceSources.flatMap((pathValue) => {
+    if (!repoRoot) {
+      return [];
+    }
+
+    const normalized = loadJenkinsCiEvidenceExport(join(repoRoot, pathValue));
+    if (!normalized) {
+      return [];
+    }
+
+    const evidence = ciEvidenceSchema.parse({
+      platform: "jenkins-ci",
+      providerName: "Jenkins",
+      host: normalized.host,
+      repository: normalized.repository,
+      pipelineName: normalized.pipelineName,
+      pipelineRunId: normalized.pipelineRunId,
+      runAttempt: normalized.runAttempt,
+      event: normalized.event,
+      branch: normalized.branch,
+      commitSha: normalized.commitSha,
+      status: normalized.status,
+      conclusion: normalized.conclusion,
+      htmlUrl: normalized.htmlUrl,
+      jobs: normalized.jobs,
+      artifacts: normalized.artifacts,
+      provenanceSource: "local-export"
+    });
+
+    return [evidence];
+  });
+}
+
 function normalizeImportedCiEvidence(
   repoRoot: string | undefined,
   evidenceSources: readonly string[]
@@ -826,6 +876,7 @@ function normalizeImportedCiEvidence(
   const combined = [
     ...normalizeGitLabCiEvidence(repoRoot, evidenceSources),
     ...normalizeBuildkiteCiEvidence(repoRoot, evidenceSources),
+    ...normalizeJenkinsCiEvidence(repoRoot, evidenceSources),
     ...normalizeGenericCiEvidence(repoRoot, evidenceSources)
   ];
   const normalized: CiEvidence[] = [];

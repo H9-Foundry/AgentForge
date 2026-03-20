@@ -39,6 +39,7 @@ import {
   benchmarkComparedRunSchema,
   benchmarkDeterministicDeltaSchema,
   buildkiteCiEvidenceExportSchema,
+  jenkinsCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
   ciEvidenceSchema,
   dependencyIntegrityEvidenceSchema,
@@ -124,6 +125,7 @@ export type CiArtifactEvidence = Infer<typeof ciArtifactEvidenceSchema>;
 export type CiJobEvidence = Infer<typeof ciJobEvidenceSchema>;
 export type CiEvidence = Infer<typeof ciEvidenceSchema>;
 export type BuildkiteCiEvidenceExport = Infer<typeof buildkiteCiEvidenceExportSchema>;
+export type JenkinsCiEvidenceExport = Infer<typeof jenkinsCiEvidenceExportSchema>;
 export type DependencyInventoryEntry = Infer<typeof dependencyInventoryEntrySchema>;
 export type DependencyIntegrityEvidence = Infer<typeof dependencyIntegrityEvidenceSchema>;
 export type GenericCiEvidenceExport = Infer<typeof genericCiEvidenceExportSchema>;
