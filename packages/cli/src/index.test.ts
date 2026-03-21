@@ -5,7 +5,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
+import { renderGitHubHandoffSummary } from "@h9-foundry/agentforge-audit";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
+import type { ReleaseArtifact } from "@h9-foundry/agentforge-shared-types";
 
 import { compareLocalEvalRuns, explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
 
@@ -2185,6 +2187,18 @@ describe("cli smoke flows", () => {
         "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` remains available for reviewer inspection.",
         "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` remains available for reviewer inspection."
       ])
+    );
+
+    const handoff = renderGitHubHandoffSummary(bundle.lifecycleArtifacts[0] as unknown as ReleaseArtifact);
+    expect(handoff.sections.some((section) => section.heading === "CI Evidence")).toBe(true);
+    expect(handoff.body).toContain(
+      "Buildkite (buildkite) pipeline `release` run `bk-42` completed from local-export evidence with success."
+    );
+    expect(handoff.body).toContain(
+      "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success."
+    );
+    expect(handoff.body).toContain(
+      "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success."
     );
   });
 
