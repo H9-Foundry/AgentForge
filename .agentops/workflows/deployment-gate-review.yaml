@@ -1,6 +1,6 @@
 version: 1
-name: release-readiness
-description: Validate a bounded release-readiness request while keeping trusted publish automation separate.
+name: deployment-gate-review
+description: Review a bounded deployment candidate using shared CI evidence and referenced lifecycle artifacts.
 trigger: manual
 catalog:
   domain: release
@@ -10,16 +10,16 @@ catalog:
 nodes:
   - id: intake
     kind: deterministic
-    agent: release-intake
+    agent: deployment-gate-intake
     outputs_to: agentResults.intake
   - id: evidence
     kind: deterministic
-    agent: release-evidence-normalizer
+    agent: deployment-gate-evidence-normalizer
     outputs_to: agentResults.evidence
-  - id: release
+  - id: deployment
     kind: reasoning
-    agent: release-analyst
-    outputs_to: agentResults.release
+    agent: deployment-gate-analyst
+    outputs_to: agentResults.deployment
   - id: report
     kind: report
     outputs_to: reports.final

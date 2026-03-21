@@ -42,6 +42,10 @@ import {
   jenkinsCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
   ciEvidenceSchema,
+  deploymentGateArtifactPayloadSchema,
+  deploymentGateArtifactSchema,
+  deploymentGateEvidenceNormalizationSchema,
+  deploymentRequestSchema,
   dependencyIntegrityEvidenceSchema,
   dependencyInventoryEntrySchema,
   ciJobEvidenceSchema,
@@ -66,6 +70,10 @@ import {
   implementationRequestSchema,
   incidentArtifactPayloadSchema,
   incidentArtifactSchema,
+  pipelineArtifactPayloadSchema,
+  pipelineArtifactSchema,
+  pipelineEvidenceNormalizationSchema,
+  pipelineRequestSchema,
   incidentRequestSchema,
   maintenanceArtifactPayloadSchema,
   maintenanceArtifactSchema,
@@ -131,6 +139,10 @@ export type DependencyIntegrityEvidence = Infer<typeof dependencyIntegrityEviden
 export type GenericCiEvidenceExport = Infer<typeof genericCiEvidenceExportSchema>;
 export type GitlabCiJobEvidenceExport = Infer<typeof gitlabCiJobEvidenceExportSchema>;
 export type GitlabCiEvidenceExport = Infer<typeof gitlabCiEvidenceExportSchema>;
+export type DeploymentGateArtifactPayload = Infer<typeof deploymentGateArtifactPayloadSchema>;
+export type DeploymentGateArtifact = Infer<typeof deploymentGateArtifactSchema>;
+export type DeploymentGateEvidenceNormalization = Infer<typeof deploymentGateEvidenceNormalizationSchema>;
+export type DeploymentRequest = Infer<typeof deploymentRequestSchema>;
 export type AdapterCapabilityMetadata = Infer<typeof adapterCapabilityMetadataSchema>;
 export type GithubActionsJobEvidence = Infer<typeof githubActionsJobEvidenceSchema>;
 export type GithubActionsCheckRunEvidence = Infer<typeof githubActionsCheckRunEvidenceSchema>;
@@ -176,6 +188,10 @@ export type ImplementationRequest = Infer<typeof implementationRequestSchema>;
 export type IncidentEvidenceNormalization = Infer<typeof incidentEvidenceNormalizationSchema>;
 export type IncidentArtifactPayload = Infer<typeof incidentArtifactPayloadSchema>;
 export type IncidentArtifact = Infer<typeof incidentArtifactSchema>;
+export type PipelineArtifactPayload = Infer<typeof pipelineArtifactPayloadSchema>;
+export type PipelineArtifact = Infer<typeof pipelineArtifactSchema>;
+export type PipelineEvidenceNormalization = Infer<typeof pipelineEvidenceNormalizationSchema>;
+export type PipelineRequest = Infer<typeof pipelineRequestSchema>;
 export type IncidentRequest = Infer<typeof incidentRequestSchema>;
 export type QaArtifactPayload = Infer<typeof qaArtifactPayloadSchema>;
 export type QaArtifact = Infer<typeof qaArtifactSchema>;

@@ -7,6 +7,9 @@ import {
   attestationVerificationEvidenceSchema,
   buildkiteCiEvidenceExportSchema,
   ciEvidenceSchema,
+  deploymentGateArtifactSchema,
+  deploymentGateEvidenceNormalizationSchema,
+  deploymentRequestSchema,
   dependencyIntegrityEvidenceSchema,
   genericCiEvidenceExportSchema,
   designArtifactSchema,
@@ -21,6 +24,9 @@ import {
   maintenanceArtifactSchema,
   maintenanceEvidenceNormalizationSchema,
   maintenanceRequestSchema,
+  pipelineArtifactSchema,
+  pipelineEvidenceNormalizationSchema,
+  pipelineRequestSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
@@ -43,6 +49,9 @@ import type {
   DependencyInventoryEntry,
   DesignArtifact,
   DesignRequest,
+  DeploymentGateArtifact,
+  DeploymentGateEvidenceNormalization,
+  DeploymentRequest,
   GenericCiEvidenceExport,
   GithubActionsEvidence,
   GithubActionsEvidenceNormalization,
@@ -59,6 +68,9 @@ import type {
   MaintenanceEvidenceNormalization,
   MaintenanceRequest,
   NormalizedValidationCommand,
+  PipelineArtifact,
+  PipelineEvidenceNormalization,
+  PipelineRequest,
   PlanningArtifact,
   PlanningRequest,
   QaArtifact,
@@ -647,6 +659,27 @@ function normalizeGitHubActionsEvidence(
   };
 }
 
+function mapGitHubActionsEvidenceToCiEvidence(evidence: GithubActionsEvidence): CiEvidence {
+  return ciEvidenceSchema.parse({
+    platform: "github-actions",
+    providerName: "GitHub Actions",
+    host: "github.com",
+    repository: evidence.repository,
+    pipelineName: evidence.workflowName,
+    pipelineRunId: `${evidence.workflowRunId}`,
+    runAttempt: evidence.runAttempt,
+    event: evidence.event,
+    branch: evidence.headBranch,
+    commitSha: evidence.headSha,
+    status: evidence.status,
+    conclusion: evidence.conclusion,
+    htmlUrl: evidence.htmlUrl,
+    jobs: evidence.jobs,
+    artifacts: [],
+    provenanceSource: "local-export"
+  });
+}
+
 function loadGitLabCiEvidenceExport(bundlePath: string): GitlabCiEvidenceExport | undefined {
   if (!existsSync(bundlePath) || !bundlePath.endsWith(".json")) {
     return undefined;
@@ -873,17 +906,52 @@ function normalizeImportedCiEvidence(
   evidenceSources: readonly string[]
 ): CiEvidence[] {
   const seen = new Set<string>();
-  // Provider-specific local exports are schema-disambiguated before they reach this shared aggregation step.
-  const providerSpecificEvidence = [
-    normalizeGitLabCiEvidence(repoRoot, evidenceSources),
-    normalizeBuildkiteCiEvidence(repoRoot, evidenceSources),
-    normalizeJenkinsCiEvidence(repoRoot, evidenceSources),
-    normalizeGenericCiEvidence(repoRoot, evidenceSources)
-  ];
-  const combined = providerSpecificEvidence.flat();
   const normalized: CiEvidence[] = [];
 
-  for (const evidence of combined) {
+  for (const pathValue of evidenceSources) {
+    if (!repoRoot) {
+      continue;
+    }
+
+    const absolutePath = join(repoRoot, pathValue);
+    if (!existsSync(absolutePath) || !absolutePath.endsWith(".json")) {
+      continue;
+    }
+
+    const evidence =
+      (() => {
+        const githubActions = loadGitHubActionsEvidence(absolutePath);
+        if (githubActions) {
+          return mapGitHubActionsEvidenceToCiEvidence(githubActions);
+        }
+
+        const gitlab = loadGitLabCiEvidenceExport(absolutePath);
+        if (gitlab) {
+          return normalizeGitLabCiEvidence(repoRoot, [pathValue])[0];
+        }
+
+        const buildkite = loadBuildkiteCiEvidenceExport(absolutePath);
+        if (buildkite) {
+          return normalizeBuildkiteCiEvidence(repoRoot, [pathValue])[0];
+        }
+
+        const jenkins = loadJenkinsCiEvidenceExport(absolutePath);
+        if (jenkins) {
+          return normalizeJenkinsCiEvidence(repoRoot, [pathValue])[0];
+        }
+
+        const generic = loadGenericCiEvidenceExport(absolutePath);
+        if (generic) {
+          return normalizeGenericCiEvidence(repoRoot, [pathValue])[0];
+        }
+
+        return undefined;
+      })();
+
+    if (!evidence) {
+      continue;
+    }
+
     const key = `${evidence.platform}:${evidence.host}:${evidence.pipelineRunId}:${evidence.pipelineName}:${evidence.repository}`;
     if (seen.has(key)) {
       continue;
@@ -2854,6 +2922,679 @@ const releaseAnalystAgent: RuntimeAgent = {
   }
 };
 
+const pipelineIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "pipeline-intake",
+    displayName: "Pipeline Intake",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const pipelineRequest = getWorkflowInput<PipelineRequest>(stateSlice, "pipelineRequest");
+    const pipelineIssueRefs = getWorkflowInput<string[]>(stateSlice, "pipelineIssueRefs") ?? [];
+    const pipelineScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "pipelineScmRefs") ?? [];
+    const pipelineGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "pipelineGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!pipelineRequest) {
+      throw new Error("pipeline-evidence-review requires a validated pipeline request before runtime execution.");
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded pipeline request from ${requestFile ?? ".agentops/requests/pipeline.yaml"} for ${pipelineRequest.pipelineScope}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...pipelineRequestSchema.parse(pipelineRequest),
+        pipelineIssueRefs,
+        pipelineScmRefs,
+        pipelineGithubRefs,
+        evidenceSourceCount:
+          pipelineRequest.evidenceSources.length +
+          pipelineRequest.qaReportRefs.length +
+          pipelineRequest.securityReportRefs.length +
+          pipelineRequest.releaseReportRefs.length
+      }
+    });
+  }
+};
+
+const pipelineEvidenceNormalizationAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "pipeline-evidence-normalizer",
+    displayName: "Pipeline Evidence Normalizer",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.md"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const pipelineRequest = getWorkflowInput<PipelineRequest>(stateSlice, "pipelineRequest");
+    if (!pipelineRequest) {
+      throw new Error("pipeline-evidence-review requires validated pipeline request inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const qaReportRefs = asStringArray(intakeMetadata.qaReportRefs).length > 0
+      ? asStringArray(intakeMetadata.qaReportRefs)
+      : pipelineRequest.qaReportRefs;
+    const securityReportRefs = asStringArray(intakeMetadata.securityReportRefs).length > 0
+      ? asStringArray(intakeMetadata.securityReportRefs)
+      : pipelineRequest.securityReportRefs;
+    const releaseReportRefs = asStringArray(intakeMetadata.releaseReportRefs).length > 0
+      ? asStringArray(intakeMetadata.releaseReportRefs)
+      : pipelineRequest.releaseReportRefs;
+    const evidenceSources = asStringArray(intakeMetadata.evidenceSources).length > 0
+      ? asStringArray(intakeMetadata.evidenceSources)
+      : pipelineRequest.evidenceSources;
+    const normalizedEvidenceSources = [...new Set([...qaReportRefs, ...securityReportRefs, ...releaseReportRefs, ...evidenceSources])];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`Pipeline evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const referencedArtifactKinds = [
+      ...new Set(
+        [...qaReportRefs, ...securityReportRefs, ...releaseReportRefs].flatMap((bundleRef) =>
+          repoRoot ? loadBundleArtifactKinds(join(repoRoot, bundleRef)) : []
+        )
+      )
+    ];
+    const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
+    const ciEvidenceSummary = ciEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
+    const failingChecks = ciEvidenceSummary.flatMap((entry) => entry.failingChecks);
+    const verificationChecks = [
+      {
+        name: "referenced-artifacts",
+        status: qaReportRefs.length + securityReportRefs.length + releaseReportRefs.length > 0 ? "passed" : "skipped",
+        detail:
+          qaReportRefs.length + securityReportRefs.length + releaseReportRefs.length > 0
+            ? `Validated ${qaReportRefs.length + securityReportRefs.length + releaseReportRefs.length} referenced artifact bundle(s).`
+            : "No upstream lifecycle artifact references were supplied."
+      },
+      {
+        name: "imported-ci-evidence",
+        status: ciEvidence.length === 0 ? "failed" : failingChecks.length > 0 ? "failed" : "passed",
+        detail:
+          ciEvidence.length === 0
+            ? "No imported CI evidence exports were supplied."
+            : failingChecks.length > 0
+              ? `Imported CI evidence still reports failing checks: ${failingChecks.join(", ")}.`
+              : `Using ${ciEvidence.length} imported CI evidence export(s) across ${[...new Set(ciEvidence.map((entry) => entry.pipelineName))].length} pipeline(s).`
+      }
+    ] as const;
+    const reviewStatus =
+      ciEvidence.length === 0 || failingChecks.length > 0
+        ? "blocked"
+        : "ready";
+
+    const normalization = pipelineEvidenceNormalizationSchema.parse({
+      qaReportRefs,
+      securityReportRefs,
+      releaseReportRefs,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      ciEvidence,
+      ciEvidenceSummary,
+      referencedArtifactKinds,
+      verificationChecks,
+      reviewStatus,
+      provenanceRefs: normalizedEvidenceSources
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized pipeline evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.ciEvidence.length} imported CI evidence export(s).`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies PipelineEvidenceNormalization
+    });
+  }
+};
+
+const pipelineAnalystAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "pipeline-analyst",
+    displayName: "Pipeline Analyst",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "reasoning"
+    },
+    permissions: {
+      model: true,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["lifecycleArtifacts"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ state, stateSlice }) {
+    const pipelineRequest = getWorkflowInput<PipelineRequest>(stateSlice, "pipelineRequest");
+    const pipelineIssueRefs = getWorkflowInput<string[]>(stateSlice, "pipelineIssueRefs") ?? [];
+    const pipelineScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "pipelineScmRefs") ?? [];
+    const pipelineGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "pipelineGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!pipelineRequest) {
+      throw new Error("pipeline-evidence-review requires validated pipeline inputs before analysis.");
+    }
+
+    const evidenceMetadata = pipelineEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const evidenceSources =
+      normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+        ? normalizedEvidence.normalizedEvidenceSources
+        : pipelineRequest.evidenceSources;
+    const ciEvidenceSummary = normalizedEvidence?.ciEvidenceSummary ?? [];
+    const verificationChecks = normalizedEvidence?.verificationChecks ?? [];
+    const referencedArtifactKinds = normalizedEvidence?.referencedArtifactKinds ?? [];
+    const blockers = [
+      ...verificationChecks
+        .filter((check) => check.status === "failed")
+        .map((check) => check.detail ?? `${check.name} failed during deterministic pipeline review.`)
+    ];
+    const riskSummary = [
+      ...(pipelineRequest.focusAreas.length > 0
+        ? [`Focused review areas still require human interpretation: ${pipelineRequest.focusAreas.join(", ")}.`]
+        : []),
+      ...(referencedArtifactKinds.length > 0
+        ? [`Referenced lifecycle artifacts remain in scope: ${referencedArtifactKinds.join(", ")}.`]
+        : []),
+      ...(ciEvidenceSummary.length > 0
+        ? [`Imported CI provenance spans ${[...new Set(ciEvidenceSummary.map((entry) => entry.provider))].join(", ")}.`]
+        : [])
+    ];
+    const recommendedNextSteps = [
+      ...ciEvidenceSummary.map(
+        (entry) => `Review ${entry.displayLabel} (${formatCiEvidenceStatus(entry)}) before moving to deployment or promotion review.`
+      ),
+      ...(pipelineRequest.qaReportRefs.length + pipelineRequest.securityReportRefs.length + pipelineRequest.releaseReportRefs.length > 0
+        ? ["Carry the validated QA, security, and release artifacts forward into deployment-gate-review."]
+        : ["Attach downstream QA, security, or release artifacts before using this pipeline report as a deployment gate input."]),
+      ...(pipelineRequest.constraints.length > 0 ? [`Keep follow-up bounded by: ${pipelineRequest.constraints.join("; ")}.`] : [])
+    ];
+    const reviewStatus = blockers.length > 0 ? "blocked" : normalizedEvidence?.reviewStatus ?? "ready";
+    const summary = `Pipeline report prepared for ${pipelineRequest.pipelineScope}.`;
+    const pipelineReport = pipelineArtifactSchema.parse({
+      ...buildLifecycleArtifactEnvelopeBase(
+        state,
+        "Pipeline Evidence Review",
+        summary,
+        [requestFile ?? ".agentops/requests/pipeline.yaml", ...new Set(evidenceSources)],
+        pipelineIssueRefs,
+        pipelineScmRefs,
+        pipelineGithubRefs
+      ),
+      artifactKind: "pipeline-report",
+      lifecycleDomain: "release",
+      payload: {
+        pipelineScope: pipelineRequest.pipelineScope,
+        evidenceSources,
+        verificationChecks,
+        ciEvidenceSummary,
+        reviewStatus,
+        blockers,
+        riskSummary,
+        recommendedNextSteps:
+          recommendedNextSteps.length > 0 ? recommendedNextSteps : ["Capture additional bounded CI evidence before follow-on review."],
+        referencedArtifactKinds,
+        provenanceRefs: normalizedEvidence?.provenanceRefs ?? evidenceSources
+      }
+    });
+
+    return agentOutputSchema.parse({
+      summary,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [pipelineReport satisfies PipelineArtifact],
+      requestedTools: [],
+      blockedActionFlags: [],
+      confidence: 0.76,
+      metadata: {
+        deterministicInputs: {
+          evidenceSources,
+          ciEvidenceSummary,
+          verificationChecks,
+          referencedArtifactKinds,
+          focusAreas: pipelineRequest.focusAreas,
+          constraints: pipelineRequest.constraints
+        },
+        synthesizedAssessment: {
+          reviewStatus,
+          blockers,
+          riskSummary,
+          recommendedNextSteps: pipelineReport.payload.recommendedNextSteps
+        }
+      }
+    });
+  }
+};
+
+const deploymentGateIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "deployment-gate-intake",
+    displayName: "Deployment Gate Intake",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const deploymentRequest = getWorkflowInput<DeploymentRequest>(stateSlice, "deploymentRequest");
+    const deploymentIssueRefs = getWorkflowInput<string[]>(stateSlice, "deploymentIssueRefs") ?? [];
+    const deploymentScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "deploymentScmRefs") ?? [];
+    const deploymentGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "deploymentGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!deploymentRequest) {
+      throw new Error("deployment-gate-review requires a validated deployment request before runtime execution.");
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded deployment request from ${requestFile ?? ".agentops/requests/deployment.yaml"} for ${deploymentRequest.targetEnvironment}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...deploymentRequestSchema.parse(deploymentRequest),
+        deploymentIssueRefs,
+        deploymentScmRefs,
+        deploymentGithubRefs,
+        evidenceSourceCount:
+          deploymentRequest.evidenceSources.length +
+          deploymentRequest.qaReportRefs.length +
+          deploymentRequest.securityReportRefs.length +
+          deploymentRequest.releaseReportRefs.length +
+          deploymentRequest.pipelineReportRefs.length
+      }
+    });
+  }
+};
+
+const deploymentGateEvidenceNormalizationAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "deployment-gate-evidence-normalizer",
+    displayName: "Deployment Gate Evidence Normalizer",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.md"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const deploymentRequest = getWorkflowInput<DeploymentRequest>(stateSlice, "deploymentRequest");
+    if (!deploymentRequest) {
+      throw new Error("deployment-gate-review requires validated deployment request inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const qaReportRefs = asStringArray(intakeMetadata.qaReportRefs).length > 0
+      ? asStringArray(intakeMetadata.qaReportRefs)
+      : deploymentRequest.qaReportRefs;
+    const securityReportRefs = asStringArray(intakeMetadata.securityReportRefs).length > 0
+      ? asStringArray(intakeMetadata.securityReportRefs)
+      : deploymentRequest.securityReportRefs;
+    const releaseReportRefs = asStringArray(intakeMetadata.releaseReportRefs).length > 0
+      ? asStringArray(intakeMetadata.releaseReportRefs)
+      : deploymentRequest.releaseReportRefs;
+    const pipelineReportRefs = asStringArray(intakeMetadata.pipelineReportRefs).length > 0
+      ? asStringArray(intakeMetadata.pipelineReportRefs)
+      : deploymentRequest.pipelineReportRefs;
+    const evidenceSources = asStringArray(intakeMetadata.evidenceSources).length > 0
+      ? asStringArray(intakeMetadata.evidenceSources)
+      : deploymentRequest.evidenceSources;
+    const normalizedEvidenceSources = [
+      ...new Set([...qaReportRefs, ...securityReportRefs, ...releaseReportRefs, ...pipelineReportRefs, ...evidenceSources])
+    ];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`Deployment evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const referencedArtifactKinds = [
+      ...new Set(
+        [...qaReportRefs, ...securityReportRefs, ...releaseReportRefs, ...pipelineReportRefs].flatMap((bundleRef) =>
+          repoRoot ? loadBundleArtifactKinds(join(repoRoot, bundleRef)) : []
+        )
+      )
+    ];
+    const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
+    const ciEvidenceSummary = ciEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
+    const failingChecks = ciEvidenceSummary.flatMap((entry) => entry.failingChecks);
+    const verificationChecks = [
+      {
+        name: "qa-report-refs",
+        status: qaReportRefs.length > 0 ? "passed" : "skipped",
+        detail: qaReportRefs.length > 0 ? `Using ${qaReportRefs.length} validated QA report reference(s).` : "No QA report references were supplied."
+      },
+      {
+        name: "security-report-refs",
+        status: securityReportRefs.length > 0 ? "passed" : "skipped",
+        detail: securityReportRefs.length > 0
+          ? `Using ${securityReportRefs.length} validated security report reference(s).`
+          : "No security report references were supplied."
+      },
+      {
+        name: "release-report-refs",
+        status: releaseReportRefs.length > 0 ? "passed" : "skipped",
+        detail: releaseReportRefs.length > 0
+          ? `Using ${releaseReportRefs.length} validated release report reference(s).`
+          : "No release report references were supplied."
+      },
+      {
+        name: "pipeline-report-refs",
+        status: pipelineReportRefs.length > 0 ? "passed" : "skipped",
+        detail: pipelineReportRefs.length > 0
+          ? `Using ${pipelineReportRefs.length} validated pipeline report reference(s).`
+          : "No pipeline report references were supplied."
+      },
+      {
+        name: "imported-ci-evidence",
+        status: ciEvidence.length === 0 ? "failed" : failingChecks.length > 0 ? "failed" : "passed",
+        detail:
+          ciEvidence.length === 0
+            ? "No imported CI evidence exports were supplied."
+            : failingChecks.length > 0
+              ? `Imported CI evidence still reports failing checks: ${failingChecks.join(", ")}.`
+              : `Using ${ciEvidence.length} imported CI evidence export(s) across ${[...new Set(ciEvidence.map((entry) => entry.pipelineName))].length} pipeline(s).`
+      }
+    ] as const;
+    const gateStatus =
+      ciEvidence.length === 0 || failingChecks.length > 0
+        ? "blocked"
+        : qaReportRefs.length > 0 &&
+            securityReportRefs.length > 0 &&
+            releaseReportRefs.length > 0 &&
+            pipelineReportRefs.length > 0
+          ? "ready_for_approval"
+          : "conditionally_ready";
+
+    const normalization = deploymentGateEvidenceNormalizationSchema.parse({
+      qaReportRefs,
+      securityReportRefs,
+      releaseReportRefs,
+      pipelineReportRefs,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      ciEvidence,
+      ciEvidenceSummary,
+      referencedArtifactKinds,
+      verificationChecks,
+      gateStatus,
+      provenanceRefs: normalizedEvidenceSources
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized deployment-gate evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.ciEvidence.length} imported CI evidence export(s).`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies DeploymentGateEvidenceNormalization
+    });
+  }
+};
+
+const deploymentGateAnalystAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "deployment-gate-analyst",
+    displayName: "Deployment Gate Analyst",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "reasoning"
+    },
+    permissions: {
+      model: true,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["lifecycleArtifacts"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ state, stateSlice }) {
+    const deploymentRequest = getWorkflowInput<DeploymentRequest>(stateSlice, "deploymentRequest");
+    const deploymentIssueRefs = getWorkflowInput<string[]>(stateSlice, "deploymentIssueRefs") ?? [];
+    const deploymentScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "deploymentScmRefs") ?? [];
+    const deploymentGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "deploymentGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!deploymentRequest) {
+      throw new Error("deployment-gate-review requires validated deployment inputs before analysis.");
+    }
+
+    const evidenceMetadata = deploymentGateEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const evidenceSources =
+      normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+        ? normalizedEvidence.normalizedEvidenceSources
+        : deploymentRequest.evidenceSources;
+    const ciEvidenceSummary = normalizedEvidence?.ciEvidenceSummary ?? [];
+    const verificationChecks = normalizedEvidence?.verificationChecks ?? [];
+    const referencedArtifactKinds = normalizedEvidence?.referencedArtifactKinds ?? [];
+    const blockers = [
+      ...verificationChecks
+        .filter((check) => check.status === "failed")
+        .map((check) => check.detail ?? `${check.name} failed during deterministic deployment-gate review.`)
+    ];
+    const requiredFollowUpChecks = [
+      ...verificationChecks
+        .filter((check) => check.status === "skipped")
+        .map((check) => check.detail ?? `${check.name} still needs explicit follow-up.`),
+      ...ciEvidenceSummary.map(
+        (entry) => `Confirm ${entry.displayLabel} remains current for the ${deploymentRequest.targetEnvironment} candidate.`
+      ),
+      ...(blockers.length === 0 ? ["Obtain explicit maintainer approval before any deploy, publish, or promotion action."] : [])
+    ];
+    const gateStatus = blockers.length > 0 ? "blocked" : normalizedEvidence?.gateStatus ?? "conditionally_ready";
+    const summary = `Deployment gate report prepared for ${deploymentRequest.targetEnvironment}.`;
+    const deploymentGateReport = deploymentGateArtifactSchema.parse({
+      ...buildLifecycleArtifactEnvelopeBase(
+        state,
+        "Deployment Gate Review",
+        summary,
+        [requestFile ?? ".agentops/requests/deployment.yaml", ...new Set(evidenceSources)],
+        deploymentIssueRefs,
+        deploymentScmRefs,
+        deploymentGithubRefs
+      ),
+      artifactKind: "deployment-gate-report",
+      lifecycleDomain: "release",
+      payload: {
+        deploymentScope: deploymentRequest.deploymentScope,
+        targetEnvironment: deploymentRequest.targetEnvironment,
+        evidenceSources,
+        verificationChecks,
+        ciEvidenceSummary,
+        gateStatus,
+        blockers,
+        requiredFollowUpChecks,
+        referencedArtifactKinds,
+        provenanceRefs: normalizedEvidence?.provenanceRefs ?? evidenceSources
+      }
+    });
+
+    return agentOutputSchema.parse({
+      summary,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [deploymentGateReport satisfies DeploymentGateArtifact],
+      requestedTools: [],
+      blockedActionFlags: [],
+      confidence: 0.77,
+      metadata: {
+        deterministicInputs: {
+          targetEnvironment: deploymentRequest.targetEnvironment,
+          evidenceSources,
+          ciEvidenceSummary,
+          verificationChecks,
+          referencedArtifactKinds,
+          constraints: deploymentRequest.constraints
+        },
+        synthesizedAssessment: {
+          gateStatus,
+          blockers,
+          requiredFollowUpChecks: deploymentGateReport.payload.requiredFollowUpChecks
+        }
+      }
+    });
+  }
+};
+
 const securityEvidenceNormalizationAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -4120,6 +4861,12 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["release-intake", releaseIntakeAgent],
     ["release-evidence-normalizer", releaseEvidenceNormalizationAgent],
     ["release-analyst", releaseAnalystAgent],
+    ["pipeline-intake", pipelineIntakeAgent],
+    ["pipeline-evidence-normalizer", pipelineEvidenceNormalizationAgent],
+    ["pipeline-analyst", pipelineAnalystAgent],
+    ["deployment-gate-intake", deploymentGateIntakeAgent],
+    ["deployment-gate-evidence-normalizer", deploymentGateEvidenceNormalizationAgent],
+    ["deployment-gate-analyst", deploymentGateAnalystAgent],
     ["security-evidence-normalizer", securityEvidenceNormalizationAgent],
     ["security-analyst", securityAnalystAgent],
     ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],

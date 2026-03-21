@@ -1,10 +1,10 @@
 # Additional SCM And CI Integrations Roadmap
 
-This document defines the design target for issue [#64](https://github.com/H9-Foundry/AgentForge/issues/64).
+This document defines the design target for issue [#64](https://github.com/H9-Foundry/AgentForge/issues/64) and the active Phase 2 tracker [#245](https://github.com/H9-Foundry/AgentForge/issues/245).
 
 It describes how AgentForge should expand beyond the current GitHub-centric baseline without promising broad integration support prematurely.
 
-It does **not** claim that broad cross-platform SCM or CI support is implemented today.
+It does **not** claim that broad cross-platform SCM or CI support or broad remote-host parity is implemented today.
 
 ## Why This Exists
 
@@ -37,13 +37,14 @@ Implemented now:
 - bounded GitLab issue and merge-request normalization into the shared SCM contract
 - bounded local GitLab CI evidence normalization into the shared CI contract
 - bounded local Buildkite CI evidence normalization into the shared CI contract
+- bounded local Jenkins CI evidence normalization into the shared CI contract
 - bounded generic CI evidence ingestion for local pipeline status and artifact exports
 - shared SCM and CI handoff summary rendering across lifecycle artifacts where normalized host-agnostic evidence is available
 
 Not yet available:
 
-- additional generic CI evidence adapters beyond the initial generic local export surface
-- broad host-agnostic workflow surfaces across multiple providers
+- broader generic release and deployment workflow surfaces across multiple providers
+- additional CI provider wedges beyond the current GitHub Actions, GitLab CI, Buildkite, Jenkins, and generic local export baseline
 - live remote SCM or CI reads on the default local path
 
 ## Recommended Priority Order
@@ -72,13 +73,23 @@ This provides a meaningful contrast to GitHub without exploding scope.
 
 ### Priority 3: Additional Provider And Generic CI Evidence
 
-Status: implemented for Buildkite and the first generic local CI evidence wedge, with Jenkins next as the active CI-only provider wedge.
+Status: implemented for Buildkite, Jenkins, and the first generic local CI evidence wedge.
 
 After the first new host pair:
 
-- validate one more explicit provider-specific CI wedge
+- validate additional explicit provider-specific CI wedges
 - expand to generic CI evidence adapters
-- consider Buildkite, Jenkins, or similar systems where bounded evidence ingestion makes sense
+- consider additional bounded CI systems only where local exported evidence makes sense
+
+### Priority 4: Generic Release And CI Workflow Consumption
+
+Status: active next family.
+
+After the shared CI baseline is proven across the current providers:
+
+- expand provider-agnostic workflow consumption instead of opening another provider wedge first
+- add generic release and deployment review workflows that consume shared `CiEvidence`
+- keep provider provenance explicit while avoiding host-specific request models
 
 ## Non-Goals
 
@@ -122,5 +133,6 @@ This epic should be decomposed into at least:
 2. implemented: GitLab issue/MR and CI evidence integration wedge as the first additional concrete host pair
 3. implemented: generic CI evidence adapter surface for bounded local pipeline status and artifact ingestion
 4. implemented: Buildkite CI evidence adapter wedge as the next additional bounded provider
-5. implemented: richer host-agnostic workflow consumption and handoff rendering built on the shared contracts
-6. next: Jenkins CI evidence adapter wedge as the next bounded CI-only provider follow-on
+5. implemented: Jenkins CI evidence adapter wedge as the next bounded CI-only provider follow-on
+6. implemented: richer host-agnostic workflow consumption and handoff rendering built on the shared contracts
+7. next: provider-agnostic release and deployment workflow family built on shared `CiEvidence`

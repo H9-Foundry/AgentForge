@@ -4,7 +4,7 @@ This document defines the design target for issue [#59](https://github.com/H9-Fo
 
 It describes how AgentForge should grow from the current release/readiness tooling into a broader release and CI/CD workflow family.
 
-It does **not** claim that a broader CI/CD workflow family is fully implemented today beyond the first official `release-readiness` wedge.
+It does **not** claim that broader CI/CD orchestration or publish automation is fully implemented today beyond the current local review-oriented release workflow family.
 
 ## Why This Exists
 
@@ -35,28 +35,34 @@ Available now:
 - package/version verification
 - audit and lifecycle artifact infrastructure
 - official `release-readiness` workflow asset and request validation
+- official `pipeline-evidence-review` workflow asset and request validation
+- official `deployment-gate-review` workflow asset and request validation
 - bounded `release-report` artifact emission from the local `release-readiness` workflow
+- bounded `pipeline-report` artifact emission from the local `pipeline-evidence-review` workflow
+- bounded `deployment-gate-report` artifact emission from the local `deployment-gate-review` workflow
 - deterministic release-state normalization across bounded local evidence, QA/security report refs, and workspace version targets
+- deterministic pipeline and deployment-gate normalization across bounded local CI evidence and referenced lifecycle artifacts
 - approval-classified publish or promotion follow-on recommendations that remain read-only by default
 
 Not yet available:
 
-- explicit CI evidence ingestion into a release workflow
-- support for broader host-agnostic pipeline orchestration
+- approval-oriented promotion follow-ons beyond the current review workflows
+- publish or deploy orchestration on the default local path
+- broader host-agnostic pipeline orchestration beyond the current local review family
 
 ## Recommended Initial Workflow Family
 
-Phase 2 should build on the current first official wedge:
+Phase 2 now builds on the current official local release and CI review family:
 
 - `release-readiness`
+- `pipeline-evidence-review`
+- `deployment-gate-review`
 
 Later planned variants can include:
 
-- `pipeline-evidence-review`
-- `deployment-gate-review`
 - `promotion-approval`
 
-`release-readiness` is already implemented on current `main`; later release-family work should extend it rather than reopening first-wedge planning.
+The three current workflows are already implemented on `main`; later release-family work should extend them rather than reopening first-wedge planning.
 
 ## User Jobs
 
@@ -166,8 +172,10 @@ Implemented on current `main`:
 2. `release-analyst` starter agent and `release-report` artifact emission
 3. deterministic CI evidence ingestion and release-state normalization across bounded local evidence
 4. richer host-agnostic CI provenance and status summaries in `release-report`
+5. `pipeline-evidence-review` workflow, request schema, starter agents, and `pipeline-report` artifact
+6. `deployment-gate-review` workflow, request schema, starter agents, and `deployment-gate-report` artifact
 
 Next release-family follow-ons:
 
-1. additional release and deployment-gate variants built on the bounded release wedge
-2. approval-gated publish/promotion orchestration aligned to release-trust controls
+1. approval-oriented promotion follow-ons built on the bounded release and deployment review family
+2. approval-gated publish or promotion orchestration aligned to release-trust controls
