@@ -10,6 +10,9 @@ import {
   ciEvidenceSchema,
   dependencyIntegrityEvidenceSchema,
   dependencyInventoryEntrySchema,
+  deploymentGateArtifactSchema,
+  deploymentGateEvidenceNormalizationSchema,
+  deploymentRequestSchema,
   genericCiEvidenceExportSchema,
   gitlabCiEvidenceExportSchema,
   jenkinsCiEvidenceExportSchema,
@@ -35,6 +38,9 @@ import {
   maintenanceArtifactSchema,
   maintenanceEvidenceNormalizationSchema,
   normalizedValidationCommandSchema,
+  pipelineArtifactSchema,
+  pipelineEvidenceNormalizationSchema,
+  pipelineRequestSchema,
   policyDocumentSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
@@ -66,9 +72,11 @@ describe("schema fixtures", () => {
     expect(() => incidentRequestSchema.parse(schemaFixtures.incidentRequest)).not.toThrow();
     expect(() => qaRequestSchema.parse(schemaFixtures.qaRequest)).not.toThrow();
     expect(() => securityRequestSchema.parse(schemaFixtures.securityRequest)).not.toThrow();
+    expect(() => pipelineRequestSchema.parse(schemaFixtures.pipelineRequest)).not.toThrow();
     expect(() => evalSpecSchema.parse(schemaFixtures.evalSpec)).not.toThrow();
     expect(() => evalFixtureCorpusSchema.parse(schemaFixtures.evalFixtureCorpus)).not.toThrow();
     expect(() => releaseRequestSchema.parse(schemaFixtures.releaseRequest)).not.toThrow();
+    expect(() => deploymentRequestSchema.parse(schemaFixtures.deploymentRequest)).not.toThrow();
     expect(() => githubReferenceSchema.parse(schemaFixtures.githubReference)).not.toThrow();
     expect(() => scmReferenceSchema.parse(schemaFixtures.scmReference)).not.toThrow();
     expect(() => scmReferenceSchema.parse(schemaFixtures.gitlabIssueScmReference)).not.toThrow();
@@ -107,6 +115,8 @@ describe("schema fixtures", () => {
     expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
     expect(() => securityEvidenceNormalizationSchema.parse(schemaFixtures.securityEvidenceNormalization)).not.toThrow();
+    expect(() => pipelineEvidenceNormalizationSchema.parse(schemaFixtures.pipelineEvidenceNormalization)).not.toThrow();
+    expect(() => deploymentGateEvidenceNormalizationSchema.parse(schemaFixtures.deploymentGateEvidenceNormalization)).not.toThrow();
     expect(() => releaseEvidenceNormalizationSchema.parse(schemaFixtures.releaseEvidenceNormalization)).not.toThrow();
     expect(() => releaseCiEvidenceSummarySchema.parse(schemaFixtures.releaseArtifact.payload.ciEvidenceSummary[0])).not.toThrow();
     expect(() => maintenanceEvidenceNormalizationSchema.parse(schemaFixtures.maintenanceEvidenceNormalization)).not.toThrow();
@@ -132,9 +142,11 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.incidentRequest).toBeDefined();
     expect(jsonSchemas.qaRequest).toBeDefined();
     expect(jsonSchemas.securityRequest).toBeDefined();
+    expect(jsonSchemas.pipelineRequest).toBeDefined();
     expect(jsonSchemas.evalSpec).toBeDefined();
     expect(jsonSchemas.evalFixtureCorpus).toBeDefined();
     expect(jsonSchemas.releaseRequest).toBeDefined();
+    expect(jsonSchemas.deploymentRequest).toBeDefined();
     expect(jsonSchemas.githubReference).toBeDefined();
     expect(jsonSchemas.scmReference).toBeDefined();
     expect(jsonSchemas.ciArtifactEvidence).toBeDefined();
@@ -157,6 +169,8 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.registryPluginCatalog).toBeDefined();
     expect(jsonSchemas.qaEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.securityEvidenceNormalization).toBeDefined();
+    expect(jsonSchemas.pipelineEvidenceNormalization).toBeDefined();
+    expect(jsonSchemas.deploymentGateEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.maintenanceEvidenceNormalization).toBeDefined();
     expect(jsonSchemas.releaseCiEvidenceSummary).toBeDefined();
     expect(jsonSchemas.releaseEvidenceNormalization).toBeDefined();
@@ -167,10 +181,12 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.incidentArtifact).toBeDefined();
     expect(jsonSchemas.qaArtifact).toBeDefined();
     expect(jsonSchemas.securityArtifact).toBeDefined();
+    expect(jsonSchemas.pipelineArtifact).toBeDefined();
     expect(jsonSchemas.evalArtifact).toBeDefined();
     expect(jsonSchemas.benchmarkArtifact).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();
     expect(jsonSchemas.releaseArtifact).toBeDefined();
+    expect(jsonSchemas.deploymentGateArtifact).toBeDefined();
     expect(jsonSchemas.maintenanceArtifact).toBeDefined();
   });
 
@@ -257,10 +273,12 @@ describe("schema fixtures", () => {
     expect(() => implementationArtifactSchema.parse(schemaFixtures.implementationArtifact)).not.toThrow();
     expect(() => qaArtifactSchema.parse(schemaFixtures.qaArtifact)).not.toThrow();
     expect(() => securityArtifactSchema.parse(schemaFixtures.securityArtifact)).not.toThrow();
+    expect(() => pipelineArtifactSchema.parse(schemaFixtures.pipelineArtifact)).not.toThrow();
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
     expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
     expect(() => reviewArtifactSchema.parse(schemaFixtures.reviewArtifact)).not.toThrow();
     expect(() => releaseArtifactSchema.parse(schemaFixtures.releaseArtifact)).not.toThrow();
+    expect(() => deploymentGateArtifactSchema.parse(schemaFixtures.deploymentGateArtifact)).not.toThrow();
     expect(() => maintenanceArtifactSchema.parse(schemaFixtures.maintenanceArtifact)).not.toThrow();
   });
 

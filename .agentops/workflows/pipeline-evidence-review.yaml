@@ -1,6 +1,6 @@
 version: 1
-name: release-readiness
-description: Validate a bounded release-readiness request while keeping trusted publish automation separate.
+name: pipeline-evidence-review
+description: Review bounded local pipeline evidence through the shared CI model without assuming a release target.
 trigger: manual
 catalog:
   domain: release
@@ -10,16 +10,16 @@ catalog:
 nodes:
   - id: intake
     kind: deterministic
-    agent: release-intake
+    agent: pipeline-intake
     outputs_to: agentResults.intake
   - id: evidence
     kind: deterministic
-    agent: release-evidence-normalizer
+    agent: pipeline-evidence-normalizer
     outputs_to: agentResults.evidence
-  - id: release
+  - id: pipeline
     kind: reasoning
-    agent: release-analyst
-    outputs_to: agentResults.release
+    agent: pipeline-analyst
+    outputs_to: agentResults.pipeline
   - id: report
     kind: report
     outputs_to: reports.final

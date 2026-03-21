@@ -1,6 +1,6 @@
 # AgentForge Architecture
 
-AgentForge is currently an early SDLC platform core with an official local workflow surface that spans review, planning, design, implementation, QA, security, release readiness, incident handoff, and maintenance. The architecture is intentionally broader than the current workflow set so the platform can expand across more lifecycle domains without abandoning deterministic control.
+AgentForge is currently an early SDLC platform core with an official local workflow surface that spans review, planning, design, implementation, QA, security, release and CI review, incident handoff, and maintenance. The architecture is intentionally broader than the current workflow set so the platform can expand across more lifecycle domains without abandoning deterministic control.
 
 ## Package Map
 
@@ -41,6 +41,8 @@ AgentForge is currently an early SDLC platform core with an official local workf
 - `.agentops/workflows/qa-review.yaml`
 - `.agentops/workflows/security-review.yaml`
 - `.agentops/workflows/release-readiness.yaml`
+- `.agentops/workflows/pipeline-evidence-review.yaml`
+- `.agentops/workflows/deployment-gate-review.yaml`
 - `.agentops/workflows/incident-handoff.yaml`
 - `.agentops/workflows/maintenance-triage.yaml`
 

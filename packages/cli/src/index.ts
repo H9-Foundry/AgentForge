@@ -14,11 +14,13 @@ import {
   benchmarkArtifactSchema,
   designArtifactSchema,
   designRequestSchema,
+  deploymentRequestSchema,
   evalArtifactSchema,
   evalFixtureCorpusSchema,
   implementationRequestSchema,
   incidentRequestSchema,
   maintenanceRequestSchema,
+  pipelineRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
   qaRequestSchema,
@@ -35,6 +37,7 @@ import type {
   BlockedPlugin,
   DesignArtifact,
   DesignRequest,
+  DeploymentRequest,
   EvalDeterministicCheck,
   EvalFixtureCorpus,
   EvalModelDependentCheck,
@@ -45,6 +48,7 @@ import type {
   ImplementationRequest,
   IncidentRequest,
   MaintenanceRequest,
+  PipelineRequest,
   PlanningArtifact,
   PlanningRequest,
   QaRequest,
@@ -306,7 +310,7 @@ description: Validate a bounded release-readiness request while keeping trusted 
 trigger: manual
 catalog:
   domain: release
-  supportLevel: partial
+  supportLevel: official
   maturity: mvp
   trustScope: official-core-only
 nodes:
@@ -322,6 +326,60 @@ nodes:
     kind: reasoning
     agent: release-analyst
     outputs_to: agentResults.release
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
+const pipelineWorkflowTemplate = `version: 1
+name: pipeline-evidence-review
+description: Review bounded local pipeline evidence through the shared CI model without assuming a release target.
+trigger: manual
+catalog:
+  domain: release
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: pipeline-intake
+    outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: pipeline-evidence-normalizer
+    outputs_to: agentResults.evidence
+  - id: pipeline
+    kind: reasoning
+    agent: pipeline-analyst
+    outputs_to: agentResults.pipeline
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
+const deploymentGateWorkflowTemplate = `version: 1
+name: deployment-gate-review
+description: Review a bounded deployment candidate using shared CI evidence and referenced lifecycle artifacts.
+trigger: manual
+catalog:
+  domain: release
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: deployment-gate-intake
+    outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: deployment-gate-evidence-normalizer
+    outputs_to: agentResults.evidence
+  - id: deployment
+    kind: reasoning
+    agent: deployment-gate-analyst
+    outputs_to: agentResults.deployment
   - id: report
     kind: report
     outputs_to: reports.final
@@ -960,6 +1018,49 @@ function validateReleaseRequestCompleteness(request: ReleaseRequest): ReleaseReq
   return request;
 }
 
+function validatePipelineRequestCompleteness(request: PipelineRequest): PipelineRequest {
+  const evidenceSignalCount =
+    request.evidenceSources.length + request.qaReportRefs.length + request.securityReportRefs.length + request.releaseReportRefs.length;
+  if (evidenceSignalCount === 0) {
+    throw new Error(
+      "Pipeline request is underspecified. Add at least one of evidenceSources, qaReportRefs, securityReportRefs, or releaseReportRefs."
+    );
+  }
+
+  return request;
+}
+
+function validateDeploymentRequestCompleteness(request: DeploymentRequest): DeploymentRequest {
+  const evidenceSignalCount =
+    request.evidenceSources.length +
+    request.qaReportRefs.length +
+    request.securityReportRefs.length +
+    request.releaseReportRefs.length +
+    request.pipelineReportRefs.length;
+  if (evidenceSignalCount === 0) {
+    throw new Error(
+      "Deployment request is underspecified. Add at least one of evidenceSources, qaReportRefs, securityReportRefs, releaseReportRefs, or pipelineReportRefs."
+    );
+  }
+
+  return request;
+}
+
+function addSourceReferences(
+  refs: { issueRefs: Set<string>; scmRefMap: Map<string, ScmReference>; githubRefMap: Map<string, GithubReference> },
+  incoming: { issueRefs: string[]; scmRefs: ScmReference[]; githubRefs: GithubReference[] }
+): void {
+  for (const issueRef of incoming.issueRefs) {
+    refs.issueRefs.add(issueRef);
+  }
+  for (const scmRef of incoming.scmRefs) {
+    refs.scmRefMap.set(scmRef.canonical, scmRef);
+  }
+  for (const githubRef of incoming.githubRefs) {
+    refs.githubRefMap.set(githubRef.canonical, githubRef);
+  }
+}
+
 function loadLifecycleArtifactKinds(root: string, bundleRef: string): string[] {
   const bundlePath = join(root, bundleRef);
   if (!existsSync(bundlePath)) {
@@ -1129,6 +1230,62 @@ function prepareWorkflowInputs(
     };
   }
 
+  if (workflow.name === "pipeline-evidence-review") {
+    const requestPath = ".agentops/requests/pipeline.yaml";
+    ensureReadablePath(policyEngine, requestPath, "pipeline request");
+    const pipelineRequest = validatePipelineRequestCompleteness(
+      readYamlFile(join(root, requestPath), pipelineRequestSchema, "pipeline request")
+    );
+
+    const scmRepoContext = inferScmRepoContext(root);
+    const gitHubRepoContext = inferGitHubRepoContext(root);
+    const pipelineRefs = {
+      issueRefs: new Set<string>(pipelineRequest.issueRefs),
+      scmRefMap: new Map<string, ScmReference>(),
+      githubRefMap: new Map<string, GithubReference>()
+    };
+
+    for (const scmRef of normalizeScmReferences(pipelineRequest.issueRefs, scmRepoContext)) {
+      pipelineRefs.scmRefMap.set(scmRef.canonical, scmRef);
+    }
+    for (const githubRef of normalizeGitHubReferences(pipelineRequest.issueRefs, gitHubRepoContext)) {
+      pipelineRefs.githubRefMap.set(githubRef.canonical, githubRef);
+    }
+
+    for (const qaReportRef of pipelineRequest.qaReportRefs) {
+      ensureReadablePath(policyEngine, qaReportRef, "QA report reference");
+      ensureBundleContainsArtifactKind(root, qaReportRef, "qa-report", "QA report reference");
+      addSourceReferences(pipelineRefs, loadLifecycleArtifactSourceReferences(root, qaReportRef));
+    }
+
+    for (const securityReportRef of pipelineRequest.securityReportRefs) {
+      ensureReadablePath(policyEngine, securityReportRef, "security report reference");
+      ensureBundleContainsArtifactKind(root, securityReportRef, "security-report", "security report reference");
+      addSourceReferences(pipelineRefs, loadLifecycleArtifactSourceReferences(root, securityReportRef));
+    }
+
+    for (const releaseReportRef of pipelineRequest.releaseReportRefs) {
+      ensureReadablePath(policyEngine, releaseReportRef, "release report reference");
+      ensureBundleContainsArtifactKind(root, releaseReportRef, "release-report", "release report reference");
+      addSourceReferences(pipelineRefs, loadLifecycleArtifactSourceReferences(root, releaseReportRef));
+    }
+
+    for (const evidenceSource of pipelineRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "pipeline evidence source");
+      if (!existsSync(join(root, evidenceSource))) {
+        throw new Error(`Pipeline evidence source not found: ${evidenceSource}`);
+      }
+    }
+
+    return {
+      pipelineRequest: pipelineRequest satisfies PipelineRequest,
+      pipelineIssueRefs: [...pipelineRefs.issueRefs],
+      pipelineScmRefs: [...pipelineRefs.scmRefMap.values()],
+      pipelineGithubRefs: [...pipelineRefs.githubRefMap.values()],
+      requestFile: requestPath
+    };
+  }
+
   if (workflow.name === "release-readiness") {
     const requestPath = ".agentops/requests/release.yaml";
     ensureReadablePath(policyEngine, requestPath, "release request");
@@ -1181,6 +1338,68 @@ function prepareWorkflowInputs(
       releaseIssueRefs: [...releaseIssueRefs],
       releaseScmRefs: [...releaseScmRefMap.values()],
       releaseGithubRefs: [...releaseGithubRefMap.values()],
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "deployment-gate-review") {
+    const requestPath = ".agentops/requests/deployment.yaml";
+    ensureReadablePath(policyEngine, requestPath, "deployment request");
+    const deploymentRequest = validateDeploymentRequestCompleteness(
+      readYamlFile(join(root, requestPath), deploymentRequestSchema, "deployment request")
+    );
+
+    const scmRepoContext = inferScmRepoContext(root);
+    const gitHubRepoContext = inferGitHubRepoContext(root);
+    const deploymentRefs = {
+      issueRefs: new Set<string>(deploymentRequest.issueRefs),
+      scmRefMap: new Map<string, ScmReference>(),
+      githubRefMap: new Map<string, GithubReference>()
+    };
+
+    for (const scmRef of normalizeScmReferences(deploymentRequest.issueRefs, scmRepoContext)) {
+      deploymentRefs.scmRefMap.set(scmRef.canonical, scmRef);
+    }
+    for (const githubRef of normalizeGitHubReferences(deploymentRequest.issueRefs, gitHubRepoContext)) {
+      deploymentRefs.githubRefMap.set(githubRef.canonical, githubRef);
+    }
+
+    for (const qaReportRef of deploymentRequest.qaReportRefs) {
+      ensureReadablePath(policyEngine, qaReportRef, "QA report reference");
+      ensureBundleContainsArtifactKind(root, qaReportRef, "qa-report", "QA report reference");
+      addSourceReferences(deploymentRefs, loadLifecycleArtifactSourceReferences(root, qaReportRef));
+    }
+
+    for (const securityReportRef of deploymentRequest.securityReportRefs) {
+      ensureReadablePath(policyEngine, securityReportRef, "security report reference");
+      ensureBundleContainsArtifactKind(root, securityReportRef, "security-report", "security report reference");
+      addSourceReferences(deploymentRefs, loadLifecycleArtifactSourceReferences(root, securityReportRef));
+    }
+
+    for (const releaseReportRef of deploymentRequest.releaseReportRefs) {
+      ensureReadablePath(policyEngine, releaseReportRef, "release report reference");
+      ensureBundleContainsArtifactKind(root, releaseReportRef, "release-report", "release report reference");
+      addSourceReferences(deploymentRefs, loadLifecycleArtifactSourceReferences(root, releaseReportRef));
+    }
+
+    for (const pipelineReportRef of deploymentRequest.pipelineReportRefs) {
+      ensureReadablePath(policyEngine, pipelineReportRef, "pipeline report reference");
+      ensureBundleContainsArtifactKind(root, pipelineReportRef, "pipeline-report", "pipeline report reference");
+      addSourceReferences(deploymentRefs, loadLifecycleArtifactSourceReferences(root, pipelineReportRef));
+    }
+
+    for (const evidenceSource of deploymentRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "deployment evidence source");
+      if (!existsSync(join(root, evidenceSource))) {
+        throw new Error(`Deployment evidence source not found: ${evidenceSource}`);
+      }
+    }
+
+    return {
+      deploymentRequest: deploymentRequest satisfies DeploymentRequest,
+      deploymentIssueRefs: [...deploymentRefs.issueRefs],
+      deploymentScmRefs: [...deploymentRefs.scmRefMap.values()],
+      deploymentGithubRefs: [...deploymentRefs.githubRefMap.values()],
       requestFile: requestPath
     };
   }
@@ -2111,6 +2330,14 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "release-readiness.yaml"),
       contents: releaseWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "pipeline-evidence-review.yaml"),
+      contents: pipelineWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "deployment-gate-review.yaml"),
+      contents: deploymentGateWorkflowTemplate
     },
     {
       path: join(workflowsDir, "incident-handoff.yaml"),

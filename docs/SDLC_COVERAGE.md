@@ -17,7 +17,7 @@ Workflow coverage is not the same thing as plug-and-play external usability. A l
 | Build / implementation | Available now | `implementation-proposal` is an official local workflow that validates `.agentops/requests/implementation.yaml`, requires a `designRecordRef`, and emits an `implementation-proposal` artifact without widening the default side-effect posture. | Expand from proposal-only implementation planning into downstream QA, security review, and gated apply-capable follow-ons. |
 | Review / test / QA | Available now | `pr-review` remains available, and `qa-review` is now an official local workflow that validates `.agentops/requests/qa.yaml`, consumes an implementation proposal bundle, and emits a `qa-report` artifact with deterministic evidence normalization. | Broaden into additional QA variants such as regression triage and release-readiness QA. |
 | Security / compliance / DevSecOps | Available now | `security-review` is an official local workflow that validates `.agentops/requests/security.yaml`, consumes bounded local evidence, and emits a `security-report` artifact without widening the default side-effect posture. | Expand beyond `security-review` into additional security/DevSecOps variants, adapters, and evals. |
-| Release / CI/CD | Available now | `release-readiness` is an official local workflow that validates `.agentops/requests/release.yaml`, consumes bounded local release evidence, and emits a `release-report` artifact without widening the default side-effect posture. | Expand into additional release and CI/CD variants such as pipeline evidence review and deployment-gate review. |
+| Release / CI/CD | Available now | `release-readiness`, `pipeline-evidence-review`, and `deployment-gate-review` are official local workflows that validate `.agentops/requests/release.yaml`, `.agentops/requests/pipeline.yaml`, and `.agentops/requests/deployment.yaml`, consume bounded local CI and release evidence, and emit `release-report`, `pipeline-report`, and `deployment-gate-report` artifacts without widening the default side-effect posture. | Expand into approval-oriented promotion follow-ons and additional release/deployment review variants after the current review family lands broadly. |
 | Operate / incident response / observability handoff | Available now | `incident-handoff` is an official local workflow that validates `.agentops/requests/incident.yaml`, consumes staged local incident evidence, and emits an `incident-brief` artifact with deterministic provenance and follow-up routing. | Expand into additional incident and operations variants such as postmortem review and alert triage. |
 | Maintain / upgrade / docs / dependency hygiene | Available now | `maintenance-triage` is an official local workflow that validates `.agentops/requests/maintenance.yaml`, consumes bounded maintenance evidence, and emits a `maintenance-report` artifact with deterministic routing support. | Expand into additional maintenance variants such as dependency-upgrade review, docs-hygiene review, and backlog refresh. |
 
@@ -46,6 +46,12 @@ Workflow coverage is not the same thing as plug-and-play external usability. A l
 - `release-readiness`
   - location: `.agentops/workflows/release-readiness.yaml`
   - purpose: validate a release request, consume bounded local release evidence, and emit a `release-report` lifecycle artifact without widening the default side-effect posture
+- `pipeline-evidence-review`
+  - location: `.agentops/workflows/pipeline-evidence-review.yaml`
+  - purpose: validate a pipeline review request, consume bounded local shared CI evidence, and emit a `pipeline-report` lifecycle artifact without assuming a release target
+- `deployment-gate-review`
+  - location: `.agentops/workflows/deployment-gate-review.yaml`
+  - purpose: validate a deployment gate request, consume bounded local shared CI evidence plus referenced QA, security, release, and pipeline artifacts, and emit a `deployment-gate-report` lifecycle artifact without adding deployment side effects
 - `incident-handoff`
   - location: `.agentops/workflows/incident-handoff.yaml`
   - purpose: validate an incident request, consume staged local incident evidence, and emit an `incident-brief` lifecycle artifact with deterministic provenance capture and routing
@@ -57,7 +63,7 @@ Workflow coverage is not the same thing as plug-and-play external usability. A l
 
 - additional QA variants beyond `qa-review`
 - security/DevSecOps
-- additional release/CI-CD variants
+- approval-oriented promotion follow-ons and additional release/CI-CD variants
 - additional operations/incident variants
 - additional maintenance/dependency/docs hygiene variants
 

@@ -28,10 +28,12 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `qa-review` | Official | Dedicated QA workflow that consumes an implementation proposal and emits a `qa-report` artifact with deterministic evidence normalization ahead of reasoning. |
 | `security-review` | Official | Dedicated security workflow that consumes bounded local evidence, emits a `security-report` artifact, and keeps the default path read-only with tighter policy handling. |
 | `release-readiness` | Official | Dedicated release workflow that consumes bounded local release evidence, emits a `release-report` artifact, and keeps publish or promotion follow-ons outside the default read-only path. |
+| `pipeline-evidence-review` | Official | Dedicated provider-agnostic pipeline workflow that consumes bounded local CI evidence, emits a `pipeline-report` artifact, and stays local-first and read-only by default. |
+| `deployment-gate-review` | Official | Dedicated deployment gate workflow that consumes shared CI evidence plus referenced QA, security, release, and pipeline artifacts, and emits a `deployment-gate-report` artifact without adding deployment side effects. |
 | `incident-handoff` | Official | Dedicated operations workflow that consumes staged local incident evidence, emits an `incident-brief` artifact, and keeps the default path local-first and read-only. |
 | `maintenance-triage` | Official | Dedicated maintenance workflow that consumes bounded maintenance evidence, emits a `maintenance-report` artifact, and keeps the default path read-only with deterministic routing support. |
 | security / DevSecOps extensions | Planned | Additional security variants beyond `security-review` are not implemented yet. |
-| release / CI-CD extensions | Planned | Additional release and CI/CD variants beyond `release-readiness` are not implemented yet. |
+| promotion / approval release follow-ons | Planned | Approval-oriented release and promotion variants beyond `release-readiness`, `pipeline-evidence-review`, and `deployment-gate-review` are not implemented yet. |
 | operations / incident variants | Planned | Additional operations and incident variants beyond `incident-handoff` are not implemented yet. |
 | maintenance / dependency/docs hygiene variants | Planned | Additional maintenance variants beyond `maintenance-triage` are not implemented yet. |
 
@@ -111,7 +113,7 @@ See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINES
 | implementation planning on the AgentForge repo | Official | Covered by `implementation-proposal` with deterministic inventory and proposal-only output. |
 | PR review and QA on the AgentForge repo | Official | Covered by `pr-review` for repository review and `qa-review` for dedicated QA handoff and `qa-report` artifacts. |
 | security and maintenance triage on the AgentForge repo | Official | Covered by `security-review` and `maintenance-triage` with bounded evidence normalization and lifecycle artifact output. |
-| release/readiness verification on the AgentForge repo | Official | Covered by `release-readiness` plus `release guide`, `release check`, and `release verify`. |
+| release/readiness verification on the AgentForge repo | Official | Covered by `release-readiness`, `pipeline-evidence-review`, `deployment-gate-review`, plus `release guide`, `release check`, and `release verify`. |
 | incident handoff on the AgentForge repo | Official | Covered by `incident-handoff` with staged evidence intake and `incident-brief` artifact output. |
 | autonomous implementation on the AgentForge repo | Planned | Not an official supported mode yet. |
 

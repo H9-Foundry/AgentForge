@@ -267,6 +267,10 @@ node packages/cli/dist/bin.js run architecture-design-review
 node packages/cli/dist/bin.js run implementation-proposal
 node packages/cli/dist/bin.js run qa-review
 node packages/cli/dist/bin.js run security-review
+node packages/cli/dist/bin.js run release-readiness
+node packages/cli/dist/bin.js run pipeline-evidence-review
+node packages/cli/dist/bin.js run deployment-gate-review
+node packages/cli/dist/bin.js run incident-handoff
 node packages/cli/dist/bin.js run maintenance-triage
 ```
 

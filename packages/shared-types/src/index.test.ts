@@ -8,6 +8,9 @@ import type {
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
+  DeploymentGateArtifact,
+  DeploymentGateEvidenceNormalization,
+  DeploymentRequest,
   EvalArtifact,
   EvalArtifactPayload,
   EvalArtifactExpectation,
@@ -27,6 +30,9 @@ import type {
   MaintenanceArtifact,
   MaintenanceRequest,
   NormalizedValidationCommand,
+  PipelineArtifact,
+  PipelineEvidenceNormalization,
+  PipelineRequest,
   PlanningArtifact,
   PlanningRequest,
   QaArtifact,
@@ -59,6 +65,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<ImplementationArtifact["lifecycleDomain"]>().toEqualTypeOf<"build">();
     expectTypeOf<IncidentArtifact["artifactKind"]>().toEqualTypeOf<"incident-brief">();
     expectTypeOf<IncidentArtifact["lifecycleDomain"]>().toEqualTypeOf<"operate">();
+    expectTypeOf<PipelineArtifact["artifactKind"]>().toEqualTypeOf<"pipeline-report">();
+    expectTypeOf<PipelineArtifact["lifecycleDomain"]>().toEqualTypeOf<"release">();
     expectTypeOf<QaArtifact["artifactKind"]>().toEqualTypeOf<"qa-report">();
     expectTypeOf<QaArtifact["lifecycleDomain"]>().toEqualTypeOf<"test">();
     expectTypeOf<SecurityArtifact["artifactKind"]>().toEqualTypeOf<"security-report">();
@@ -71,6 +79,8 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<ReviewArtifact["lifecycleDomain"]>().toEqualTypeOf<"review">();
     expectTypeOf<ReleaseArtifact["artifactKind"]>().toEqualTypeOf<"release-report">();
     expectTypeOf<ReleaseArtifact["lifecycleDomain"]>().toEqualTypeOf<"release">();
+    expectTypeOf<DeploymentGateArtifact["artifactKind"]>().toEqualTypeOf<"deployment-gate-report">();
+    expectTypeOf<DeploymentGateArtifact["lifecycleDomain"]>().toEqualTypeOf<"release">();
     expectTypeOf<MaintenanceArtifact["artifactKind"]>().toEqualTypeOf<"maintenance-report">();
     expectTypeOf<MaintenanceArtifact["lifecycleDomain"]>().toEqualTypeOf<"maintain">();
   });
@@ -103,6 +113,7 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
     expectTypeOf<IncidentRequest["incidentSummary"]>().toEqualTypeOf<string>();
+    expectTypeOf<PipelineRequest["pipelineScope"]>().toEqualTypeOf<string>();
     expectTypeOf<IncidentEvidenceNormalization["severityHint"]>().toEqualTypeOf<
       "unknown" | "low" | "medium" | "high" | "critical"
     >();
@@ -111,8 +122,13 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<SecurityRequest["targetRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ReleaseRequest["releaseScope"]>().toEqualTypeOf<string>();
     expectTypeOf<ReleaseRequest["versionTargets"]>().toEqualTypeOf<ReleaseVersionTarget[]>();
+    expectTypeOf<DeploymentRequest["targetEnvironment"]>().toEqualTypeOf<string>();
     expectTypeOf<ReleaseEvidenceNormalization["approvalRecommendations"]>().toEqualTypeOf<ReleaseApprovalRecommendation[]>();
     expectTypeOf<ReleaseEvidenceNormalization["versionResolutions"]>().toEqualTypeOf<ReleaseVersionResolution[]>();
+    expectTypeOf<PipelineEvidenceNormalization["reviewStatus"]>().toEqualTypeOf<"ready" | "needs_follow_up" | "blocked">();
+    expectTypeOf<DeploymentGateEvidenceNormalization["gateStatus"]>().toEqualTypeOf<
+      "ready_for_approval" | "conditionally_ready" | "blocked"
+    >();
     expectTypeOf<QaEvidenceNormalization["targetType"]>().toEqualTypeOf<
       "artifact-bundle" | "validation-output" | "local-reference"
     >();

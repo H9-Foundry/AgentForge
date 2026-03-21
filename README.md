@@ -7,9 +7,9 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 ## What You Can Do Today
 
 - try the current official workflow surface with the published CLI, without cloning this monorepo
-- initialize a repository, scan it, and run `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, `release-readiness`, `incident-handoff`, and `maintenance-triage` with the latest published CLI
+- initialize a repository, scan it, and run `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, `release-readiness`, `pipeline-evidence-review`, `deployment-gate-review`, `incident-handoff`, and `maintenance-triage` with the latest published CLI
 - use the published CLI today for the current official workflow surface, the bounded planning preset startup path, and the local eval runner and compare flow
-- inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, `implementation-proposal`, `qa-report`, `security-report`, `release-report`, `incident-brief`, and `maintenance-report`
+- inspect generated audit bundles plus lifecycle artifacts such as `planning-brief`, `design-record`, `implementation-proposal`, `qa-report`, `security-report`, `release-report`, `pipeline-report`, `deployment-gate-report`, `incident-brief`, and `maintenance-report`
 - run `agentforge eval run` and `agentforge eval compare` locally against the deterministic workflow fixture corpus in the latest published CLI
 - evaluate the secure-by-default runtime model before broader provider, adapter, and integration support lands
 
@@ -86,12 +86,14 @@ For the new lifecycle wedges, `bundle.json` also persists one structured lifecyc
 - `qa-review` emits a `qa-report`
 - `security-review` emits a `security-report`
 - `release-readiness` emits a `release-report`
+- `pipeline-evidence-review` emits a `pipeline-report`
+- `deployment-gate-review` emits a `deployment-gate-report`
 - `incident-handoff` emits an `incident-brief`
 - `maintenance-triage` emits a `maintenance-report`
 
 ## Project Definition
 
-AgentForge provides the runtime, policy, context, audit, and packaging foundation for software engineering workflows that need to reason over a repository without abandoning deterministic controls. The current official workflow surface is local and repo-first: `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, `release-readiness`, `incident-handoff`, and `maintenance-triage`.
+AgentForge provides the runtime, policy, context, audit, and packaging foundation for software engineering workflows that need to reason over a repository without abandoning deterministic controls. The current official workflow surface is local and repo-first: `pr-review`, `planning-discovery`, `architecture-design-review`, `implementation-proposal`, `qa-review`, `security-review`, `release-readiness`, `pipeline-evidence-review`, `deployment-gate-review`, `incident-handoff`, and `maintenance-triage`.
 
 ## Problem Statement
 
@@ -119,7 +121,7 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 ### Available Now
 
 - secure-by-default runtime, policy, context, audit, and schema foundation
-- nine official local workflow slices:
+- eleven official local workflow slices:
   - `.agentops/workflows/pr-review.yaml`
   - `.agentops/workflows/planning-discovery.yaml`
   - `.agentops/workflows/architecture-design-review.yaml`
@@ -127,6 +129,8 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
   - `.agentops/workflows/qa-review.yaml`
   - `.agentops/workflows/security-review.yaml`
   - `.agentops/workflows/release-readiness.yaml`
+  - `.agentops/workflows/pipeline-evidence-review.yaml`
+  - `.agentops/workflows/deployment-gate-review.yaml`
   - `.agentops/workflows/incident-handoff.yaml`
   - `.agentops/workflows/maintenance-triage.yaml`
 - official in-repo starter agents for context collection, planning analysis, design analysis, implementation planning, QA analysis, security analysis, release analysis, incident analysis, maintenance analysis, security audit, code review, and test generation; these are bundled workflow assets, not separately supported external packages
@@ -160,7 +164,7 @@ AgentForge is an early open-source platform core, not a complete end-to-end SDLC
 | Build / implementation | Available now | `implementation-proposal` is an official local workflow that consumes a design record, emits an `implementation-proposal` artifact, and keeps the default path read-only and proposal-only. |
 | Review / test / QA | Available now | `pr-review` remains official, and `qa-review` is now an official local workflow that consumes an implementation proposal and emits a `qa-report` artifact without widening the default side-effect posture. |
 | Security / compliance / DevSecOps | Available now | `security-review` is an official local workflow that consumes bounded local evidence, emits a `security-report` artifact, and keeps the default path read-only; broader security variants remain planned. |
-| Release / CI/CD | Available now | `release-readiness` is an official local workflow that consumes bounded local release evidence, emits a `release-report` artifact, and keeps publish or promotion follow-ons outside the default read-only path. |
+| Release / CI/CD | Available now | `release-readiness`, `pipeline-evidence-review`, and `deployment-gate-review` are official local workflows that consume bounded local CI and release evidence, emit `release-report`, `pipeline-report`, and `deployment-gate-report` artifacts, and keep publish, promote, or deploy follow-ons outside the default read-only path. |
 | Operate / incidents / observability handoff | Available now | `incident-handoff` is an official local workflow that consumes staged local incident evidence, emits an `incident-brief` artifact, and keeps the default path local-first and read-only. |
 | Maintain / upgrades / docs hygiene | Available now | `maintenance-triage` is an official local workflow that consumes bounded maintenance evidence, emits a `maintenance-report` artifact, and keeps the default path read-only; broader maintenance variants remain planned. |
 

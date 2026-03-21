@@ -103,6 +103,10 @@ function readJson<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, "utf8")) as T;
 }
 
+function cloneFixture<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 function writeBundleFixture(
   root: string,
   runId: string,
@@ -2199,6 +2203,239 @@ describe("cli smoke flows", () => {
     );
     expect(handoff.body).toContain(
       "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success."
+    );
+  });
+
+  it("fails pipeline-evidence-review before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    await expect(runLocalWorkflow("pipeline-evidence-review", root)).rejects.toThrow("Missing pipeline request");
+  });
+
+  it("rejects underspecified pipeline-evidence-review requests before reasoning", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "pipeline.yaml"), {
+      pipelineScope: "Review the bounded CI evidence for the current candidate pipeline set."
+    });
+
+    await expect(runLocalWorkflow("pipeline-evidence-review", root)).rejects.toThrow(
+      /Pipeline request is underspecified/i
+    );
+  });
+
+  it("runs pipeline-evidence-review with shared CI evidence across the current provider baseline", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+
+    writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)]);
+    writeBundleFixture(root, "run-security", [cloneFixture(schemaFixtures.securityArtifact)]);
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
+
+    writeFileSync(
+      join(root, ".agentops", "evidence", "github-actions-ci.json"),
+      JSON.stringify(schemaFixtures.githubActionsEvidence, null, 2)
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "gitlab-ci.json"),
+      JSON.stringify(schemaFixtures.gitlabCiEvidenceExport, null, 2)
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "buildkite-ci.json"),
+      JSON.stringify(schemaFixtures.buildkiteCiEvidenceExport, null, 2)
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
+      JSON.stringify(schemaFixtures.jenkinsCiEvidenceExport, null, 2)
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "generic-ci.json"),
+      JSON.stringify(schemaFixtures.genericCiEvidenceExport, null, 2)
+    );
+
+    writeYamlFile(join(root, ".agentops", "requests", "pipeline.yaml"), {
+      pipelineScope: "Review the bounded CI evidence for the current candidate pipeline set.",
+      issueRefs: ["#245"],
+      focusAreas: ["pipeline-risk", "deployment-readiness"],
+      constraints: ["Keep the workflow read-only"],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      evidenceSources: [
+        ".agentops/evidence/github-actions-ci.json",
+        ".agentops/evidence/gitlab-ci.json",
+        ".agentops/evidence/buildkite-ci.json",
+        ".agentops/evidence/jenkins-ci.json",
+        ".agentops/evidence/generic-ci.json"
+      ]
+    });
+
+    const pipelineRun = await runLocalWorkflow("pipeline-evidence-review", root);
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          reviewStatus?: string;
+          blockers?: string[];
+          referencedArtifactKinds?: string[];
+          ciEvidenceSummary?: Array<{ provider: string; platform: string }>;
+        };
+      }>;
+    }>(pipelineRun.jsonPath);
+
+    expect(pipelineRun.status).toBe("success");
+    expect(pipelineRun.artifactKinds).toContain("pipeline-report");
+    expect(bundle.workflow).toBe("pipeline-evidence-review");
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("pipeline-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.reviewStatus).toBe("blocked");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.blockers).toEqual(
+      expect.arrayContaining([expect.stringContaining("Imported CI evidence still reports failing checks:")])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.referencedArtifactKinds).toEqual(
+      expect.arrayContaining(["qa-report", "security-report", "release-report"])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.ciEvidenceSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: "GitHub Actions", platform: "github-actions" }),
+        expect.objectContaining({ provider: "GitLab CI", platform: "gitlab-ci" }),
+        expect.objectContaining({ provider: "Buildkite", platform: "buildkite" }),
+        expect.objectContaining({ provider: "Jenkins", platform: "jenkins-ci" }),
+        expect.objectContaining({ provider: "CircleCI", platform: "generic-ci" })
+      ])
+    );
+  });
+
+  it("fails deployment-gate-review before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    await expect(runLocalWorkflow("deployment-gate-review", root)).rejects.toThrow("Missing deployment request");
+  });
+
+  it("rejects underspecified deployment-gate-review requests before reasoning", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "deployment.yaml"), {
+      deploymentScope: "Review the staging deployment gate for the current candidate.",
+      targetEnvironment: "staging"
+    });
+
+    await expect(runLocalWorkflow("deployment-gate-review", root)).rejects.toThrow(
+      /Deployment request is underspecified/i
+    );
+  });
+
+  it("rejects deployment-gate-review when the referenced pipeline bundle lacks a pipeline-report artifact", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+
+    writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)]);
+    writeBundleFixture(root, "run-security", [cloneFixture(schemaFixtures.securityArtifact)]);
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
+    writeBundleFixture(root, "run-review", [cloneFixture(schemaFixtures.reviewArtifact)]);
+
+    writeFileSync(
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
+      JSON.stringify(schemaFixtures.jenkinsCiEvidenceExport, null, 2)
+    );
+
+    writeYamlFile(join(root, ".agentops", "requests", "deployment.yaml"), {
+      deploymentScope: "Review the staging deployment gate for the current candidate.",
+      targetEnvironment: "staging",
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      pipelineReportRefs: [".agentops/runs/run-review/bundle.json"],
+      evidenceSources: [".agentops/evidence/jenkins-ci.json"]
+    });
+
+    await expect(runLocalWorkflow("deployment-gate-review", root)).rejects.toThrow(
+      /does not contain a pipeline-report artifact/i
+    );
+  });
+
+  it("runs deployment-gate-review with shared CI evidence and mixed artifact references", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    const readyPipelineArtifact = {
+      ...cloneFixture(schemaFixtures.pipelineArtifact),
+      payload: {
+        ...cloneFixture(schemaFixtures.pipelineArtifact).payload,
+        reviewStatus: "ready" as const
+      }
+    };
+
+    writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)]);
+    writeBundleFixture(root, "run-security", [cloneFixture(schemaFixtures.securityArtifact)]);
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
+    writeBundleFixture(root, "run-pipeline", [readyPipelineArtifact]);
+
+    writeFileSync(
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
+      JSON.stringify(schemaFixtures.jenkinsCiEvidenceExport, null, 2)
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "generic-ci.json"),
+      JSON.stringify(schemaFixtures.genericCiEvidenceExport, null, 2)
+    );
+
+    writeYamlFile(join(root, ".agentops", "requests", "deployment.yaml"), {
+      deploymentScope: "Review the staging deployment gate for the current candidate.",
+      targetEnvironment: "staging",
+      issueRefs: ["#245"],
+      constraints: ["Keep the workflow read-only"],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      pipelineReportRefs: [".agentops/runs/run-pipeline/bundle.json"],
+      evidenceSources: [
+        ".agentops/evidence/jenkins-ci.json",
+        ".agentops/evidence/generic-ci.json"
+      ]
+    });
+
+    const deploymentRun = await runLocalWorkflow("deployment-gate-review", root);
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          gateStatus?: string;
+          blockers?: string[];
+          referencedArtifactKinds?: string[];
+          ciEvidenceSummary?: Array<{ provider: string; platform: string }>;
+          requiredFollowUpChecks?: string[];
+        };
+      }>;
+    }>(deploymentRun.jsonPath);
+
+    expect(deploymentRun.status).toBe("success");
+    expect(deploymentRun.artifactKinds).toContain("deployment-gate-report");
+    expect(bundle.workflow).toBe("deployment-gate-review");
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("deployment-gate-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.gateStatus).toBe("ready_for_approval");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.blockers).toEqual([]);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.referencedArtifactKinds).toEqual(
+      expect.arrayContaining(["qa-report", "security-report", "release-report", "pipeline-report"])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.ciEvidenceSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: "Jenkins", platform: "jenkins-ci" }),
+        expect.objectContaining({ provider: "CircleCI", platform: "generic-ci" })
+      ])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.requiredFollowUpChecks).toEqual(
+      expect.arrayContaining([expect.stringContaining("Obtain explicit maintainer approval before any deploy, publish, or promotion action.")])
     );
   });
 
