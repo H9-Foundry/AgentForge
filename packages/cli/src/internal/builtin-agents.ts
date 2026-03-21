@@ -538,6 +538,97 @@ function loadBundleArtifactKinds(bundlePath: string): string[] {
     .filter((artifactKind): artifactKind is string => Boolean(artifactKind));
 }
 
+function loadBundleLifecycleArtifact(bundlePath: string, artifactKind: string): unknown | undefined {
+  if (!existsSync(bundlePath)) {
+    return undefined;
+  }
+
+  const parsed = JSON.parse(readFileSync(bundlePath, "utf8")) as unknown;
+  if (!isRecord(parsed) || !Array.isArray(parsed.lifecycleArtifacts)) {
+    return undefined;
+  }
+
+  return parsed.lifecycleArtifacts.find(
+    (artifact) => isRecord(artifact) && artifact.artifactKind === artifactKind
+  );
+}
+
+function evaluateReleaseReportReadiness(bundlePath: string): { ready: boolean; detail: string } {
+  const artifact = loadBundleLifecycleArtifact(bundlePath, "release-report");
+  if (!artifact) {
+    return {
+      ready: false,
+      detail: `Release report bundle is missing a release-report artifact: ${bundlePath}`
+    };
+  }
+
+  const parsed = releaseArtifactSchema.safeParse(artifact);
+  if (!parsed.success) {
+    return {
+      ready: false,
+      detail: `Release report bundle could not be parsed as a bounded release-report artifact: ${bundlePath}`
+    };
+  }
+
+  const releaseArtifact = parsed.data;
+  if (releaseArtifact.status !== "complete") {
+    return {
+      ready: false,
+      detail: `Release report ${bundlePath} is ${releaseArtifact.status} and cannot satisfy a deployment gate yet.`
+    };
+  }
+
+  if (releaseArtifact.payload.readinessStatus !== "ready") {
+    return {
+      ready: false,
+      detail: `Release report ${bundlePath} is ${releaseArtifact.payload.readinessStatus} and cannot satisfy a deployment gate yet.`
+    };
+  }
+
+  return {
+    ready: true,
+    detail: `Using ${bundlePath} as a ready release-report reference.`
+  };
+}
+
+function evaluatePipelineReportReadiness(bundlePath: string): { ready: boolean; detail: string } {
+  const artifact = loadBundleLifecycleArtifact(bundlePath, "pipeline-report");
+  if (!artifact) {
+    return {
+      ready: false,
+      detail: `Pipeline report bundle is missing a pipeline-report artifact: ${bundlePath}`
+    };
+  }
+
+  const parsed = pipelineArtifactSchema.safeParse(artifact);
+  if (!parsed.success) {
+    return {
+      ready: false,
+      detail: `Pipeline report bundle could not be parsed as a bounded pipeline-report artifact: ${bundlePath}`
+    };
+  }
+
+  const pipelineArtifact = parsed.data;
+  if (pipelineArtifact.status !== "complete") {
+    return {
+      ready: false,
+      detail: `Pipeline report ${bundlePath} is ${pipelineArtifact.status} and cannot satisfy a deployment gate yet.`
+    };
+  }
+
+  if (pipelineArtifact.payload.reviewStatus !== "ready") {
+    return {
+      ready: false,
+      detail: `Pipeline report ${bundlePath} is ${pipelineArtifact.payload.reviewStatus} and cannot satisfy a deployment gate yet.`
+    };
+  }
+
+  return {
+    ready: true,
+    detail: `Using ${bundlePath} as a ready pipeline-report reference.`
+  };
+}
+
 function loadBundleArtifactPayloadPaths(bundlePath: string): string[] {
   if (!existsSync(bundlePath)) {
     return [];
@@ -3393,6 +3484,16 @@ const deploymentGateEvidenceNormalizationAgent: RuntimeAgent = {
         )
       )
     ];
+    const releaseReportReadiness = releaseReportRefs.map((bundleRef) =>
+      repoRoot
+        ? evaluateReleaseReportReadiness(join(repoRoot, bundleRef))
+        : { ready: false, detail: `Release report reference cannot be evaluated without a repository root: ${bundleRef}` }
+    );
+    const pipelineReportReadiness = pipelineReportRefs.map((bundleRef) =>
+      repoRoot
+        ? evaluatePipelineReportReadiness(join(repoRoot, bundleRef))
+        : { ready: false, detail: `Pipeline report reference cannot be evaluated without a repository root: ${bundleRef}` }
+    );
     const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
     const ciEvidenceSummary = ciEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
     const failingChecks = ciEvidenceSummary.flatMap((entry) => entry.failingChecks);
@@ -3411,16 +3512,30 @@ const deploymentGateEvidenceNormalizationAgent: RuntimeAgent = {
       },
       {
         name: "release-report-refs",
-        status: releaseReportRefs.length > 0 ? "passed" : "skipped",
+        status:
+          releaseReportRefs.length === 0
+            ? "skipped"
+            : releaseReportReadiness.some((entry) => !entry.ready)
+              ? "failed"
+              : "passed",
         detail: releaseReportRefs.length > 0
-          ? `Using ${releaseReportRefs.length} validated release report reference(s).`
+          ? releaseReportReadiness.some((entry) => !entry.ready)
+            ? releaseReportReadiness.filter((entry) => !entry.ready).map((entry) => entry.detail).join(" ")
+            : `Using ${releaseReportRefs.length} ready release report reference(s).`
           : "No release report references were supplied."
       },
       {
         name: "pipeline-report-refs",
-        status: pipelineReportRefs.length > 0 ? "passed" : "skipped",
+        status:
+          pipelineReportRefs.length === 0
+            ? "skipped"
+            : pipelineReportReadiness.some((entry) => !entry.ready)
+              ? "failed"
+              : "passed",
         detail: pipelineReportRefs.length > 0
-          ? `Using ${pipelineReportRefs.length} validated pipeline report reference(s).`
+          ? pipelineReportReadiness.some((entry) => !entry.ready)
+            ? pipelineReportReadiness.filter((entry) => !entry.ready).map((entry) => entry.detail).join(" ")
+            : `Using ${pipelineReportRefs.length} ready pipeline report reference(s).`
           : "No pipeline report references were supplied."
       },
       {

@@ -2367,11 +2367,18 @@ describe("cli smoke flows", () => {
     initializeWorkspace(root);
     ensureRequestsDir(root);
     mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    const readyPipelineArtifact = {
+      ...cloneFixture(schemaFixtures.pipelineArtifact),
+      payload: {
+        ...cloneFixture(schemaFixtures.pipelineArtifact).payload,
+        reviewStatus: "ready" as const
+      }
+    };
 
     writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)]);
     writeBundleFixture(root, "run-security", [cloneFixture(schemaFixtures.securityArtifact)]);
     writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
-    writeBundleFixture(root, "run-pipeline", [cloneFixture(schemaFixtures.pipelineArtifact)]);
+    writeBundleFixture(root, "run-pipeline", [readyPipelineArtifact]);
 
     writeFileSync(
       join(root, ".agentops", "evidence", "jenkins-ci.json"),
