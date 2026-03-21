@@ -12,6 +12,7 @@ import {
   dependencyInventoryEntrySchema,
   genericCiEvidenceExportSchema,
   gitlabCiEvidenceExportSchema,
+  jenkinsCiEvidenceExportSchema,
   designArtifactSchema,
   designRequestSchema,
   evalArtifactSchema,
@@ -76,16 +77,19 @@ describe("schema fixtures", () => {
     expect(() => ciEvidenceSchema.parse(schemaFixtures.ciEvidence)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.gitlabCiEvidence)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.buildkiteCiEvidence)).not.toThrow();
+    expect(() => ciEvidenceSchema.parse(schemaFixtures.jenkinsCiEvidence)).not.toThrow();
     expect(() => ciEvidenceSchema.parse(schemaFixtures.genericCiEvidence)).not.toThrow();
     expect(() => dependencyInventoryEntrySchema.parse(schemaFixtures.dependencyIntegrityEvidence.inventoryEntries[0])).not.toThrow();
     expect(() => dependencyIntegrityEvidenceSchema.parse(schemaFixtures.dependencyIntegrityEvidence)).not.toThrow();
     expect(() => attestationVerificationEvidenceSchema.parse(schemaFixtures.attestationVerificationEvidence)).not.toThrow();
     expect(() => gitlabCiEvidenceExportSchema.parse(schemaFixtures.gitlabCiEvidenceExport)).not.toThrow();
     expect(() => buildkiteCiEvidenceExportSchema.parse(schemaFixtures.buildkiteCiEvidenceExport)).not.toThrow();
+    expect(() => jenkinsCiEvidenceExportSchema.parse(schemaFixtures.jenkinsCiEvidenceExport)).not.toThrow();
     expect(() => genericCiEvidenceExportSchema.parse(schemaFixtures.genericCiEvidenceExport)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.adapterCapabilityMetadata)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.gitlabAdapterCapabilityMetadata)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.buildkiteAdapterCapabilityMetadata)).not.toThrow();
+    expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.jenkinsAdapterCapabilityMetadata)).not.toThrow();
     expect(() => adapterCapabilityMetadataSchema.parse(schemaFixtures.genericCiAdapterCapabilityMetadata)).not.toThrow();
     expect(() => githubActionsEvidenceSchema.parse(schemaFixtures.githubActionsEvidence)).not.toThrow();
     expect(() =>
@@ -139,6 +143,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.dependencyIntegrityEvidence).toBeDefined();
     expect(jsonSchemas.attestationVerificationEvidence).toBeDefined();
     expect(jsonSchemas.buildkiteCiEvidenceExport).toBeDefined();
+    expect(jsonSchemas.jenkinsCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.genericCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.gitlabCiEvidenceExport).toBeDefined();
     expect(jsonSchemas.adapterCapabilityMetadata).toBeDefined();

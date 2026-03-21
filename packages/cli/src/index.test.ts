@@ -1207,6 +1207,7 @@ describe("cli smoke flows", () => {
       join(root, ".agentops", "evidence", "buildkite-ci.json"),
       JSON.stringify(
         {
+          providerName: "Buildkite",
           host: "buildkite.local",
           repository: "H9-Foundry/fixture",
           pipelineName: "Buildkite CI",
@@ -1276,6 +1277,96 @@ describe("cli smoke flows", () => {
     );
     expect(bundle.lifecycleArtifacts[0]?.payload?.releaseImpact).toContain(
       "Imported CI evidence still shows failing checks: Buildkite CI / lint."
+    );
+  });
+
+  it("ingests bounded Jenkins CI evidence exports during qa-review", async () => {
+    const root = createFixtureRepo();
+
+    initProject(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
+      JSON.stringify(
+        {
+          providerName: "Jenkins",
+          host: "jenkins.local",
+          repository: "H9-Foundry/fixture",
+          pipelineName: "Jenkins CI",
+          pipelineRunId: "jenkins-42",
+          runAttempt: 1,
+          event: "push",
+          branch: "main",
+          commitSha: "abc123",
+          status: "completed",
+          conclusion: "failure",
+          htmlUrl: "https://jenkins.example.com/job/agentforge/42",
+          jobs: [
+            {
+              name: "test",
+              status: "completed",
+              conclusion: "success",
+              htmlUrl: "https://jenkins.example.com/job/agentforge/42/test"
+            },
+            {
+              name: "lint",
+              status: "completed",
+              conclusion: "failure",
+              htmlUrl: "https://jenkins.example.com/job/agentforge/42/lint"
+            }
+          ],
+          artifacts: [
+            {
+              name: "coverage-report",
+              type: "html-report",
+              path: "artifacts/coverage/index.html"
+            }
+          ]
+        },
+        null,
+        2
+      )
+    );
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        "targetRef: package.json",
+        "evidenceSources:",
+        "  - .agentops/evidence/jenkins-ci.json",
+        "executedChecks:",
+        "  - pnpm test",
+        "focusAreas:",
+        "  - release-readiness",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          coverageGaps?: string[];
+          recommendedNextChecks?: string[];
+          releaseImpact?: string;
+          ciEvidenceSummary?: Array<{ provider: string; platform: string }>;
+        };
+      }>;
+    }>(qaRun.jsonPath);
+
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("qa-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.coverageGaps).toContain(
+      "Imported CI evidence still reports a failing check that needs manual review: Jenkins CI / lint"
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.recommendedNextChecks).toContain(
+      "Review the imported CI evidence for pipeline `Jenkins CI` before promotion."
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.releaseImpact).toContain(
+      "Imported CI evidence still shows failing checks: Jenkins CI / lint."
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.ciEvidenceSummary).toEqual(
+      expect.arrayContaining([expect.objectContaining({ provider: "Jenkins", platform: "jenkins-ci" })])
     );
   });
 
@@ -1867,6 +1958,7 @@ describe("cli smoke flows", () => {
       join(root, ".agentops", "evidence", "buildkite-ci.json"),
       JSON.stringify(
         {
+          providerName: "Buildkite",
           host: "buildkite.com",
           repository: "H9-Foundry/fixture",
           pipelineName: "release",
