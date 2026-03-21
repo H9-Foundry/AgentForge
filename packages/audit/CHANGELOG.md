@@ -1,5 +1,20 @@
 # @h9-foundry/agentforge-audit
 
+## 0.10.0
+
+### Patch Changes
+
+- 25fb68d: Render shared SCM and CI provenance summaries across lifecycle handoff outputs.
+- Updated dependencies [0dbf030]
+- Updated dependencies [ffdab26]
+- Updated dependencies [9261149]
+- Updated dependencies [c3df71b]
+- Updated dependencies [b5253bf]
+- Updated dependencies [0367e8c]
+- Updated dependencies [fa4d206]
+- Updated dependencies [25fb68d]
+  - @h9-foundry/agentforge-shared-types@0.10.0
+
 ## 0.9.0
 
 ### Patch Changes
