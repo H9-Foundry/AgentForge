@@ -1,5 +1,35 @@
 # @h9-foundry/agentforge-cli
 
+## 0.10.0
+
+### Minor Changes
+
+- 0dbf030: Add bounded attestation verification evidence and trust-summary reporting for release workflows.
+- 9261149: Add bounded dependency-integrity inventory evidence and surface it through security-review and release-readiness reports.
+
+### Patch Changes
+
+- ffdab26: Add a bounded Buildkite CI evidence export contract and normalize Buildkite pipeline exports into shared CI evidence.
+- c3df71b: Add provider-agnostic `pipeline-evidence-review` and `deployment-gate-review` workflows with shared CI evidence consumption and lifecycle artifacts.
+- b5253bf: Add a bounded Jenkins CI evidence export contract and normalize Jenkins pipeline exports into shared CI evidence.
+- fa4d206: Expose normalized host-agnostic CI provenance and status summaries in release-readiness artifacts.
+- 25fb68d: Render shared SCM and CI provenance summaries across lifecycle handoff outputs.
+- Updated dependencies [0dbf030]
+- Updated dependencies [ffdab26]
+- Updated dependencies [9261149]
+- Updated dependencies [c3df71b]
+- Updated dependencies [b5253bf]
+- Updated dependencies [0367e8c]
+- Updated dependencies [fa4d206]
+- Updated dependencies [25fb68d]
+  - @h9-foundry/agentforge-schemas@0.10.0
+  - @h9-foundry/agentforge-shared-types@0.10.0
+  - @h9-foundry/agentforge-policy-engine@0.10.0
+  - @h9-foundry/agentforge-audit@0.10.0
+  - @h9-foundry/agentforge-context-engine@0.10.0
+  - @h9-foundry/agentforge-runtime@0.10.0
+  - @h9-foundry/agentforge-sdk@0.10.0
+
 ## 0.9.0
 
 ### Patch Changes

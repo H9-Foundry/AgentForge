@@ -1,5 +1,21 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.10.0
+
+### Minor Changes
+
+- 0dbf030: Add bounded attestation verification evidence and trust-summary reporting for release workflows.
+- 9261149: Add bounded dependency-integrity inventory evidence and surface it through security-review and release-readiness reports.
+- 0367e8c: Add registry distribution verification metadata and policy hardening for non-manual plugin activation.
+
+### Patch Changes
+
+- ffdab26: Add a bounded Buildkite CI evidence export contract and normalize Buildkite pipeline exports into shared CI evidence.
+- c3df71b: Add provider-agnostic `pipeline-evidence-review` and `deployment-gate-review` workflows with shared CI evidence consumption and lifecycle artifacts.
+- b5253bf: Add a bounded Jenkins CI evidence export contract and normalize Jenkins pipeline exports into shared CI evidence.
+- fa4d206: Expose normalized host-agnostic CI provenance and status summaries in release-readiness artifacts.
+- 25fb68d: Render shared SCM and CI provenance summaries across lifecycle handoff outputs.
+
 ## 0.9.0
 
 ### Minor Changes

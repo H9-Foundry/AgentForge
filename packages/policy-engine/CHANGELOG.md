@@ -1,5 +1,24 @@
 # @h9-foundry/agentforge-policy-engine
 
+## 0.10.0
+
+### Minor Changes
+
+- 0367e8c: Add registry distribution verification metadata and policy hardening for non-manual plugin activation.
+
+### Patch Changes
+
+- Updated dependencies [0dbf030]
+- Updated dependencies [ffdab26]
+- Updated dependencies [9261149]
+- Updated dependencies [c3df71b]
+- Updated dependencies [b5253bf]
+- Updated dependencies [0367e8c]
+- Updated dependencies [fa4d206]
+- Updated dependencies [25fb68d]
+  - @h9-foundry/agentforge-schemas@0.10.0
+  - @h9-foundry/agentforge-shared-types@0.10.0
+
 ## 0.9.0
 
 ### Minor Changes
