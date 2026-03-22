@@ -51,6 +51,7 @@ Current active lane:
 
 1. [#245](https://github.com/H9-Foundry/AgentForge/issues/245) Phase 2 provider and integration expansion tracker
 2. no active implementation slice assigned after the current release and CI review family shipped and was verified from npm
+3. [#268](https://github.com/H9-Foundry/AgentForge/issues/268) AgentForge-first dogfood benchmark log may run in parallel as a docs-and-ops slice while no new implementation family is active
 
 ### Ready Lane
 
@@ -180,6 +181,7 @@ While the queue is being executed, AgentForge should be used on itself for:
 - planning and design
 - PR review and QA
 - release/readiness verification
+- benchmarked comparison against the same agent's default workflow using [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](AGENTFORGE_DOGFOOD_BENCHMARK.md)
 
 It should **not** be used as a general autonomous implementation engine until:
 

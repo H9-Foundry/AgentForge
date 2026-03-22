@@ -39,6 +39,7 @@ Available now:
 - local benchmark comparison via `agentforge eval compare <baseline-run> <candidate-run...>`
 - `benchmark-summary` lifecycle artifact emission for deterministic local eval comparisons
 - support matrix and roadmap framing
+- a concrete internal dogfood benchmark playbook for AgentForge-on-AgentForge comparison in [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](AGENTFORGE_DOGFOOD_BENCHMARK.md)
 
 Not yet available:
 
@@ -149,6 +150,17 @@ Evals should grow with the workflow catalog:
 - then for build, QA, security, release, maintenance, and operations workflows
 
 The eval framework should never assume a broader workflow surface than the support matrix currently claims.
+
+## Relationship To Internal Dogfooding
+
+The current dogfood benchmark should remain narrower than the full eval roadmap:
+
+- use the existing workflow surface and validation commands
+- compare the same agent's default flow against AgentForge-gated flow
+- keep adjudication explicit and human-reviewed
+- treat replay tasks as calibration and live tasks as the real signal
+
+See [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](AGENTFORGE_DOGFOOD_BENCHMARK.md) and [#268](https://github.com/H9-Foundry/AgentForge/issues/268).
 
 ## Follow-On Implementation Slices
 
