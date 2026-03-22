@@ -343,6 +343,7 @@ AgentForge is moving from a single secure `pr-review` wedge toward a broader SDL
 Current dogfooding posture:
 
 - use AgentForge on AgentForge for planning, design, review, QA, and release verification
+- benchmark AgentForge on AgentForge against the same agent's default workflow before expanding the pilot to other repositories
 - do not treat it as a broad autonomous implementation engine yet
 
 Current onboarding focus:
@@ -350,7 +351,7 @@ Current onboarding focus:
 - keep the current wedge CLI-first and as frictionless as possible for new evaluators
 - improve README, quickstart, examples, and contributor entry points in parallel with the Phase 1 foundation work
 
-See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md), [docs/CONTEXT_SLICE_CONTRACTS.md](docs/CONTEXT_SLICE_CONTRACTS.md), and [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md).
+See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md), [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](docs/AGENTFORGE_DOGFOOD_BENCHMARK.md), [docs/CONTEXT_SLICE_CONTRACTS.md](docs/CONTEXT_SLICE_CONTRACTS.md), and [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md).
 
 Roadmap docs:
 

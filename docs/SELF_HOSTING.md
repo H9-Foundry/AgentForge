@@ -114,6 +114,7 @@ Additionally:
 - review or QA runs must emit structured findings or an explicit no-findings result
 - release-oriented checks must stay deterministic and machine-readable where possible
 - documentation must not describe a self-hosted capability as official until it actually exists in the repo
+- dogfood benchmarking should follow [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](AGENTFORGE_DOGFOOD_BENCHMARK.md) and log results in [#268](https://github.com/H9-Foundry/AgentForge/issues/268)
 
 ## Graduation Criteria For Broader Self-Hosting
 
