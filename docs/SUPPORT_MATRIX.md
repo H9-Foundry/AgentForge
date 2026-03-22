@@ -30,10 +30,11 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `release-readiness` | Official | Dedicated release workflow that consumes bounded local release evidence, emits a `release-report` artifact, and keeps publish or promotion follow-ons outside the default read-only path. |
 | `pipeline-evidence-review` | Official | Dedicated provider-agnostic pipeline workflow that consumes bounded local CI evidence, emits a `pipeline-report` artifact, and stays local-first and read-only by default. |
 | `deployment-gate-review` | Official | Dedicated deployment gate workflow that consumes shared CI evidence plus referenced QA, security, release, and pipeline artifacts, and emits a `deployment-gate-report` artifact without adding deployment side effects. |
+| `promotion-approval` | Official | Approval-oriented release review workflow on `main` that consumes shared CI evidence plus ready release and deployment gate artifacts, emits a `promotion-approval-report`, and remains source-build only until the next npm release. |
 | `incident-handoff` | Official | Dedicated operations workflow that consumes staged local incident evidence, emits an `incident-brief` artifact, and keeps the default path local-first and read-only. |
 | `maintenance-triage` | Official | Dedicated maintenance workflow that consumes bounded maintenance evidence, emits a `maintenance-report` artifact, and keeps the default path read-only with deterministic routing support. |
 | security / DevSecOps extensions | Planned | Additional security variants beyond `security-review` are not implemented yet. |
-| promotion / approval release follow-ons | Planned | Approval-oriented release and promotion variants beyond `release-readiness`, `pipeline-evidence-review`, and `deployment-gate-review` are not implemented yet. |
+| promotion / approval release follow-ons | Partial | `promotion-approval` is now implemented on `main`, but broader approval-oriented release and promotion variants beyond the current review-only workflow remain unimplemented. |
 | operations / incident variants | Planned | Additional operations and incident variants beyond `incident-handoff` are not implemented yet. |
 | maintenance / dependency/docs hygiene variants | Planned | Additional maintenance variants beyond `maintenance-triage` are not implemented yet. |
 

@@ -31,6 +31,7 @@ export const lifecycleArtifactKindSchema = z.enum([
   "review-report",
   "release-report",
   "deployment-gate-report",
+  "promotion-approval-report",
   "maintenance-report"
 ]);
 export const lifecycleDomainSchema = z.enum(["plan", "design", "build", "test", "security", "evaluate", "review", "release", "operate", "maintain"]);
@@ -828,7 +829,14 @@ export const githubWorkflowStatusMappingSchema = z.object({
   reason: z.string().min(1)
 });
 
-export const githubHandoffArtifactKindSchema = z.enum(["planning-brief", "design-record", "incident-brief", "qa-report", "release-report"]);
+export const githubHandoffArtifactKindSchema = z.enum([
+  "planning-brief",
+  "design-record",
+  "incident-brief",
+  "qa-report",
+  "release-report",
+  "promotion-approval-report"
+]);
 
 export const githubHandoffSectionSchema = z.object({
   heading: z.string().min(1),
@@ -1038,6 +1046,18 @@ export const deploymentRequestSchema = z.object({
   constraints: z.array(z.string().min(1)).default([])
 });
 
+export const promotionRequestSchema = z.object({
+  promotionScope: z.string().min(1),
+  targetEnvironment: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  qaReportRefs: z.array(z.string().min(1)).default([]),
+  securityReportRefs: z.array(z.string().min(1)).default([]),
+  releaseReportRefs: z.array(z.string().min(1)).default([]),
+  deploymentGateReportRefs: z.array(z.string().min(1)).default([]),
+  issueRefs: z.array(z.string().min(1)).default([]),
+  constraints: z.array(z.string().min(1)).default([])
+});
+
 export const incidentRequestSchema = z.object({
   incidentSummary: z.string().min(1),
   severityHint: z.enum(["unknown", "low", "medium", "high", "critical"]).default("unknown"),
@@ -1240,6 +1260,39 @@ export const deploymentGateArtifactPayloadSchema = z.object({
   provenanceRefs: z.array(z.string().min(1)).default([])
 });
 
+export const promotionApprovalStatusSchema = z.enum(["approval_recommended", "needs_follow_up", "blocked"]);
+
+export const promotionApprovalEvidenceNormalizationSchema = z.object({
+  qaReportRefs: z.array(z.string().min(1)).default([]),
+  securityReportRefs: z.array(z.string().min(1)).default([]),
+  releaseReportRefs: z.array(z.string().min(1)).default([]),
+  deploymentGateReportRefs: z.array(z.string().min(1)).default([]),
+  normalizedEvidenceSources: z.array(z.string().min(1)).default([]),
+  missingEvidenceSources: z.array(z.string().min(1)).default([]),
+  ciEvidence: z.array(ciEvidenceSchema).default([]),
+  ciEvidenceSummary: z.array(releaseCiEvidenceSummarySchema).default([]),
+  referencedArtifactKinds: z.array(z.string().min(1)).default([]),
+  verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
+  approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
+  approvalStatus: promotionApprovalStatusSchema,
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
+export const promotionApprovalArtifactPayloadSchema = z.object({
+  promotionScope: z.string().min(1),
+  targetEnvironment: z.string().min(1),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
+  ciEvidenceSummary: z.array(releaseCiEvidenceSummarySchema).default([]),
+  approvalStatus: promotionApprovalStatusSchema,
+  blockers: z.array(z.string().min(1)).default([]),
+  requiredApprovals: z.array(z.string().min(1)).default([]),
+  recommendedNextSteps: z.array(z.string().min(1)).default([]),
+  approvalRecommendations: z.array(releaseApprovalRecommendationSchema).default([]),
+  referencedArtifactKinds: z.array(z.string().min(1)).default([]),
+  provenanceRefs: z.array(z.string().min(1)).default([])
+});
+
 export const maintenanceArtifactPayloadSchema = z.object({
   maintenanceScope: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
@@ -1404,6 +1457,12 @@ export const deploymentGateArtifactSchema = lifecycleArtifactEnvelopeSchema.exte
   payload: deploymentGateArtifactPayloadSchema
 });
 
+export const promotionApprovalArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
+  artifactKind: z.literal("promotion-approval-report"),
+  lifecycleDomain: z.literal("release"),
+  payload: promotionApprovalArtifactPayloadSchema
+});
+
 export const maintenanceArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
   artifactKind: z.literal("maintenance-report"),
   lifecycleDomain: z.literal("maintain"),
@@ -1423,6 +1482,7 @@ export const lifecycleArtifactSchema = z.discriminatedUnion("artifactKind", [
   reviewArtifactSchema,
   releaseArtifactSchema,
   deploymentGateArtifactSchema,
+  promotionApprovalArtifactSchema,
   maintenanceArtifactSchema
 ]);
 
@@ -1514,6 +1574,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   releaseArtifactPayload: releaseArtifactPayloadSchema,
   pipelineArtifactPayload: pipelineArtifactPayloadSchema,
   deploymentGateArtifactPayload: deploymentGateArtifactPayloadSchema,
+  promotionApprovalArtifactPayload: promotionApprovalArtifactPayloadSchema,
   maintenanceArtifactPayload: maintenanceArtifactPayloadSchema,
   planningArtifact: planningArtifactSchema,
   designArtifact: designArtifactSchema,
@@ -1527,6 +1588,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   reviewArtifact: reviewArtifactSchema,
   releaseArtifact: releaseArtifactSchema,
   deploymentGateArtifact: deploymentGateArtifactSchema,
+  promotionApprovalArtifact: promotionApprovalArtifactSchema,
   maintenanceArtifact: maintenanceArtifactSchema,
   lifecycleArtifact: lifecycleArtifactSchema,
   agentOutput: agentOutputSchema,
@@ -1541,6 +1603,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   pipelineRequest: pipelineRequestSchema,
   releaseRequest: releaseRequestSchema,
   deploymentRequest: deploymentRequestSchema,
+  promotionRequest: promotionRequestSchema,
   incidentRequest: incidentRequestSchema,
   maintenanceRequest: maintenanceRequestSchema,
   evalPolicyExpectation: evalPolicyExpectationSchema,
@@ -1554,6 +1617,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   securityEvidenceNormalization: securityEvidenceNormalizationSchema,
   pipelineEvidenceNormalization: pipelineEvidenceNormalizationSchema,
   deploymentGateEvidenceNormalization: deploymentGateEvidenceNormalizationSchema,
+  promotionApprovalEvidenceNormalization: promotionApprovalEvidenceNormalizationSchema,
   incidentEvidenceNormalization: incidentEvidenceNormalizationSchema,
   maintenanceEvidenceNormalization: maintenanceEvidenceNormalizationSchema,
   policyDocument: policyDocumentSchema,
@@ -1997,6 +2061,95 @@ const deploymentGateArtifactFixture = {
   }
 } as const;
 
+const promotionApprovalArtifactFixture = {
+  ...lifecycleArtifactFixtureBase,
+  artifactKind: "promotion-approval-report",
+  lifecycleDomain: "release",
+  summary: "Promotion approval review report for the production candidate.",
+  payload: {
+    promotionScope: "Review approval readiness for promoting the current release candidate.",
+    targetEnvironment: "production",
+    evidenceSources: [
+      ".agentops/evidence/jenkins-ci.json",
+      ".agentops/evidence/generic-ci.json",
+      ".agentops/runs/run-release/bundle.json",
+      ".agentops/runs/run-deployment/bundle.json"
+    ],
+    verificationChecks: [
+      { name: "release-report-refs", status: "passed", detail: "Using 1 ready release report reference(s)." },
+      {
+        name: "deployment-gate-report-refs",
+        status: "passed",
+        detail: "Using 1 ready deployment gate report reference(s) for production."
+      },
+      { name: "imported-ci-evidence", status: "passed", detail: "Using 2 imported CI evidence export(s) across 2 pipeline(s)." }
+    ],
+    ciEvidenceSummary: [
+      {
+        provider: "Jenkins",
+        platform: "jenkins-ci",
+        host: "jenkins.local",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "Jenkins CI",
+        pipelineRunId: "jenkins-42",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "local-export",
+        displayLabel: "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42`",
+        statusSummary: "Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success."
+      },
+      {
+        provider: "CircleCI",
+        platform: "generic-ci",
+        host: "circleci.local",
+        repository: "H9-Foundry/AgentForge",
+        pipelineName: "CircleCI",
+        pipelineRunId: "circleci-42",
+        status: "completed",
+        conclusion: "success",
+        branch: "main",
+        commitSha: "abc123",
+        failingChecks: [],
+        provenanceSource: "local-export",
+        displayLabel: "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42`",
+        statusSummary: "CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success."
+      }
+    ],
+    approvalStatus: "approval_recommended",
+    blockers: [],
+    requiredApprovals: [
+      "Obtain explicit maintainer approval before any promotion or publish action.",
+      "Confirm the production deployment owner accepts the current promotion window."
+    ],
+    recommendedNextSteps: [
+      "Use the ready release and deployment-gate reports as the bounded approval package for promotion review.",
+      "Keep deployment and publish execution outside this review-only workflow."
+    ],
+    approvalRecommendations: [
+      {
+        action: "promote-release",
+        classification: "approval_required",
+        reason: "Promotion remains a release-significant side effect and requires explicit maintainer approval."
+      },
+      {
+        action: "publish-packages",
+        classification: "approval_required",
+        reason: "Package publication remains outside the default read-only workflow path."
+      }
+    ],
+    referencedArtifactKinds: ["qa-report", "security-report", "release-report", "deployment-gate-report"],
+    provenanceRefs: [
+      ".agentops/evidence/jenkins-ci.json",
+      ".agentops/evidence/generic-ci.json",
+      ".agentops/runs/run-release/bundle.json",
+      ".agentops/runs/run-deployment/bundle.json"
+    ]
+  }
+} as const;
+
 const maintenanceArtifactFixture = {
   ...lifecycleArtifactFixtureBase,
   artifactKind: "maintenance-report",
@@ -2193,6 +2346,21 @@ const deploymentRequestFixture = {
   pipelineReportRefs: [".agentops/runs/run-pipeline/bundle.json"],
   issueRefs: ["#245", "#260"],
   constraints: ["Keep deployment gate review read-only"]
+} as const;
+
+const promotionRequestFixture = {
+  promotionScope: "Review approval readiness for promoting the current release candidate.",
+  targetEnvironment: "production",
+  evidenceSources: [
+    ".agentops/evidence/jenkins-ci.json",
+    ".agentops/evidence/generic-ci.json"
+  ],
+  qaReportRefs: [".agentops/runs/run-789/bundle.json"],
+  securityReportRefs: [".agentops/runs/run-790/bundle.json"],
+  releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+  deploymentGateReportRefs: [".agentops/runs/run-deployment/bundle.json"],
+  issueRefs: ["#245", "#261"],
+  constraints: ["Keep promotion approval review read-only"]
 } as const;
 
 const incidentRequestFixture = {
@@ -3259,6 +3427,36 @@ const deploymentGateEvidenceNormalizationFixture = {
   ]
 } as const;
 
+const promotionApprovalEvidenceNormalizationFixture = {
+  qaReportRefs: [".agentops/runs/run-789/bundle.json"],
+  securityReportRefs: [".agentops/runs/run-790/bundle.json"],
+  releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+  deploymentGateReportRefs: [".agentops/runs/run-deployment/bundle.json"],
+  normalizedEvidenceSources: [
+    ".agentops/runs/run-789/bundle.json",
+    ".agentops/runs/run-790/bundle.json",
+    ".agentops/runs/run-release/bundle.json",
+    ".agentops/runs/run-deployment/bundle.json",
+    ".agentops/evidence/jenkins-ci.json",
+    ".agentops/evidence/generic-ci.json"
+  ],
+  missingEvidenceSources: [],
+  ciEvidence: [jenkinsCiEvidenceFixture, genericCiEvidenceFixture],
+  ciEvidenceSummary: promotionApprovalArtifactFixture.payload.ciEvidenceSummary,
+  referencedArtifactKinds: ["qa-report", "security-report", "release-report", "deployment-gate-report"],
+  verificationChecks: promotionApprovalArtifactFixture.payload.verificationChecks,
+  approvalRecommendations: promotionApprovalArtifactFixture.payload.approvalRecommendations,
+  approvalStatus: "approval_recommended",
+  provenanceRefs: [
+    ".agentops/runs/run-789/bundle.json",
+    ".agentops/runs/run-790/bundle.json",
+    ".agentops/runs/run-release/bundle.json",
+    ".agentops/runs/run-deployment/bundle.json",
+    ".agentops/evidence/jenkins-ci.json",
+    ".agentops/evidence/generic-ci.json"
+  ]
+} as const;
+
 export const schemaFixtures = {
   finding: {
     id: "finding-1",
@@ -3471,6 +3669,7 @@ export const schemaFixtures = {
   pipelineRequest: pipelineRequestFixture,
   releaseRequest: releaseRequestFixture,
   deploymentRequest: deploymentRequestFixture,
+  promotionRequest: promotionRequestFixture,
   incidentRequest: incidentRequestFixture,
   maintenanceRequest: maintenanceRequestFixture,
   evalSpec: evalFixtureCorpusFixture.specs[1],
@@ -3504,6 +3703,7 @@ export const schemaFixtures = {
   securityEvidenceNormalization: securityEvidenceNormalizationFixture,
   pipelineEvidenceNormalization: pipelineEvidenceNormalizationFixture,
   deploymentGateEvidenceNormalization: deploymentGateEvidenceNormalizationFixture,
+  promotionApprovalEvidenceNormalization: promotionApprovalEvidenceNormalizationFixture,
   incidentEvidenceNormalization: incidentEvidenceNormalizationFixture,
   maintenanceEvidenceNormalization: maintenanceEvidenceNormalizationFixture,
   releaseEvidenceNormalization: releaseEvidenceNormalizationFixture,
@@ -3520,6 +3720,7 @@ export const schemaFixtures = {
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   deploymentGateArtifact: deploymentGateArtifactFixture,
+  promotionApprovalArtifact: promotionApprovalArtifactFixture,
   maintenanceArtifact: maintenanceArtifactFixture,
   invalidLifecycleArtifactEnvelope: invalidLifecycleArtifactEnvelopeFixture,
   invalidPlanningArtifact: invalidPlanningArtifactFixture,

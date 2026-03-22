@@ -4,6 +4,7 @@ import type {
   DesignArtifact,
   IncidentArtifact,
   PlanningArtifact,
+  PromotionApprovalArtifact,
   QaArtifact,
   ReleaseArtifact
 } from "@h9-foundry/agentforge-shared-types";
@@ -135,5 +136,19 @@ describe("renderGitHubHandoffSummary", () => {
     expect(summary.body).toContain("Buildkite (buildkite) pipeline `release` run `bk-42` completed from local-export evidence with success.");
     expect(summary.body).toContain("Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success.");
     expect(summary.body).toContain("CircleCI (generic-ci) pipeline `CircleCI` run `circleci-42` completed from local-export evidence with success.");
+  });
+
+  it("renders a bounded promotion approval handoff summary", () => {
+    const artifact = cloneFixture(schemaFixtures.promotionApprovalArtifact) as unknown as PromotionApprovalArtifact;
+    artifact.source.scmRefs = [cloneFixture(schemaFixtures.gitlabIssueScmReference)];
+    const summary = renderGitHubHandoffSummary(artifact);
+
+    expect(summary.artifactKind).toBe("promotion-approval-report");
+    expect(summary.sections.some((section) => section.heading === "Approval Status")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "Required Approvals")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "SCM References")).toBe(true);
+    expect(summary.sections.some((section) => section.heading === "CI Evidence")).toBe(true);
+    expect(summary.body).toContain("gitlab issue: gitlab.com/h9-foundry/platform/agentforge#123");
+    expect(summary.body).toContain("Jenkins (jenkins-ci) pipeline `Jenkins CI` run `jenkins-42` completed from local-export evidence with success.");
   });
 });

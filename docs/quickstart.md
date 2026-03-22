@@ -270,6 +270,7 @@ node packages/cli/dist/bin.js run security-review
 node packages/cli/dist/bin.js run release-readiness
 node packages/cli/dist/bin.js run pipeline-evidence-review
 node packages/cli/dist/bin.js run deployment-gate-review
+node packages/cli/dist/bin.js run promotion-approval
 node packages/cli/dist/bin.js run incident-handoff
 node packages/cli/dist/bin.js run maintenance-triage
 ```

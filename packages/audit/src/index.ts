@@ -8,6 +8,7 @@ import type {
   GithubWorkflowStatusMapping,
   IncidentArtifact,
   PlanningArtifact,
+  PromotionApprovalArtifact,
   QaArtifact,
   ReleaseCiEvidenceSummary,
   ReleaseArtifact,
@@ -15,7 +16,13 @@ import type {
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
 
-type GitHubRenderableArtifact = PlanningArtifact | DesignArtifact | IncidentArtifact | QaArtifact | ReleaseArtifact;
+type GitHubRenderableArtifact =
+  | PlanningArtifact
+  | DesignArtifact
+  | IncidentArtifact
+  | QaArtifact
+  | ReleaseArtifact
+  | PromotionApprovalArtifact;
 
 export function createAuditEntry(entry: AuditEntry): AuditEntry {
   return entry;
@@ -115,6 +122,19 @@ function renderReleaseSections(artifact: ReleaseArtifact): GithubHandoffSection[
   ].filter((section) => section.lines.length > 0);
 }
 
+function renderPromotionApprovalSections(artifact: PromotionApprovalArtifact): GithubHandoffSection[] {
+  return [
+    { heading: "Summary", lines: [artifact.summary] },
+    { heading: "Approval Status", lines: [artifact.payload.approvalStatus] },
+    {
+      heading: "Verification Checks",
+      lines: artifact.payload.verificationChecks.map((check) => `${check.name}: ${check.status}${check.detail ? ` (${check.detail})` : ""}`)
+    },
+    { heading: "Required Approvals", lines: artifact.payload.requiredApprovals ?? [] },
+    { heading: "Recommended Next Steps", lines: artifact.payload.recommendedNextSteps ?? [] }
+  ].filter((section) => section.lines.length > 0);
+}
+
 function renderSharedScmSection(artifact: GitHubRenderableArtifact): GithubHandoffSection[] {
   const githubCanonicals = new Set((artifact.source.githubRefs ?? []).map((entry) => entry.canonical));
   const lines = [...new Set(
@@ -131,6 +151,7 @@ function readArtifactCiEvidenceSummary(artifact: GitHubRenderableArtifact): Rele
     case "qa-report":
       return artifact.payload.ciEvidenceSummary ?? [];
     case "release-report":
+    case "promotion-approval-report":
       return artifact.payload.ciEvidenceSummary ?? [];
     default:
       return [];
@@ -165,6 +186,8 @@ function buildGitHubHandoffSections(artifact: GitHubRenderableArtifact): GithubH
       return renderQaSections(artifact);
     case "release-report":
       return renderReleaseSections(artifact);
+    case "promotion-approval-report":
+      return renderPromotionApprovalSections(artifact);
     }
   })();
 

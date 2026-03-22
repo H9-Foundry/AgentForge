@@ -66,7 +66,7 @@ program
   .description("Run an official local workflow wedge in safe mode.")
   .argument(
     "<workflow>",
-    "Workflow name. Run an initialized workflow under .agentops/workflows, for example: pr-review, planning-discovery, release-readiness, pipeline-evidence-review, or deployment-gate-review."
+    "Workflow name. Run an initialized workflow under .agentops/workflows, for example: pr-review, planning-discovery, release-readiness, pipeline-evidence-review, deployment-gate-review, or promotion-approval."
   )
   .option("--json", "Print machine-readable JSON output.")
   .action(async (workflow, options: { json?: boolean }) => {

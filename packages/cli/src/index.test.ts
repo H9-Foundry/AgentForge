@@ -2439,6 +2439,155 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("fails promotion-approval before reasoning when the request is missing", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    await expect(runLocalWorkflow("promotion-approval", root)).rejects.toThrow("Missing promotion request");
+  });
+
+  it("rejects underspecified promotion-approval requests before reasoning", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeYamlFile(join(root, ".agentops", "requests", "promotion.yaml"), {
+      promotionScope: "Review approval readiness for the current release candidate.",
+      targetEnvironment: "production",
+      evidenceSources: [".agentops/evidence/jenkins-ci.json"]
+    });
+
+    await expect(runLocalWorkflow("promotion-approval", root)).rejects.toThrow(
+      /Add at least one releaseReportRef and one deploymentGateReportRef/i
+    );
+  });
+
+  it("blocks promotion-approval when the deployment gate report is not ready for approval", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+
+    writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)]);
+    writeBundleFixture(root, "run-security", [cloneFixture(schemaFixtures.securityArtifact)]);
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
+    writeBundleFixture(root, "run-deployment", [cloneFixture(schemaFixtures.deploymentGateArtifact)]);
+
+    writeFileSync(
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
+      JSON.stringify(schemaFixtures.jenkinsCiEvidenceExport, null, 2)
+    );
+
+    writeYamlFile(join(root, ".agentops", "requests", "promotion.yaml"), {
+      promotionScope: "Review approval readiness for the current release candidate.",
+      targetEnvironment: "production",
+      issueRefs: ["#261"],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      deploymentGateReportRefs: [".agentops/runs/run-deployment/bundle.json"],
+      evidenceSources: [".agentops/evidence/jenkins-ci.json"]
+    });
+
+    const promotionRun = await runLocalWorkflow("promotion-approval", root);
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          approvalStatus?: string;
+          blockers?: string[];
+        };
+      }>;
+    }>(promotionRun.jsonPath);
+
+    expect(promotionRun.status).toBe("success");
+    expect(bundle.workflow).toBe("promotion-approval");
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("promotion-approval-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.approvalStatus).toBe("blocked");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.blockers).toEqual(
+      expect.arrayContaining([expect.stringContaining("cannot satisfy promotion approval yet")])
+    );
+  });
+
+  it("runs promotion-approval with ready release and deployment gate artifacts", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, ".agentops", "evidence"), { recursive: true });
+
+    const readyDeploymentGateArtifact = {
+      ...cloneFixture(schemaFixtures.deploymentGateArtifact),
+      payload: {
+        ...cloneFixture(schemaFixtures.deploymentGateArtifact).payload,
+        targetEnvironment: "production",
+        gateStatus: "ready_for_approval" as const
+      }
+    };
+
+    writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)]);
+    writeBundleFixture(root, "run-security", [cloneFixture(schemaFixtures.securityArtifact)]);
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
+    writeBundleFixture(root, "run-deployment", [readyDeploymentGateArtifact]);
+
+    writeFileSync(
+      join(root, ".agentops", "evidence", "jenkins-ci.json"),
+      JSON.stringify(schemaFixtures.jenkinsCiEvidenceExport, null, 2)
+    );
+    writeFileSync(
+      join(root, ".agentops", "evidence", "generic-ci.json"),
+      JSON.stringify(schemaFixtures.genericCiEvidenceExport, null, 2)
+    );
+
+    writeYamlFile(join(root, ".agentops", "requests", "promotion.yaml"), {
+      promotionScope: "Review approval readiness for promoting the current release candidate.",
+      targetEnvironment: "production",
+      issueRefs: ["#261"],
+      constraints: ["Keep the workflow read-only"],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      releaseReportRefs: [".agentops/runs/run-release/bundle.json"],
+      deploymentGateReportRefs: [".agentops/runs/run-deployment/bundle.json"],
+      evidenceSources: [
+        ".agentops/evidence/jenkins-ci.json",
+        ".agentops/evidence/generic-ci.json"
+      ]
+    });
+
+    const promotionRun = await runLocalWorkflow("promotion-approval", root);
+    const bundle = readJson<{
+      workflow: string;
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          approvalStatus?: string;
+          blockers?: string[];
+          referencedArtifactKinds?: string[];
+          ciEvidenceSummary?: Array<{ provider: string; platform: string }>;
+          requiredApprovals?: string[];
+        };
+      }>;
+    }>(promotionRun.jsonPath);
+
+    expect(promotionRun.status).toBe("success");
+    expect(promotionRun.artifactKinds).toContain("promotion-approval-report");
+    expect(bundle.workflow).toBe("promotion-approval");
+    expect(bundle.lifecycleArtifacts[0]?.artifactKind).toBe("promotion-approval-report");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.approvalStatus).toBe("approval_recommended");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.blockers).toEqual([]);
+    expect(bundle.lifecycleArtifacts[0]?.payload?.referencedArtifactKinds).toEqual(
+      expect.arrayContaining(["qa-report", "security-report", "release-report", "deployment-gate-report"])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.ciEvidenceSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: "Jenkins", platform: "jenkins-ci" }),
+        expect.objectContaining({ provider: "CircleCI", platform: "generic-ci" })
+      ])
+    );
+    expect(bundle.lifecycleArtifacts[0]?.payload?.requiredApprovals).toEqual(
+      expect.arrayContaining([expect.stringContaining("Obtain explicit maintainer approval before any promotion or publish action.")])
+    );
+  });
+
   it("fails incident-handoff before reasoning when the request is missing", async () => {
     const root = createFixtureRepo();
     initializeWorkspace(root);

@@ -23,6 +23,7 @@ import {
   pipelineRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
+  promotionRequestSchema,
   qaRequestSchema,
   releaseRequestSchema,
   schemaFixtures,
@@ -51,6 +52,7 @@ import type {
   PipelineRequest,
   PlanningArtifact,
   PlanningRequest,
+  PromotionRequest,
   QaRequest,
   ReleaseRequest,
   ScmReference,
@@ -380,6 +382,33 @@ nodes:
     kind: reasoning
     agent: deployment-gate-analyst
     outputs_to: agentResults.deployment
+  - id: report
+    kind: report
+    outputs_to: reports.final
+`;
+
+const promotionApprovalWorkflowTemplate = `version: 1
+name: promotion-approval
+description: Review promotion approval readiness using bounded CI evidence plus ready release and deployment gate artifacts.
+trigger: manual
+catalog:
+  domain: release
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: promotion-approval-intake
+    outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: promotion-approval-evidence-normalizer
+    outputs_to: agentResults.evidence
+  - id: promotion
+    kind: reasoning
+    agent: promotion-approval-analyst
+    outputs_to: agentResults.promotion
   - id: report
     kind: report
     outputs_to: reports.final
@@ -1046,6 +1075,28 @@ function validateDeploymentRequestCompleteness(request: DeploymentRequest): Depl
   return request;
 }
 
+function validatePromotionRequestCompleteness(request: PromotionRequest): PromotionRequest {
+  const evidenceSignalCount =
+    request.evidenceSources.length +
+    request.qaReportRefs.length +
+    request.securityReportRefs.length +
+    request.releaseReportRefs.length +
+    request.deploymentGateReportRefs.length;
+  if (evidenceSignalCount === 0) {
+    throw new Error(
+      "Promotion request is underspecified. Add at least one of evidenceSources, qaReportRefs, securityReportRefs, releaseReportRefs, or deploymentGateReportRefs."
+    );
+  }
+
+  if (request.releaseReportRefs.length === 0 || request.deploymentGateReportRefs.length === 0) {
+    throw new Error(
+      "Promotion request is underspecified. Add at least one releaseReportRef and one deploymentGateReportRef."
+    );
+  }
+
+  return request;
+}
+
 function addSourceReferences(
   refs: { issueRefs: Set<string>; scmRefMap: Map<string, ScmReference>; githubRefMap: Map<string, GithubReference> },
   incoming: { issueRefs: string[]; scmRefs: ScmReference[]; githubRefs: GithubReference[] }
@@ -1400,6 +1451,68 @@ function prepareWorkflowInputs(
       deploymentIssueRefs: [...deploymentRefs.issueRefs],
       deploymentScmRefs: [...deploymentRefs.scmRefMap.values()],
       deploymentGithubRefs: [...deploymentRefs.githubRefMap.values()],
+      requestFile: requestPath
+    };
+  }
+
+  if (workflow.name === "promotion-approval") {
+    const requestPath = ".agentops/requests/promotion.yaml";
+    ensureReadablePath(policyEngine, requestPath, "promotion request");
+    const promotionRequest = validatePromotionRequestCompleteness(
+      readYamlFile(join(root, requestPath), promotionRequestSchema, "promotion request")
+    );
+
+    const scmRepoContext = inferScmRepoContext(root);
+    const gitHubRepoContext = inferGitHubRepoContext(root);
+    const promotionRefs = {
+      issueRefs: new Set<string>(promotionRequest.issueRefs),
+      scmRefMap: new Map<string, ScmReference>(),
+      githubRefMap: new Map<string, GithubReference>()
+    };
+
+    for (const scmRef of normalizeScmReferences(promotionRequest.issueRefs, scmRepoContext)) {
+      promotionRefs.scmRefMap.set(scmRef.canonical, scmRef);
+    }
+    for (const githubRef of normalizeGitHubReferences(promotionRequest.issueRefs, gitHubRepoContext)) {
+      promotionRefs.githubRefMap.set(githubRef.canonical, githubRef);
+    }
+
+    for (const qaReportRef of promotionRequest.qaReportRefs) {
+      ensureReadablePath(policyEngine, qaReportRef, "QA report reference");
+      ensureBundleContainsArtifactKind(root, qaReportRef, "qa-report", "QA report reference");
+      addSourceReferences(promotionRefs, loadLifecycleArtifactSourceReferences(root, qaReportRef));
+    }
+
+    for (const securityReportRef of promotionRequest.securityReportRefs) {
+      ensureReadablePath(policyEngine, securityReportRef, "security report reference");
+      ensureBundleContainsArtifactKind(root, securityReportRef, "security-report", "security report reference");
+      addSourceReferences(promotionRefs, loadLifecycleArtifactSourceReferences(root, securityReportRef));
+    }
+
+    for (const releaseReportRef of promotionRequest.releaseReportRefs) {
+      ensureReadablePath(policyEngine, releaseReportRef, "release report reference");
+      ensureBundleContainsArtifactKind(root, releaseReportRef, "release-report", "release report reference");
+      addSourceReferences(promotionRefs, loadLifecycleArtifactSourceReferences(root, releaseReportRef));
+    }
+
+    for (const deploymentGateReportRef of promotionRequest.deploymentGateReportRefs) {
+      ensureReadablePath(policyEngine, deploymentGateReportRef, "deployment gate report reference");
+      ensureBundleContainsArtifactKind(root, deploymentGateReportRef, "deployment-gate-report", "deployment gate report reference");
+      addSourceReferences(promotionRefs, loadLifecycleArtifactSourceReferences(root, deploymentGateReportRef));
+    }
+
+    for (const evidenceSource of promotionRequest.evidenceSources) {
+      ensureReadablePath(policyEngine, evidenceSource, "promotion evidence source");
+      if (!existsSync(join(root, evidenceSource))) {
+        throw new Error(`Promotion evidence source not found: ${evidenceSource}`);
+      }
+    }
+
+    return {
+      promotionRequest: promotionRequest satisfies PromotionRequest,
+      promotionIssueRefs: [...promotionRefs.issueRefs],
+      promotionScmRefs: [...promotionRefs.scmRefMap.values()],
+      promotionGithubRefs: [...promotionRefs.githubRefMap.values()],
       requestFile: requestPath
     };
   }
@@ -2338,6 +2451,10 @@ function ensureInitFiles(root: string): string[] {
     {
       path: join(workflowsDir, "deployment-gate-review.yaml"),
       contents: deploymentGateWorkflowTemplate
+    },
+    {
+      path: join(workflowsDir, "promotion-approval.yaml"),
+      contents: promotionApprovalWorkflowTemplate
     },
     {
       path: join(workflowsDir, "incident-handoff.yaml"),

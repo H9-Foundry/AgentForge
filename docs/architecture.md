@@ -43,6 +43,7 @@ AgentForge is currently an early SDLC platform core with an official local workf
 - `.agentops/workflows/release-readiness.yaml`
 - `.agentops/workflows/pipeline-evidence-review.yaml`
 - `.agentops/workflows/deployment-gate-review.yaml`
+- `.agentops/workflows/promotion-approval.yaml`
 - `.agentops/workflows/incident-handoff.yaml`
 - `.agentops/workflows/maintenance-triage.yaml`
 
