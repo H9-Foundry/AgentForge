@@ -60,7 +60,7 @@ Phase 2 now builds on the current official local release and CI review family:
 - `deployment-gate-review`
 - `promotion-approval`
 
-The four current workflows are implemented on `main`. `promotion-approval` remains source-build only until the next npm release; later release-family work should extend this bounded review family rather than reopening first-wedge planning.
+The four current workflows are implemented on `main` and published in the current npm release. Later release-family work should extend this bounded review family rather than reopening first-wedge planning.
 
 ## User Jobs
 

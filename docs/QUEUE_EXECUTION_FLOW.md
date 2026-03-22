@@ -50,7 +50,7 @@ Rules:
 Current active lane:
 
 1. [#245](https://github.com/H9-Foundry/AgentForge/issues/245) Phase 2 provider and integration expansion tracker
-2. [#261](https://github.com/H9-Foundry/AgentForge/issues/261) Promotion approval review follow-on
+2. no active implementation slice assigned after the current release and CI review family shipped and was verified from npm
 
 ### Ready Lane
 
@@ -58,9 +58,9 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-3. additional generic release and CI workflow consumption after the current provider-agnostic review family is published and validated from npm
-4. additional provider-specific SCM and CI wedges after the generic release and CI workflow family is stable
-5. deeper supply-chain and enterprise trust work reopened only after the next provider/integration family is defined explicitly
+3. additional generic release and CI workflow consumption after the next bounded Phase 2 family is chosen explicitly
+4. additional provider-specific SCM and CI wedges after the current generic release and CI workflow family is stable
+5. deeper supply-chain and enterprise trust work reopened only after the next provider or integration family is defined explicitly
 
 ### Parallel Safe Lane
 

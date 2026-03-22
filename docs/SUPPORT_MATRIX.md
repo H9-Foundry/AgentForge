@@ -30,7 +30,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `release-readiness` | Official | Dedicated release workflow that consumes bounded local release evidence, emits a `release-report` artifact, and keeps publish or promotion follow-ons outside the default read-only path. |
 | `pipeline-evidence-review` | Official | Dedicated provider-agnostic pipeline workflow that consumes bounded local CI evidence, emits a `pipeline-report` artifact, and stays local-first and read-only by default. |
 | `deployment-gate-review` | Official | Dedicated deployment gate workflow that consumes shared CI evidence plus referenced QA, security, release, and pipeline artifacts, and emits a `deployment-gate-report` artifact without adding deployment side effects. |
-| `promotion-approval` | Official | Approval-oriented release review workflow on `main` that consumes shared CI evidence plus ready release and deployment gate artifacts, emits a `promotion-approval-report`, and remains source-build only until the next npm release. |
+| `promotion-approval` | Official | Approval-oriented release review workflow that consumes shared CI evidence plus ready release and deployment gate artifacts and emits a `promotion-approval-report`. |
 | `incident-handoff` | Official | Dedicated operations workflow that consumes staged local incident evidence, emits an `incident-brief` artifact, and keeps the default path local-first and read-only. |
 | `maintenance-triage` | Official | Dedicated maintenance workflow that consumes bounded maintenance evidence, emits a `maintenance-report` artifact, and keeps the default path read-only with deterministic routing support. |
 | security / DevSecOps extensions | Planned | Additional security variants beyond `security-review` are not implemented yet. |
@@ -120,7 +120,7 @@ See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINES
 
 ## Compatibility Notes
 
-- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it, but the current quick path and preset startup are already available in the published CLI.
+- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it; the current quick path, preset startup, and release/CI review family are already available in the published CLI.
 - Current support is strongest for local repository execution and GitHub-centric release workflows.
 - Public compatibility commitments are intentionally narrow until broader workflow and integration support exists.
 - Planned support in this matrix should be treated as roadmap direction, not shipped capability.
