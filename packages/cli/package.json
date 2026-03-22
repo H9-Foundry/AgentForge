@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-cli",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Secure-by-default CLI for AgentForge repo-first software engineering workflows.",
   "license": "MIT",
   "author": "H9 Foundry",

@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.11.0
+
+### Minor Changes
+
+- 3b284b8: Add the `promotion-approval` workflow, request/artifact contracts, and shared handoff rendering for approval-oriented release review on `main`.
+
 ## 0.10.0
 
 ### Minor Changes

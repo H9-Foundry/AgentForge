@@ -1,5 +1,22 @@
 # @h9-foundry/agentforge-cli
 
+## 0.11.0
+
+### Minor Changes
+
+- 3b284b8: Add the `promotion-approval` workflow, request/artifact contracts, and shared handoff rendering for approval-oriented release review on `main`.
+
+### Patch Changes
+
+- Updated dependencies [3b284b8]
+  - @h9-foundry/agentforge-audit@0.11.0
+  - @h9-foundry/agentforge-schemas@0.11.0
+  - @h9-foundry/agentforge-shared-types@0.11.0
+  - @h9-foundry/agentforge-runtime@0.11.0
+  - @h9-foundry/agentforge-context-engine@0.11.0
+  - @h9-foundry/agentforge-policy-engine@0.11.0
+  - @h9-foundry/agentforge-sdk@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes
