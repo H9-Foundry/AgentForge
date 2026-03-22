@@ -46,6 +46,10 @@ import {
   deploymentGateArtifactSchema,
   deploymentGateEvidenceNormalizationSchema,
   deploymentRequestSchema,
+  promotionApprovalArtifactPayloadSchema,
+  promotionApprovalArtifactSchema,
+  promotionApprovalEvidenceNormalizationSchema,
+  promotionRequestSchema,
   dependencyIntegrityEvidenceSchema,
   dependencyInventoryEntrySchema,
   ciJobEvidenceSchema,
@@ -143,6 +147,10 @@ export type DeploymentGateArtifactPayload = Infer<typeof deploymentGateArtifactP
 export type DeploymentGateArtifact = Infer<typeof deploymentGateArtifactSchema>;
 export type DeploymentGateEvidenceNormalization = Infer<typeof deploymentGateEvidenceNormalizationSchema>;
 export type DeploymentRequest = Infer<typeof deploymentRequestSchema>;
+export type PromotionApprovalArtifactPayload = Infer<typeof promotionApprovalArtifactPayloadSchema>;
+export type PromotionApprovalArtifact = Infer<typeof promotionApprovalArtifactSchema>;
+export type PromotionApprovalEvidenceNormalization = Infer<typeof promotionApprovalEvidenceNormalizationSchema>;
+export type PromotionRequest = Infer<typeof promotionRequestSchema>;
 export type AdapterCapabilityMetadata = Infer<typeof adapterCapabilityMetadataSchema>;
 export type GithubActionsJobEvidence = Infer<typeof githubActionsJobEvidenceSchema>;
 export type GithubActionsCheckRunEvidence = Infer<typeof githubActionsCheckRunEvidenceSchema>;

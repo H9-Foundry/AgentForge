@@ -1,0 +1,25 @@
+version: 1
+name: promotion-approval
+description: Review promotion approval readiness using bounded CI evidence plus ready release and deployment gate artifacts.
+trigger: manual
+catalog:
+  domain: release
+  supportLevel: official
+  maturity: mvp
+  trustScope: official-core-only
+nodes:
+  - id: intake
+    kind: deterministic
+    agent: promotion-approval-intake
+    outputs_to: agentResults.intake
+  - id: evidence
+    kind: deterministic
+    agent: promotion-approval-evidence-normalizer
+    outputs_to: agentResults.evidence
+  - id: promotion
+    kind: reasoning
+    agent: promotion-approval-analyst
+    outputs_to: agentResults.promotion
+  - id: report
+    kind: report
+    outputs_to: reports.final

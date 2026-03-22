@@ -30,6 +30,9 @@ import {
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
+  promotionApprovalArtifactSchema,
+  promotionApprovalEvidenceNormalizationSchema,
+  promotionRequestSchema,
   releaseApprovalRecommendationSchema,
   releaseArtifactSchema,
   releaseCiEvidenceSummarySchema,
@@ -73,6 +76,9 @@ import type {
   PipelineRequest,
   PlanningArtifact,
   PlanningRequest,
+  PromotionApprovalArtifact,
+  PromotionApprovalEvidenceNormalization,
+  PromotionRequest,
   QaArtifact,
   QaEvidenceNormalization,
   QaRequest,
@@ -626,6 +632,54 @@ function evaluatePipelineReportReadiness(bundlePath: string): { ready: boolean; 
   return {
     ready: true,
     detail: `Using ${bundlePath} as a ready pipeline-report reference.`
+  };
+}
+
+function evaluateDeploymentGateApprovalReadiness(
+  bundlePath: string,
+  targetEnvironment?: string
+): { ready: boolean; detail: string } {
+  const artifact = loadBundleLifecycleArtifact(bundlePath, "deployment-gate-report");
+  if (!artifact) {
+    return {
+      ready: false,
+      detail: `Deployment gate bundle is missing a deployment-gate-report artifact: ${bundlePath}`
+    };
+  }
+
+  const parsed = deploymentGateArtifactSchema.safeParse(artifact);
+  if (!parsed.success) {
+    return {
+      ready: false,
+      detail: `Deployment gate bundle could not be parsed as a bounded deployment-gate-report artifact: ${bundlePath}`
+    };
+  }
+
+  const deploymentGateArtifact = parsed.data;
+  if (deploymentGateArtifact.status !== "complete") {
+    return {
+      ready: false,
+      detail: `Deployment gate report ${bundlePath} is ${deploymentGateArtifact.status} and cannot satisfy promotion approval yet.`
+    };
+  }
+
+  if (deploymentGateArtifact.payload.gateStatus !== "ready_for_approval") {
+    return {
+      ready: false,
+      detail: `Deployment gate report ${bundlePath} is ${deploymentGateArtifact.payload.gateStatus} and cannot satisfy promotion approval yet.`
+    };
+  }
+
+  if (targetEnvironment && deploymentGateArtifact.payload.targetEnvironment !== targetEnvironment) {
+    return {
+      ready: false,
+      detail: `Deployment gate report ${bundlePath} targets ${deploymentGateArtifact.payload.targetEnvironment}, not ${targetEnvironment}.`
+    };
+  }
+
+  return {
+    ready: true,
+    detail: `Using ${bundlePath} as a ready deployment-gate-report reference for ${targetEnvironment ?? deploymentGateArtifact.payload.targetEnvironment}.`
   };
 }
 
@@ -3710,6 +3764,411 @@ const deploymentGateAnalystAgent: RuntimeAgent = {
   }
 };
 
+const promotionApprovalIntakeAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "promotion-approval-intake",
+    displayName: "Promotion Approval Intake",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "context"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const promotionRequest = getWorkflowInput<PromotionRequest>(stateSlice, "promotionRequest");
+    const promotionIssueRefs = getWorkflowInput<string[]>(stateSlice, "promotionIssueRefs") ?? [];
+    const promotionScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "promotionScmRefs") ?? [];
+    const promotionGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "promotionGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!promotionRequest) {
+      throw new Error("promotion-approval requires a validated promotion request before runtime execution.");
+    }
+
+    return agentOutputSchema.parse({
+      summary: `Loaded promotion approval request from ${requestFile ?? ".agentops/requests/promotion.yaml"} for ${promotionRequest.targetEnvironment}.`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: {
+        ...promotionRequestSchema.parse(promotionRequest),
+        promotionIssueRefs,
+        promotionScmRefs,
+        promotionGithubRefs,
+        evidenceSourceCount:
+          promotionRequest.evidenceSources.length +
+          promotionRequest.qaReportRefs.length +
+          promotionRequest.securityReportRefs.length +
+          promotionRequest.releaseReportRefs.length +
+          promotionRequest.deploymentGateReportRefs.length
+      }
+    });
+  }
+};
+
+const promotionApprovalEvidenceNormalizationAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "promotion-approval-evidence-normalizer",
+    displayName: "Promotion Approval Evidence Normalizer",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "deterministic"
+    },
+    permissions: {
+      model: false,
+      network: false,
+      tools: [],
+      readPaths: [".agentops/requests/**", ".agentops/runs/**", "**/*.json", "**/*.md"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["summary", "metadata"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ stateSlice }) {
+    const promotionRequest = getWorkflowInput<PromotionRequest>(stateSlice, "promotionRequest");
+    if (!promotionRequest) {
+      throw new Error("promotion-approval requires validated promotion request inputs before evidence normalization.");
+    }
+
+    const repoRoot = stateSlice.repo?.root;
+    const intakeMetadata = isRecord(stateSlice.agentResults?.intake?.metadata) ? stateSlice.agentResults.intake.metadata : {};
+    const qaReportRefs = asStringArray(intakeMetadata.qaReportRefs).length > 0
+      ? asStringArray(intakeMetadata.qaReportRefs)
+      : promotionRequest.qaReportRefs;
+    const securityReportRefs = asStringArray(intakeMetadata.securityReportRefs).length > 0
+      ? asStringArray(intakeMetadata.securityReportRefs)
+      : promotionRequest.securityReportRefs;
+    const releaseReportRefs = asStringArray(intakeMetadata.releaseReportRefs).length > 0
+      ? asStringArray(intakeMetadata.releaseReportRefs)
+      : promotionRequest.releaseReportRefs;
+    const deploymentGateReportRefs = asStringArray(intakeMetadata.deploymentGateReportRefs).length > 0
+      ? asStringArray(intakeMetadata.deploymentGateReportRefs)
+      : promotionRequest.deploymentGateReportRefs;
+    const evidenceSources = asStringArray(intakeMetadata.evidenceSources).length > 0
+      ? asStringArray(intakeMetadata.evidenceSources)
+      : promotionRequest.evidenceSources;
+    const normalizedEvidenceSources = [
+      ...new Set([...qaReportRefs, ...securityReportRefs, ...releaseReportRefs, ...deploymentGateReportRefs, ...evidenceSources])
+    ];
+    const missingEvidenceSources = normalizedEvidenceSources.filter((pathValue) => repoRoot && !existsSync(join(repoRoot, pathValue)));
+    if (missingEvidenceSources.length > 0) {
+      throw new Error(`Promotion evidence source not found: ${missingEvidenceSources[0]}`);
+    }
+
+    const referencedArtifactKinds = [
+      ...new Set(
+        [...qaReportRefs, ...securityReportRefs, ...releaseReportRefs, ...deploymentGateReportRefs].flatMap((bundleRef) =>
+          repoRoot ? loadBundleArtifactKinds(join(repoRoot, bundleRef)) : []
+        )
+      )
+    ];
+    const releaseReportReadiness = releaseReportRefs.map((bundleRef) =>
+      repoRoot
+        ? evaluateReleaseReportReadiness(join(repoRoot, bundleRef))
+        : { ready: false, detail: `Release report reference cannot be evaluated without a repository root: ${bundleRef}` }
+    );
+    const deploymentGateReadiness = deploymentGateReportRefs.map((bundleRef) =>
+      repoRoot
+        ? evaluateDeploymentGateApprovalReadiness(join(repoRoot, bundleRef), promotionRequest.targetEnvironment)
+        : { ready: false, detail: `Deployment gate reference cannot be evaluated without a repository root: ${bundleRef}` }
+    );
+    const ciEvidence = normalizeImportedCiEvidence(repoRoot, normalizedEvidenceSources);
+    const ciEvidenceSummary = ciEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
+    const failingChecks = ciEvidenceSummary.flatMap((entry) => entry.failingChecks);
+    const verificationChecks = [
+      {
+        name: "qa-report-refs",
+        status: qaReportRefs.length > 0 ? "passed" : "skipped",
+        detail: qaReportRefs.length > 0 ? `Using ${qaReportRefs.length} validated QA report reference(s).` : "No QA report references were supplied."
+      },
+      {
+        name: "security-report-refs",
+        status: securityReportRefs.length > 0 ? "passed" : "skipped",
+        detail: securityReportRefs.length > 0
+          ? `Using ${securityReportRefs.length} validated security report reference(s).`
+          : "No security report references were supplied."
+      },
+      {
+        name: "release-report-refs",
+        status:
+          releaseReportRefs.length === 0
+            ? "failed"
+            : releaseReportReadiness.some((entry) => !entry.ready)
+              ? "failed"
+              : "passed",
+        detail: releaseReportRefs.length > 0
+          ? releaseReportReadiness.some((entry) => !entry.ready)
+            ? releaseReportReadiness.filter((entry) => !entry.ready).map((entry) => entry.detail).join(" ")
+            : `Using ${releaseReportRefs.length} ready release report reference(s).`
+          : "At least one ready release report reference is required."
+      },
+      {
+        name: "deployment-gate-report-refs",
+        status:
+          deploymentGateReportRefs.length === 0
+            ? "failed"
+            : deploymentGateReadiness.some((entry) => !entry.ready)
+              ? "failed"
+              : "passed",
+        detail: deploymentGateReportRefs.length > 0
+          ? deploymentGateReadiness.some((entry) => !entry.ready)
+            ? deploymentGateReadiness.filter((entry) => !entry.ready).map((entry) => entry.detail).join(" ")
+            : `Using ${deploymentGateReportRefs.length} ready deployment gate report reference(s) for ${promotionRequest.targetEnvironment}.`
+          : "At least one ready deployment gate report reference is required."
+      },
+      {
+        name: "imported-ci-evidence",
+        status: ciEvidence.length === 0 ? "failed" : failingChecks.length > 0 ? "failed" : "passed",
+        detail:
+          ciEvidence.length === 0
+            ? "No imported CI evidence exports were supplied."
+            : failingChecks.length > 0
+              ? `Imported CI evidence still reports failing checks: ${failingChecks.join(", ")}.`
+              : `Using ${ciEvidence.length} imported CI evidence export(s) across ${[...new Set(ciEvidence.map((entry) => entry.pipelineName))].length} pipeline(s).`
+      }
+    ] as const;
+    const approvalStatus =
+      verificationChecks.some((check) => check.status === "failed")
+        ? "blocked"
+        : qaReportRefs.length > 0 && securityReportRefs.length > 0
+          ? "approval_recommended"
+          : "needs_follow_up";
+    const approvalRecommendations = [
+      {
+        action: "promote-release",
+        classification: approvalStatus === "approval_recommended" ? "approval_required" : "deny",
+        reason:
+          approvalStatus === "approval_recommended"
+            ? "Promotion remains a release-significant side effect and requires explicit maintainer approval."
+            : "Keep release promotion blocked until bounded release and deployment gate evidence is complete."
+      },
+      {
+        action: "publish-packages",
+        classification: approvalStatus === "approval_recommended" ? "approval_required" : "deny",
+        reason:
+          approvalStatus === "approval_recommended"
+            ? "Package publication remains outside the default read-only workflow path."
+            : "Do not publish packages while promotion approval remains blocked or incomplete."
+      }
+    ];
+
+    const normalization = promotionApprovalEvidenceNormalizationSchema.parse({
+      qaReportRefs,
+      securityReportRefs,
+      releaseReportRefs,
+      deploymentGateReportRefs,
+      normalizedEvidenceSources,
+      missingEvidenceSources: [],
+      ciEvidence,
+      ciEvidenceSummary,
+      referencedArtifactKinds,
+      verificationChecks,
+      approvalRecommendations,
+      approvalStatus,
+      provenanceRefs: normalizedEvidenceSources
+    });
+
+    return agentOutputSchema.parse({
+      summary: `Normalized promotion approval evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.ciEvidence.length} imported CI evidence export(s).`,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [],
+      requestedTools: [],
+      blockedActionFlags: [],
+      metadata: normalization satisfies PromotionApprovalEvidenceNormalization
+    });
+  }
+};
+
+const promotionApprovalAnalystAgent: RuntimeAgent = {
+  manifest: agentManifestSchema.parse({
+    version: 1,
+    name: "promotion-approval-analyst",
+    displayName: "Promotion Approval Analyst",
+    category: "release",
+    runtime: {
+      minVersion: "0.1.0",
+      kind: "reasoning"
+    },
+    permissions: {
+      model: true,
+      network: false,
+      tools: [],
+      readPaths: ["**/*"],
+      writePaths: []
+    },
+    inputs: ["workflowInputs", "repo", "agentResults"],
+    outputs: ["lifecycleArtifacts"],
+    contextPolicy: {
+      sections: ["workflowInputs", "repo", "agentResults"],
+      minimalContext: true
+    },
+    catalog: {
+      domain: "release",
+      supportLevel: "internal",
+      maturity: "mvp",
+      trustScope: "official-core-only"
+    },
+    trust: {
+      tier: "core",
+      source: "official",
+      reviewed: true
+    }
+  }),
+  outputSchema: agentOutputSchema,
+  async execute({ state, stateSlice }) {
+    const promotionRequest = getWorkflowInput<PromotionRequest>(stateSlice, "promotionRequest");
+    const promotionIssueRefs = getWorkflowInput<string[]>(stateSlice, "promotionIssueRefs") ?? [];
+    const promotionScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "promotionScmRefs") ?? [];
+    const promotionGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "promotionGithubRefs") ?? [];
+    const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    if (!promotionRequest) {
+      throw new Error("promotion-approval requires validated promotion inputs before analysis.");
+    }
+
+    const evidenceMetadata = promotionApprovalEvidenceNormalizationSchema.safeParse(stateSlice.agentResults?.evidence?.metadata);
+    const normalizedEvidence = evidenceMetadata.success ? evidenceMetadata.data : undefined;
+    const evidenceSources =
+      normalizedEvidence?.normalizedEvidenceSources && normalizedEvidence.normalizedEvidenceSources.length > 0
+        ? normalizedEvidence.normalizedEvidenceSources
+        : promotionRequest.evidenceSources;
+    const ciEvidenceSummary = normalizedEvidence?.ciEvidenceSummary ?? [];
+    const verificationChecks = normalizedEvidence?.verificationChecks ?? [];
+    const referencedArtifactKinds = normalizedEvidence?.referencedArtifactKinds ?? [];
+    const blockers = [
+      ...verificationChecks
+        .filter((check) => check.status === "failed")
+        .map((check) => check.detail ?? `${check.name} failed during deterministic promotion approval review.`)
+    ];
+    const approvalStatus = blockers.length > 0 ? "blocked" : normalizedEvidence?.approvalStatus ?? "needs_follow_up";
+    const requiredApprovals = [
+      "Obtain explicit maintainer approval before any promotion or publish action.",
+      `Confirm the ${promotionRequest.targetEnvironment} deployment owner accepts the current promotion window.`
+    ];
+    const recommendedNextSteps = [
+      ...ciEvidenceSummary.map(
+        (entry) => `Review ${entry.displayLabel} (${formatCiEvidenceStatus(entry)}) before approving promotion.`
+      ),
+      ...(promotionRequest.qaReportRefs.length > 0 || promotionRequest.securityReportRefs.length > 0
+        ? ["Carry the validated QA and security artifacts into the promotion approval packet."]
+        : ["Attach QA and security artifacts if additional assurance is required before promotion."]),
+      "Keep deployment, publication, and tag creation outside this review-only workflow.",
+      ...(promotionRequest.constraints.length > 0 ? [`Keep follow-up bounded by: ${promotionRequest.constraints.join("; ")}.`] : [])
+    ];
+    const approvalRecommendations = normalizedEvidence?.approvalRecommendations ?? [
+      {
+        action: "promote-release",
+        classification: approvalStatus === "approval_recommended" ? "approval_required" : "deny",
+        reason:
+          approvalStatus === "approval_recommended"
+            ? "Promotion remains a release-significant side effect and requires explicit maintainer approval."
+            : "Keep release promotion blocked until bounded release and deployment gate evidence is complete."
+      }
+    ];
+    const summary = `Promotion approval report prepared for ${promotionRequest.targetEnvironment}.`;
+    const promotionApprovalReport = promotionApprovalArtifactSchema.parse({
+      ...buildLifecycleArtifactEnvelopeBase(
+        state,
+        "Promotion Approval Review",
+        summary,
+        [requestFile ?? ".agentops/requests/promotion.yaml", ...new Set(evidenceSources)],
+        promotionIssueRefs,
+        promotionScmRefs,
+        promotionGithubRefs
+      ),
+      artifactKind: "promotion-approval-report",
+      lifecycleDomain: "release",
+      payload: {
+        promotionScope: promotionRequest.promotionScope,
+        targetEnvironment: promotionRequest.targetEnvironment,
+        evidenceSources,
+        verificationChecks,
+        ciEvidenceSummary,
+        approvalStatus,
+        blockers,
+        requiredApprovals,
+        recommendedNextSteps,
+        approvalRecommendations: approvalRecommendations.map((recommendation) =>
+          releaseApprovalRecommendationSchema.parse(recommendation)
+        ),
+        referencedArtifactKinds,
+        provenanceRefs: normalizedEvidence?.provenanceRefs ?? evidenceSources
+      }
+    });
+
+    return agentOutputSchema.parse({
+      summary,
+      findings: [],
+      proposedActions: [],
+      lifecycleArtifacts: [promotionApprovalReport satisfies PromotionApprovalArtifact],
+      requestedTools: [],
+      blockedActionFlags: [],
+      confidence: 0.78,
+      metadata: {
+        deterministicInputs: {
+          targetEnvironment: promotionRequest.targetEnvironment,
+          evidenceSources,
+          ciEvidenceSummary,
+          verificationChecks,
+          referencedArtifactKinds,
+          constraints: promotionRequest.constraints
+        },
+        synthesizedAssessment: {
+          approvalStatus,
+          blockers,
+          requiredApprovals,
+          recommendedNextSteps
+        }
+      }
+    });
+  }
+};
+
 const securityEvidenceNormalizationAgent: RuntimeAgent = {
   manifest: agentManifestSchema.parse({
     version: 1,
@@ -4982,6 +5441,9 @@ export function createBuiltinAgentRegistry(): Map<string, RuntimeAgent> {
     ["deployment-gate-intake", deploymentGateIntakeAgent],
     ["deployment-gate-evidence-normalizer", deploymentGateEvidenceNormalizationAgent],
     ["deployment-gate-analyst", deploymentGateAnalystAgent],
+    ["promotion-approval-intake", promotionApprovalIntakeAgent],
+    ["promotion-approval-evidence-normalizer", promotionApprovalEvidenceNormalizationAgent],
+    ["promotion-approval-analyst", promotionApprovalAnalystAgent],
     ["security-evidence-normalizer", securityEvidenceNormalizationAgent],
     ["security-analyst", securityAnalystAgent],
     ["qa-evidence-normalizer", qaEvidenceNormalizationAgent],

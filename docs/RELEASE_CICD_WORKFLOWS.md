@@ -37,16 +37,17 @@ Available now:
 - official `release-readiness` workflow asset and request validation
 - official `pipeline-evidence-review` workflow asset and request validation
 - official `deployment-gate-review` workflow asset and request validation
+- official `promotion-approval` workflow asset and request validation on `main`
 - bounded `release-report` artifact emission from the local `release-readiness` workflow
 - bounded `pipeline-report` artifact emission from the local `pipeline-evidence-review` workflow
 - bounded `deployment-gate-report` artifact emission from the local `deployment-gate-review` workflow
+- bounded `promotion-approval-report` artifact emission from the local `promotion-approval` workflow on `main`
 - deterministic release-state normalization across bounded local evidence, QA/security report refs, and workspace version targets
 - deterministic pipeline and deployment-gate normalization across bounded local CI evidence and referenced lifecycle artifacts
 - approval-classified publish or promotion follow-on recommendations that remain read-only by default
 
 Not yet available:
 
-- approval-oriented promotion follow-ons beyond the current review workflows
 - publish or deploy orchestration on the default local path
 - broader host-agnostic pipeline orchestration beyond the current local review family
 
@@ -57,12 +58,9 @@ Phase 2 now builds on the current official local release and CI review family:
 - `release-readiness`
 - `pipeline-evidence-review`
 - `deployment-gate-review`
-
-Later planned variants can include:
-
 - `promotion-approval`
 
-The three current workflows are already implemented on `main`; later release-family work should extend them rather than reopening first-wedge planning.
+The four current workflows are implemented on `main`. `promotion-approval` remains source-build only until the next npm release; later release-family work should extend this bounded review family rather than reopening first-wedge planning.
 
 ## User Jobs
 
@@ -174,8 +172,8 @@ Implemented on current `main`:
 4. richer host-agnostic CI provenance and status summaries in `release-report`
 5. `pipeline-evidence-review` workflow, request schema, starter agents, and `pipeline-report` artifact
 6. `deployment-gate-review` workflow, request schema, starter agents, and `deployment-gate-report` artifact
+7. `promotion-approval` workflow, request schema, starter agents, and `promotion-approval-report` artifact on `main`
 
 Next release-family follow-ons:
 
-1. approval-oriented promotion follow-ons built on the bounded release and deployment review family
-2. approval-gated publish or promotion orchestration aligned to release-trust controls
+1. approval-gated publish or promotion orchestration aligned to release-trust controls
