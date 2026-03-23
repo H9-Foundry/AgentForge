@@ -4,6 +4,7 @@ import {
   agentManifestSchema,
   auditBundleSchema,
   benchmarkArtifactSchema,
+  benchmarkLedgerDocumentSchema,
   attestationVerificationEvidenceSchema,
   buildkiteCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
@@ -117,6 +118,7 @@ describe("schema fixtures", () => {
     expect(() => incidentArtifactSchema.parse(schemaFixtures.incidentArtifact)).not.toThrow();
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
     expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
+    expect(() => benchmarkLedgerDocumentSchema.parse(schemaFixtures.benchmarkLedgerDocument)).not.toThrow();
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
     expect(() => securityEvidenceNormalizationSchema.parse(schemaFixtures.securityEvidenceNormalization)).not.toThrow();
     expect(() => pipelineEvidenceNormalizationSchema.parse(schemaFixtures.pipelineEvidenceNormalization)).not.toThrow();
@@ -192,6 +194,7 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.pipelineArtifact).toBeDefined();
     expect(jsonSchemas.evalArtifact).toBeDefined();
     expect(jsonSchemas.benchmarkArtifact).toBeDefined();
+    expect(jsonSchemas.benchmarkLedgerDocument).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();
     expect(jsonSchemas.releaseArtifact).toBeDefined();
     expect(jsonSchemas.deploymentGateArtifact).toBeDefined();

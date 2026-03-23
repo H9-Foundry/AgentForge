@@ -9,7 +9,7 @@ import { renderGitHubHandoffSummary } from "@h9-foundry/agentforge-audit";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import type { ReleaseArtifact } from "@h9-foundry/agentforge-shared-types";
 
-import { compareLocalEvalRuns, explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
+import { compareLocalEvalRuns, explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, readBenchmarkLedger, recordBenchmarkLedgerEntry, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
 
 function createGitFixture(prefix: string, repositoryUrl = "https://github.com/H9-Foundry/fixture.git"): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -3047,6 +3047,104 @@ describe("cli smoke flows", () => {
     }>(result.jsonPath);
     expect(bundle.lifecycleArtifacts[0]?.payload?.comparedRuns?.[0]?.comparable).toBe(false);
     expect(bundle.lifecycleArtifacts[0]?.payload?.comparedRuns?.[0]?.nonComparableFindings?.[0]).toContain("Spec mismatch");
+  });
+
+  it("reads an empty benchmark ledger when no local ledger file exists", () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    const ledger = readBenchmarkLedger(root);
+
+    expect(ledger.document.entries).toHaveLength(0);
+    expect(ledger.path).toContain(".agentops/benchmark-ledger.json");
+  });
+
+  it("records and updates a benchmark ledger entry with run-prefill support", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    writeYamlFile(join(root, ".agentops", "requests", "planning.yaml"), {
+      problemStatement: "Plan the benchmark ledger tooling",
+      goals: ["Produce one planning brief"],
+      pathHints: ["packages/cli", "packages/schemas"]
+    });
+
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+
+    const created = recordBenchmarkLedgerEntry(
+      {
+        taskId: "live-benchmark-ledger-tooling",
+        arm: "agentforge",
+        source: "live",
+        taskType: "feature/refactor",
+        summary: "AgentForge added explicit benchmark-ledger schema validation before merge.",
+        decisionOutcome: "added_validation",
+        agentforgeChangedDecision: true,
+        decisionImpactReason: "Workflow review exposed the need for a validated local benchmark-ledger contract.",
+        prefillRunRef: planningRun.runId,
+        confirmedRisks: {
+          high: 0,
+          medium: 1,
+          low: 0,
+          noisy: 0,
+          unresolved: 0
+        },
+        notes: ["Used the planning run to prefill workflow and artifact evidence."]
+      },
+      root
+    );
+
+    expect(created.created).toBe(true);
+    expect(created.prefill?.runId).toBe(planningRun.runId);
+    expect(created.entry.workflow).toBe("planning-discovery");
+    expect(created.entry.workflowStatuses[0]).toEqual({
+      workflow: "planning-discovery",
+      status: "success"
+    });
+    expect(created.entry.evidence.present).toContain("planning-brief");
+
+    const updated = recordBenchmarkLedgerEntry(
+      {
+        taskId: "live-benchmark-ledger-tooling",
+        arm: "agentforge",
+        source: "live",
+        taskType: "feature/refactor",
+        runId: planningRun.runId,
+        workflow: "planning-discovery",
+        summary: "Updated adjudication after local review.",
+        decisionOutcome: "added_validation",
+        agentforgeChangedDecision: true,
+        decisionImpactReason: "The benchmark ledger tooling should stay human-adjudicated but schema-validated.",
+        confirmedRisks: {
+          high: 0,
+          medium: 1,
+          low: 0,
+          noisy: 0,
+          unresolved: 1
+        },
+        evidence: {
+          present: ["planning-brief"],
+          missing: ["benchmark-ledger.json"],
+          partial: []
+        },
+        workflowStatuses: [
+          {
+            workflow: "planning-discovery",
+            status: "success"
+          }
+        ],
+        notes: ["Updated after the implementation pass."]
+      },
+      root
+    );
+
+    expect(updated.created).toBe(false);
+    expect(updated.document.entries).toHaveLength(1);
+    expect(updated.entry.evidence.missing).toContain("benchmark-ledger.json");
+
+    const ledger = readBenchmarkLedger(root);
+    expect(ledger.document.entries).toHaveLength(1);
+    expect(ledger.document.entries[0]?.summary).toBe("Updated adjudication after local review.");
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

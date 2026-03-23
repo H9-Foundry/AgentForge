@@ -55,6 +55,15 @@ To surface adjudicated decision-impact, override, false-positive, evidence-gap, 
 
 - `.agentops/benchmark-ledger.json`
 
+The current internal CLI helpers for that ledger are:
+
+```bash
+agentforge eval benchmark-ledger --json
+agentforge eval benchmark-record <task-id> <control|agentforge> --source <replay|live> --task-type <type> --prefill-run <run-id> --json
+```
+
+These commands are intended for local dogfooding and benchmark review only. They are not part of the published npm support commitment yet.
+
 The visualizer treats this file as an internal overlay, not a product contract. The expected shape is:
 
 ```json

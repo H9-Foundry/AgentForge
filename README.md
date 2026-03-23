@@ -51,6 +51,7 @@ If you want to develop AgentForge itself, use the contributor/source-build path 
 Source-build only:
 
 - `pnpm visualizer:dev` starts a local read-only visualizer for `.agentops/runs`, including outcomes, risk, and benchmark views
+- `agentforge eval benchmark-ledger --json` and `agentforge eval benchmark-record ...` support the local dogfood benchmark ledger that powers adjudicated `/outcomes` overlays
 - see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current boundary and launch path
 
 ## What Success Looks Like

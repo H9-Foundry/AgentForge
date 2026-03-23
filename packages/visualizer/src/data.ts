@@ -1,11 +1,13 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
-import { auditBundleSchema, benchmarkArtifactSchema, lifecycleArtifactSchema } from "@h9-foundry/agentforge-schemas";
+import { auditBundleSchema, benchmarkArtifactSchema, benchmarkLedgerDocumentSchema, lifecycleArtifactSchema } from "@h9-foundry/agentforge-schemas";
 import type {
   AuditBundle,
   AuditEntry,
   BenchmarkArtifact,
+  BenchmarkLedgerDocument,
+  BenchmarkLedgerEntry,
   BlockedPlugin,
   Finding,
   LifecycleArtifact
@@ -168,54 +170,6 @@ export type DecisionOutcomeKind =
   | "remediation_before_merge"
   | "added_confidence"
   | "no_meaningful_change";
-
-export interface BenchmarkLedgerEntry {
-  taskId: string;
-  taskLink?: string;
-  source: "replay" | "live";
-  taskType: string;
-  arm: "control" | "agentforge";
-  runId?: string;
-  workflow?: string;
-  agent?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  summary?: string;
-  decisionOutcome?: DecisionOutcomeKind;
-  decisionImpactReason?: string;
-  agentforgeChangedDecision?: boolean;
-  triggerRefs: TraceReferenceView[];
-  confirmedRisks: {
-    high: number;
-    medium: number;
-    low: number;
-    noisy: number;
-    unresolved: number;
-  };
-  confirmedRiskRefs: Array<{
-    severity: "high" | "medium" | "low";
-    title: string;
-    runId?: string;
-    artifactKind?: string;
-    note?: string;
-  }>;
-  evidence: {
-    present: string[];
-    missing: string[];
-    partial: string[];
-  };
-  evidenceGapRefs: TraceReferenceView[];
-  workflowStatuses: Array<{ workflow: string; status: string }>;
-  friction: {
-    override: boolean;
-    overrideReason?: string;
-    falsePositivePatterns: string[];
-    falsePositiveRefs: TraceReferenceView[];
-    manualSteps: string[];
-    requestFriction: string[];
-  };
-  notes: string[];
-}
 
 export interface BenchmarkLedgerView {
   path: string;
@@ -447,24 +401,6 @@ function readString(value: unknown, fallback: string): string {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : [];
-}
-
-function readTraceReference(value: unknown): TraceReferenceView | undefined {
-  if (!isRecord(value) || typeof value.note !== "string" || value.note.length === 0) {
-    return undefined;
-  }
-
-  return {
-    runId: typeof value.runId === "string" ? value.runId : undefined,
-    artifactKind: typeof value.artifactKind === "string" ? value.artifactKind : undefined,
-    section: typeof value.section === "string" ? value.section : undefined,
-    findingId: typeof value.findingId === "string" ? value.findingId : undefined,
-    note: value.note
-  };
-}
-
-function readTraceReferenceArray(value: unknown): TraceReferenceView[] {
-  return Array.isArray(value) ? value.map(readTraceReference).filter((entry): entry is TraceReferenceView => !!entry) : [];
 }
 
 function readLooseArtifact(value: unknown): LooseArtifact {
@@ -1015,92 +951,6 @@ function safeParseJson(value: string): unknown | undefined {
   }
 }
 
-function readBoolean(value: unknown, fallback = false): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function toDecisionOutcomeKind(value: unknown): DecisionOutcomeKind | undefined {
-  return value === "scope_reduction" ||
-    value === "added_validation" ||
-    value === "blocked_approval" ||
-    value === "remediation_before_merge" ||
-    value === "added_confidence" ||
-    value === "no_meaningful_change"
-    ? value
-    : undefined;
-}
-
-function readBenchmarkLedgerEntry(value: unknown): BenchmarkLedgerEntry | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  return {
-    taskId: readString(value.taskId, "unknown-task"),
-    taskLink: typeof value.taskLink === "string" ? value.taskLink : undefined,
-    source: value.source === "live" ? "live" : "replay",
-    taskType: readString(value.taskType, "unspecified"),
-    arm: value.arm === "control" ? "control" : "agentforge",
-    runId: typeof value.runId === "string" ? value.runId : undefined,
-    workflow: typeof value.workflow === "string" ? value.workflow : undefined,
-    agent: typeof value.agent === "string" ? value.agent : undefined,
-    startedAt: typeof value.startedAt === "string" ? value.startedAt : undefined,
-    finishedAt: typeof value.finishedAt === "string" ? value.finishedAt : undefined,
-    summary: typeof value.summary === "string" ? value.summary : undefined,
-    decisionOutcome: toDecisionOutcomeKind(value.decisionOutcome),
-    decisionImpactReason: typeof value.decisionImpactReason === "string" ? value.decisionImpactReason : undefined,
-    agentforgeChangedDecision: typeof value.agentforgeChangedDecision === "boolean" ? value.agentforgeChangedDecision : undefined,
-    triggerRefs: readTraceReferenceArray(value.triggerRefs),
-    confirmedRisks: isRecord(value.confirmedRisks)
-      ? {
-          high: typeof value.confirmedRisks.high === "number" ? value.confirmedRisks.high : 0,
-          medium: typeof value.confirmedRisks.medium === "number" ? value.confirmedRisks.medium : 0,
-          low: typeof value.confirmedRisks.low === "number" ? value.confirmedRisks.low : 0,
-          noisy: typeof value.confirmedRisks.noisy === "number" ? value.confirmedRisks.noisy : 0,
-          unresolved: typeof value.confirmedRisks.unresolved === "number" ? value.confirmedRisks.unresolved : 0
-        }
-      : { high: 0, medium: 0, low: 0, noisy: 0, unresolved: 0 },
-    confirmedRiskRefs: Array.isArray(value.confirmedRiskRefs)
-      ? value.confirmedRiskRefs
-          .filter(isRecord)
-          .map((entry) => ({
-            severity: entry.severity === "high" || entry.severity === "medium" || entry.severity === "low" ? entry.severity : "low",
-            title: readString(entry.title, "Unnamed risk"),
-            runId: typeof entry.runId === "string" ? entry.runId : undefined,
-            artifactKind: typeof entry.artifactKind === "string" ? entry.artifactKind : undefined,
-            note: typeof entry.note === "string" ? entry.note : undefined
-          }))
-      : [],
-    evidence: isRecord(value.evidence)
-      ? {
-          present: readStringArray(value.evidence.present),
-          missing: readStringArray(value.evidence.missing),
-          partial: readStringArray(value.evidence.partial)
-        }
-      : { present: [], missing: [], partial: [] },
-    evidenceGapRefs: readTraceReferenceArray(value.evidenceGapRefs),
-    workflowStatuses: Array.isArray(value.workflowStatuses)
-      ? value.workflowStatuses
-          .filter(isRecord)
-          .map((entry) => ({
-            workflow: readString(entry.workflow, "unknown"),
-            status: readString(entry.status, "unknown")
-          }))
-      : [],
-    friction: isRecord(value.friction)
-      ? {
-          override: readBoolean(value.friction.override),
-          overrideReason: typeof value.friction.overrideReason === "string" ? value.friction.overrideReason : undefined,
-          falsePositivePatterns: readStringArray(value.friction.falsePositivePatterns),
-          falsePositiveRefs: readTraceReferenceArray(value.friction.falsePositiveRefs),
-          manualSteps: readStringArray(value.friction.manualSteps),
-          requestFriction: readStringArray(value.friction.requestFriction)
-        }
-      : { override: false, falsePositivePatterns: [], falsePositiveRefs: [], manualSteps: [], requestFriction: [] },
-    notes: readStringArray(value.notes)
-  };
-}
-
 export function loadBenchmarkLedgerView(
   workspaceRoot: string,
   configuredBenchmarkLedgerPath?: string
@@ -1119,15 +969,16 @@ export function loadBenchmarkLedgerView(
 
   try {
     const raw = safeParseJson(readFileSync(ledgerPath, "utf8"));
-    if (!isRecord(raw)) {
+    const parsed = benchmarkLedgerDocumentSchema.safeParse(raw);
+    if (!parsed.success) {
       return {
         path: toRelativeDisplayPath(workspaceRoot, ledgerPath),
         entries: [],
-        errors: ["Benchmark ledger root is not an object."]
+        errors: parsed.error.issues.map((issue) => issue.message)
       };
     }
 
-    const entries = Array.isArray(raw.entries) ? raw.entries.map(readBenchmarkLedgerEntry).filter((entry): entry is BenchmarkLedgerEntry => !!entry) : [];
+    const entries = (parsed.data as BenchmarkLedgerDocument).entries;
     return {
       path: toRelativeDisplayPath(workspaceRoot, ledgerPath),
       entries,
