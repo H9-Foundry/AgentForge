@@ -4,6 +4,8 @@ import { Command } from "commander";
 import {
   checkReleaseReadiness,
   compareLocalEvalRuns,
+  readBenchmarkLedger,
+  recordBenchmarkLedgerEntry,
   runLocalEval,
   explainLastRun,
   initProject,
@@ -13,6 +15,27 @@ import {
   startupPresetNames,
   verifyReleaseArtifacts
 } from "./index.js";
+
+function parseJsonOption<T>(value: string, label: string): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch (error) {
+    throw new Error(`Invalid ${label} JSON: ${error instanceof Error ? error.message : "unknown parse error"}`);
+  }
+}
+
+function parseBooleanOption(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`Boolean options must be 'true' or 'false', received: ${value}`);
+}
 
 const program = new Command();
 
@@ -135,6 +158,149 @@ evalCommand
     console.log(`Improvements: ${result.improvementCount}`);
     console.log(`Non-comparable differences: ${result.nonComparableCount}`);
     console.log("Next: run `agentforge explain last-run` for a compact summary of this benchmark compare.");
+  });
+
+evalCommand
+  .command("benchmark-ledger")
+  .description("Print the local benchmark-ledger document used by the outcomes visualizer.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action((options: { json?: boolean }) => {
+    const result = readBenchmarkLedger();
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(`Ledger: ${result.path}`);
+    console.log(`Entries: ${result.document.entries.length}`);
+    for (const entry of result.document.entries) {
+      console.log(`- ${entry.taskId} [${entry.arm}] ${entry.workflow ?? "unknown-workflow"}`);
+    }
+  });
+
+evalCommand
+  .command("benchmark-record")
+  .description("Create or update one local benchmark-ledger entry for dogfood adjudication.")
+  .argument("<task-id>", "Benchmark task id.")
+  .argument("<arm>", "Benchmark arm: control or agentforge.")
+  .requiredOption("--source <source>", "Benchmark source: replay or live.")
+  .requiredOption("--task-type <taskType>", "Benchmark task type, for example feature/refactor or release/deployment.")
+  .option("--task-link <taskLink>", "Optional issue, PR, or comment link for this benchmarked task.")
+  .option("--run-id <runId>", "Explicit run id to record.")
+  .option("--workflow <workflow>", "Explicit workflow name to record.")
+  .option("--agent <agent>", "Agent or model label for the benchmark entry.")
+  .option("--started-at <iso>", "Optional ISO timestamp for task start.")
+  .option("--finished-at <iso>", "Optional ISO timestamp for task end.")
+  .option("--summary <summary>", "Short human summary for the benchmarked outcome.")
+  .option("--decision-outcome <outcome>", "Decision outcome classification.")
+  .option("--changed-decision <boolean>", "Whether AgentForge changed the decision: true or false.")
+  .option("--decision-impact-reason <reason>", "Reason why the decision outcome was recorded.")
+  .option("--prefill-run <runRef>", "Prefill obvious fields from an existing local run id or bundle path.")
+  .option("--trigger-ref <json...>", "Repeatable JSON objects for trigger refs.")
+  .option("--confirmed-risks <json>", "JSON object with high, medium, low, noisy, and unresolved counts.")
+  .option("--confirmed-risk <json...>", "Repeatable JSON objects for confirmed risk refs.")
+  .option("--evidence-present <value...>", "Repeatable artifact/evidence kinds judged present.")
+  .option("--evidence-missing <value...>", "Repeatable artifact/evidence kinds judged missing.")
+  .option("--evidence-partial <value...>", "Repeatable artifact/evidence kinds judged partial.")
+  .option("--evidence-gap-ref <json...>", "Repeatable JSON objects for evidence gap refs.")
+  .option("--workflow-status <json...>", "Repeatable JSON objects with workflow and status.")
+  .option("--override <boolean>", "Whether the task overrode a blocked/partial result: true or false.")
+  .option("--override-reason <reason>", "Reason for any override.")
+  .option("--false-positive-pattern <value...>", "Repeatable false-positive pattern labels.")
+  .option("--false-positive-ref <json...>", "Repeatable JSON objects for false-positive refs.")
+  .option("--manual-step <value...>", "Repeatable manual-step notes.")
+  .option("--request-friction <value...>", "Repeatable request-friction notes.")
+  .option("--note <value...>", "Repeatable free-form notes.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action((taskId, arm, options: {
+    source: string;
+    taskType: string;
+    taskLink?: string;
+    runId?: string;
+    workflow?: string;
+    agent?: string;
+    startedAt?: string;
+    finishedAt?: string;
+    summary?: string;
+    decisionOutcome?: string;
+    changedDecision?: string;
+    decisionImpactReason?: string;
+    prefillRun?: string;
+    triggerRef?: string[];
+    confirmedRisks?: string;
+    confirmedRisk?: string[];
+    evidencePresent?: string[];
+    evidenceMissing?: string[];
+    evidencePartial?: string[];
+    evidenceGapRef?: string[];
+    workflowStatus?: string[];
+    override?: string;
+    overrideReason?: string;
+    falsePositivePattern?: string[];
+    falsePositiveRef?: string[];
+    manualStep?: string[];
+    requestFriction?: string[];
+    note?: string[];
+    json?: boolean;
+  }) => {
+    const result = recordBenchmarkLedgerEntry({
+      taskId,
+      arm: arm as "control" | "agentforge",
+      source: options.source as "replay" | "live",
+      taskType: options.taskType,
+      taskLink: options.taskLink,
+      runId: options.runId,
+      workflow: options.workflow,
+      agent: options.agent,
+      startedAt: options.startedAt,
+      finishedAt: options.finishedAt,
+      summary: options.summary,
+      decisionOutcome: options.decisionOutcome as undefined,
+      agentforgeChangedDecision: parseBooleanOption(options.changedDecision),
+      decisionImpactReason: options.decisionImpactReason,
+      prefillRunRef: options.prefillRun,
+      triggerRefs: options.triggerRef?.map((value) => parseJsonOption(value, "trigger-ref")),
+      confirmedRisks: options.confirmedRisks ? parseJsonOption(options.confirmedRisks, "confirmed-risks") : undefined,
+      confirmedRiskRefs: options.confirmedRisk?.map((value) => parseJsonOption(value, "confirmed-risk")),
+      evidence: options.evidencePresent || options.evidenceMissing || options.evidencePartial
+        ? {
+            present: options.evidencePresent ?? [],
+            missing: options.evidenceMissing ?? [],
+            partial: options.evidencePartial ?? []
+          }
+        : undefined,
+      evidenceGapRefs: options.evidenceGapRef?.map((value) => parseJsonOption(value, "evidence-gap-ref")),
+      workflowStatuses: options.workflowStatus?.map((value) => parseJsonOption(value, "workflow-status")),
+      friction:
+        options.override !== undefined ||
+        options.overrideReason !== undefined ||
+        (options.falsePositivePattern?.length ?? 0) > 0 ||
+        (options.falsePositiveRef?.length ?? 0) > 0 ||
+        (options.manualStep?.length ?? 0) > 0 ||
+        (options.requestFriction?.length ?? 0) > 0
+          ? {
+              override: parseBooleanOption(options.override),
+              overrideReason: options.overrideReason,
+              falsePositivePatterns: options.falsePositivePattern,
+              falsePositiveRefs: options.falsePositiveRef?.map((value) => parseJsonOption(value, "false-positive-ref")),
+              manualSteps: options.manualStep,
+              requestFriction: options.requestFriction
+            }
+          : undefined,
+      notes: options.note
+    });
+
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    console.log(`${result.created ? "Created" : "Updated"} benchmark ledger entry for ${result.entry.taskId} [${result.entry.arm}]`);
+    console.log(`Ledger: ${result.path}`);
+    if (result.prefill) {
+      console.log(`Prefilled from run ${result.prefill.runId} (${result.prefill.workflow}/${result.prefill.status})`);
+    }
+    console.log(`Workflow: ${result.entry.workflow ?? "unresolved"}`);
+    console.log(`Decision outcome: ${result.entry.decisionOutcome ?? "unrecorded"}`);
   });
 
 program

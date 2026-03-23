@@ -6,6 +6,11 @@ It is an operational playbook, not a shipped workflow or product guarantee.
 
 Use [#268](https://github.com/H9-Foundry/AgentForge/issues/268) as the benchmark feedback sink and scorecard log.
 
+Use the local benchmark-ledger file at `.agentops/benchmark-ledger.json` as the adjudicated machine-readable overlay for the visualizer. The current internal CLI helpers are:
+
+- `agentforge eval benchmark-ledger --json`
+- `agentforge eval benchmark-record <task-id> <control|agentforge> --source <replay|live> --task-type <type> ...`
+
 ## Goal
 
 Measure whether AgentForge improves the same agent's SDLC behavior on this repository when compared with that agent's normal default workflow.
@@ -161,6 +166,8 @@ Each benchmarked task should add one comment to [#268](https://github.com/H9-Fou
 - confirmed findings
 - friction or false positives
 - override note if applicable
+
+The GitHub comment remains the human source of truth for the benchmark narrative. The ledger exists to make those adjudications visible in the local `/outcomes` visualizer without scraping issue comments.
 - keep / tighten / simplify / deprioritize recommendation
 
 After every three benchmarked tasks, summarize:

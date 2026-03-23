@@ -38,6 +38,15 @@ import {
   benchmarkArtifactSchema,
   benchmarkComparedRunSchema,
   benchmarkDeterministicDeltaSchema,
+  benchmarkDecisionOutcomeSchema,
+  benchmarkLedgerArmSchema,
+  benchmarkLedgerConfirmedRiskReferenceSchema,
+  benchmarkLedgerDocumentSchema,
+  benchmarkLedgerEntrySchema,
+  benchmarkLedgerFrictionSchema,
+  benchmarkLedgerSourceSchema,
+  benchmarkLedgerTraceReferenceSchema,
+  benchmarkLedgerWorkflowStatusSchema,
   buildkiteCiEvidenceExportSchema,
   jenkinsCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
@@ -185,10 +194,19 @@ export type EvalPolicyExpectation = Infer<typeof evalPolicyExpectationSchema>;
 export type EvalRedactionExpectation = Infer<typeof evalRedactionExpectationSchema>;
 export type EvalSpec = Infer<typeof evalSpecSchema>;
 export type EvalFixtureCorpus = Infer<typeof evalFixtureCorpusSchema>;
+export type BenchmarkDecisionOutcome = Infer<typeof benchmarkDecisionOutcomeSchema>;
+export type BenchmarkLedgerSource = Infer<typeof benchmarkLedgerSourceSchema>;
+export type BenchmarkLedgerArm = Infer<typeof benchmarkLedgerArmSchema>;
 export type BenchmarkDeterministicDelta = Infer<typeof benchmarkDeterministicDeltaSchema>;
 export type BenchmarkComparedRun = Infer<typeof benchmarkComparedRunSchema>;
 export type BenchmarkArtifactPayload = Infer<typeof benchmarkArtifactPayloadSchema>;
 export type BenchmarkArtifact = Infer<typeof benchmarkArtifactSchema>;
+export type BenchmarkLedgerTraceReference = Infer<typeof benchmarkLedgerTraceReferenceSchema>;
+export type BenchmarkLedgerConfirmedRiskReference = Infer<typeof benchmarkLedgerConfirmedRiskReferenceSchema>;
+export type BenchmarkLedgerWorkflowStatus = Infer<typeof benchmarkLedgerWorkflowStatusSchema>;
+export type BenchmarkLedgerFriction = Infer<typeof benchmarkLedgerFrictionSchema>;
+export type BenchmarkLedgerEntry = Infer<typeof benchmarkLedgerEntrySchema>;
+export type BenchmarkLedgerDocument = Infer<typeof benchmarkLedgerDocumentSchema>;
 export type ImplementationArtifactPayload = Infer<typeof implementationArtifactPayloadSchema>;
 export type ImplementationArtifact = Infer<typeof implementationArtifactSchema>;
 export type ImplementationInventory = Infer<typeof implementationInventorySchema>;

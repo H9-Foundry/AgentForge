@@ -1348,6 +1348,16 @@ export const evalArtifactPayloadSchema = z.object({
 });
 
 export const benchmarkComparisonClassificationSchema = z.enum(["regression", "improvement", "unchanged", "non_comparable"]);
+export const benchmarkDecisionOutcomeSchema = z.enum([
+  "scope_reduction",
+  "added_validation",
+  "blocked_approval",
+  "remediation_before_merge",
+  "added_confidence",
+  "no_meaningful_change"
+]);
+export const benchmarkLedgerSourceSchema = z.enum(["replay", "live"]);
+export const benchmarkLedgerArmSchema = z.enum(["control", "agentforge"]);
 
 export const benchmarkDeterministicDeltaSchema = z.object({
   name: z.string().min(1),
@@ -1383,6 +1393,82 @@ export const benchmarkArtifactPayloadSchema = z.object({
   unchangedCount: z.number().int().nonnegative(),
   nonComparableCount: z.number().int().nonnegative(),
   summaryConclusion: z.string().min(1)
+});
+
+export const benchmarkLedgerTraceReferenceSchema = z.object({
+  runId: z.string().min(1).optional(),
+  artifactKind: z.string().min(1).optional(),
+  section: z.string().min(1).optional(),
+  findingId: z.string().min(1).optional(),
+  note: z.string().min(1)
+});
+
+export const benchmarkLedgerConfirmedRiskReferenceSchema = z.object({
+  severity: z.enum(["high", "medium", "low"]),
+  title: z.string().min(1),
+  runId: z.string().min(1).optional(),
+  artifactKind: z.string().min(1).optional(),
+  note: z.string().min(1).optional()
+});
+
+export const benchmarkLedgerWorkflowStatusSchema = z.object({
+  workflow: z.string().min(1),
+  status: z.string().min(1)
+});
+
+export const benchmarkLedgerFrictionSchema = z.object({
+  override: z.boolean().default(false),
+  overrideReason: z.string().min(1).optional(),
+  falsePositivePatterns: z.array(z.string().min(1)).default([]),
+  falsePositiveRefs: z.array(benchmarkLedgerTraceReferenceSchema).default([]),
+  manualSteps: z.array(z.string().min(1)).default([]),
+  requestFriction: z.array(z.string().min(1)).default([])
+});
+
+export const benchmarkLedgerEntrySchema = z.object({
+  taskId: z.string().min(1),
+  taskLink: z.string().min(1).optional(),
+  source: benchmarkLedgerSourceSchema,
+  taskType: z.string().min(1),
+  arm: benchmarkLedgerArmSchema,
+  runId: z.string().min(1).optional(),
+  workflow: z.string().min(1).optional(),
+  agent: z.string().min(1).optional(),
+  startedAt: z.string().datetime().optional(),
+  finishedAt: z.string().datetime().optional(),
+  summary: z.string().min(1).optional(),
+  decisionOutcome: benchmarkDecisionOutcomeSchema.optional(),
+  decisionImpactReason: z.string().min(1).optional(),
+  agentforgeChangedDecision: z.boolean().optional(),
+  triggerRefs: z.array(benchmarkLedgerTraceReferenceSchema).default([]),
+  confirmedRisks: z.object({
+    high: z.number().int().nonnegative().default(0),
+    medium: z.number().int().nonnegative().default(0),
+    low: z.number().int().nonnegative().default(0),
+    noisy: z.number().int().nonnegative().default(0),
+    unresolved: z.number().int().nonnegative().default(0)
+  }),
+  confirmedRiskRefs: z.array(benchmarkLedgerConfirmedRiskReferenceSchema).default([]),
+  evidence: z.object({
+    present: z.array(z.string().min(1)).default([]),
+    missing: z.array(z.string().min(1)).default([]),
+    partial: z.array(z.string().min(1)).default([])
+  }),
+  evidenceGapRefs: z.array(benchmarkLedgerTraceReferenceSchema).default([]),
+  workflowStatuses: z.array(benchmarkLedgerWorkflowStatusSchema).default([]),
+  friction: benchmarkLedgerFrictionSchema.default({
+    override: false,
+    falsePositivePatterns: [],
+    falsePositiveRefs: [],
+    manualSteps: [],
+    requestFriction: []
+  }),
+  notes: z.array(z.string().min(1)).default([])
+});
+
+export const benchmarkLedgerDocumentSchema = z.object({
+  schemaVersion: z.string().min(1).default("1.0.0"),
+  entries: z.array(benchmarkLedgerEntrySchema).default([])
 });
 
 export const planningArtifactSchema = lifecycleArtifactEnvelopeSchema.extend({
@@ -1561,9 +1647,18 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   evalModelDependentCheck: evalModelDependentCheckSchema,
   evalSetupRun: evalSetupRunSchema,
   evalArtifactPayload: evalArtifactPayloadSchema,
+  benchmarkDecisionOutcome: benchmarkDecisionOutcomeSchema,
+  benchmarkLedgerSource: benchmarkLedgerSourceSchema,
+  benchmarkLedgerArm: benchmarkLedgerArmSchema,
   benchmarkDeterministicDelta: benchmarkDeterministicDeltaSchema,
   benchmarkComparedRun: benchmarkComparedRunSchema,
   benchmarkArtifactPayload: benchmarkArtifactPayloadSchema,
+  benchmarkLedgerTraceReference: benchmarkLedgerTraceReferenceSchema,
+  benchmarkLedgerConfirmedRiskReference: benchmarkLedgerConfirmedRiskReferenceSchema,
+  benchmarkLedgerWorkflowStatus: benchmarkLedgerWorkflowStatusSchema,
+  benchmarkLedgerFriction: benchmarkLedgerFrictionSchema,
+  benchmarkLedgerEntry: benchmarkLedgerEntrySchema,
+  benchmarkLedgerDocument: benchmarkLedgerDocumentSchema,
   reviewArtifactPayload: reviewArtifactPayloadSchema,
   releaseVerificationCheck: releaseVerificationCheckSchema,
   releaseVersionTarget: releaseVersionTargetSchema,
@@ -2262,6 +2357,78 @@ const benchmarkArtifactFixture = {
     nonComparableCount: 0,
     summaryConclusion: "Detected 1 deterministic regression compared with the baseline eval result."
   }
+} as const;
+
+const benchmarkLedgerDocumentFixture = {
+  schemaVersion: "1.0.0",
+  entries: [
+    {
+      taskId: "task-1",
+      taskLink: "https://github.com/H9-Foundry/AgentForge/issues/268#issuecomment-example",
+      source: "live",
+      taskType: "release/deployment",
+      arm: "agentforge",
+      runId: "1774182026977-5f74df",
+      workflow: "planning-discovery",
+      agent: "codex",
+      startedAt: "2026-03-23T10:00:00.000Z",
+      finishedAt: "2026-03-23T10:05:00.000Z",
+      summary: "AgentForge forced a release-evidence follow-up before merge.",
+      decisionOutcome: "added_validation",
+      decisionImpactReason: "Derived from missing release evidence and required verification checks.",
+      agentforgeChangedDecision: true,
+      triggerRefs: [
+        {
+          runId: "1774182026977-5f74df",
+          artifactKind: "release-report",
+          section: "required-verification",
+          note: "Release report still had missing CI evidence."
+        }
+      ],
+      confirmedRisks: {
+        high: 0,
+        medium: 1,
+        low: 0,
+        noisy: 0,
+        unresolved: 1
+      },
+      confirmedRiskRefs: [
+        {
+          severity: "medium",
+          title: "Missing CI evidence before release decision",
+          runId: "1774182026977-5f74df",
+          artifactKind: "release-report"
+        }
+      ],
+      evidence: {
+        present: ["qa-report"],
+        missing: ["release-report"],
+        partial: ["ci-evidence"]
+      },
+      evidenceGapRefs: [
+        {
+          runId: "1774182026977-5f74df",
+          artifactKind: "release-report",
+          section: "evidence",
+          note: "CI evidence was only partial."
+        }
+      ],
+      workflowStatuses: [
+        {
+          workflow: "planning-discovery",
+          status: "success"
+        }
+      ],
+      friction: {
+        override: false,
+        falsePositivePatterns: [],
+        falsePositiveRefs: [],
+        manualSteps: [],
+        requestFriction: []
+      },
+      notes: ["AgentForge forced an extra validation pass before merge."]
+    }
+  ]
 } as const;
 
 const invalidLifecycleArtifactEnvelopeFixture = {
@@ -3717,6 +3884,7 @@ export const schemaFixtures = {
   securityArtifact: securityArtifactFixture,
   evalArtifact: evalArtifactFixture,
   benchmarkArtifact: benchmarkArtifactFixture,
+  benchmarkLedgerDocument: benchmarkLedgerDocumentFixture,
   reviewArtifact: reviewArtifactFixture,
   releaseArtifact: releaseArtifactFixture,
   deploymentGateArtifact: deploymentGateArtifactFixture,

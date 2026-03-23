@@ -12,6 +12,8 @@ import {
   agentforgeConfigSchema,
   auditBundleSchema,
   benchmarkArtifactSchema,
+  benchmarkLedgerDocumentSchema,
+  benchmarkLedgerEntrySchema,
   designArtifactSchema,
   designRequestSchema,
   deploymentRequestSchema,
@@ -26,6 +28,7 @@ import {
   promotionRequestSchema,
   qaRequestSchema,
   releaseRequestSchema,
+  schemaVersion,
   schemaFixtures,
   securityRequestSchema,
   workflowDefinitionSchema
@@ -35,6 +38,12 @@ import type {
   AgentPluginRegistration,
   BenchmarkComparedRun,
   BenchmarkDeterministicDelta,
+  BenchmarkDecisionOutcome,
+  BenchmarkLedgerArm,
+  BenchmarkLedgerDocument,
+  BenchmarkLedgerEntry,
+  BenchmarkLedgerTraceReference,
+  BenchmarkLedgerWorkflowStatus,
   BlockedPlugin,
   DesignArtifact,
   DesignRequest,
@@ -1756,6 +1765,55 @@ export interface LastRunExplanation {
   artifactKinds: string[];
 }
 
+export interface BenchmarkLedgerResult {
+  path: string;
+  document: BenchmarkLedgerDocument;
+}
+
+export interface BenchmarkLedgerPrefill {
+  runId: string;
+  workflow: string;
+  status: string;
+  artifactKinds: string[];
+  entry: Partial<BenchmarkLedgerEntry>;
+}
+
+export interface BenchmarkLedgerRecordInput {
+  taskId: string;
+  arm: BenchmarkLedgerArm;
+  source: BenchmarkLedgerDocument["entries"][number]["source"];
+  taskType: string;
+  taskLink?: string;
+  runId?: string;
+  workflow?: string;
+  agent?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  summary?: string;
+  decisionOutcome?: BenchmarkDecisionOutcome;
+  agentforgeChangedDecision?: boolean;
+  decisionImpactReason?: string;
+  triggerRefs?: BenchmarkLedgerTraceReference[];
+  confirmedRisks?: BenchmarkLedgerEntry["confirmedRisks"];
+  confirmedRiskRefs?: BenchmarkLedgerEntry["confirmedRiskRefs"];
+  evidence?: BenchmarkLedgerEntry["evidence"];
+  evidenceGapRefs?: BenchmarkLedgerTraceReference[];
+  workflowStatuses?: BenchmarkLedgerWorkflowStatus[];
+  friction?: Partial<BenchmarkLedgerEntry["friction"]>;
+  notes?: string[];
+  prefillRunRef?: string;
+}
+
+export interface BenchmarkLedgerRecordResult extends BenchmarkLedgerResult {
+  created: boolean;
+  prefill?: BenchmarkLedgerPrefill;
+  entry: BenchmarkLedgerEntry;
+}
+
+function resolveBenchmarkLedgerPath(root: string): string {
+  return join(root, ".agentops", "benchmark-ledger.json");
+}
+
 function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle: Record<string, unknown> } | undefined {
   if (!existsSync(runsRoot)) {
     return undefined;
@@ -1851,6 +1909,66 @@ function readRunBundleByRef(root: string, runRef: string): { runId: string; bund
     runId: typeof bundle.runId === "string" ? bundle.runId : runRef,
     bundlePath,
     bundle
+  };
+}
+
+function readBenchmarkLedgerDocument(root: string): BenchmarkLedgerResult {
+  const ledgerPath = resolveBenchmarkLedgerPath(root);
+  if (!existsSync(ledgerPath)) {
+    return {
+      path: ledgerPath,
+      document: benchmarkLedgerDocumentSchema.parse({
+        schemaVersion,
+        entries: []
+      })
+    };
+  }
+
+  return {
+    path: ledgerPath,
+    document: benchmarkLedgerDocumentSchema.parse(JSON.parse(readFileSync(ledgerPath, "utf8")) as unknown)
+  };
+}
+
+function writeBenchmarkLedgerDocument(root: string, document: BenchmarkLedgerDocument): string {
+  const ledgerPath = resolveBenchmarkLedgerPath(root);
+  mkdirSync(join(root, ".agentops"), { recursive: true });
+  writeFileSync(ledgerPath, JSON.stringify(benchmarkLedgerDocumentSchema.parse(document), null, 2), "utf8");
+  return ledgerPath;
+}
+
+function buildBenchmarkLedgerPrefill(root: string, runRef: string): BenchmarkLedgerPrefill {
+  const { runId, bundle } = readRunBundleByRef(root, runRef);
+  const artifactKinds = bundle.lifecycleArtifacts
+    .map((artifact) => artifact.artifactKind)
+    .filter((artifactKind): artifactKind is NonNullable<typeof artifactKind> => typeof artifactKind === "string" && artifactKind.length > 0);
+
+  return {
+    runId,
+    workflow: bundle.workflow,
+    status: bundle.status,
+    artifactKinds,
+    entry: {
+      runId,
+      workflow: bundle.workflow,
+      workflowStatuses: [
+        {
+          workflow: bundle.workflow,
+          status: bundle.status
+        }
+      ],
+      evidence: {
+        present: artifactKinds,
+        missing: [],
+        partial: []
+      },
+      triggerRefs: [
+        {
+          runId,
+          note: `Prefilled from local run bundle ${runId}.`
+        }
+      ]
+    }
   };
 }
 
@@ -3141,6 +3259,74 @@ export function explainLastRun(cwd = process.cwd()): LastRunExplanation {
     artifactKinds: lifecycleArtifacts
       .map((artifact) => (isRecord(artifact) && typeof artifact.artifactKind === "string" ? artifact.artifactKind : undefined))
       .filter((artifactKind): artifactKind is string => Boolean(artifactKind))
+  };
+}
+
+export function readBenchmarkLedger(cwd = process.cwd()): BenchmarkLedgerResult {
+  const root = findWorkspaceRoot(cwd);
+  return readBenchmarkLedgerDocument(root);
+}
+
+export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cwd = process.cwd()): BenchmarkLedgerRecordResult {
+  const root = findWorkspaceRoot(cwd);
+  const existing = readBenchmarkLedgerDocument(root);
+  const prefill = input.prefillRunRef ? buildBenchmarkLedgerPrefill(root, input.prefillRunRef) : undefined;
+
+  const mergedEntry = benchmarkLedgerEntrySchema.parse({
+    taskId: input.taskId,
+    taskLink: input.taskLink,
+    source: input.source,
+    taskType: input.taskType,
+    arm: input.arm,
+    runId: input.runId ?? prefill?.entry.runId,
+    workflow: input.workflow ?? prefill?.entry.workflow,
+    agent: input.agent,
+    startedAt: input.startedAt,
+    finishedAt: input.finishedAt,
+    summary: input.summary,
+    decisionOutcome: input.decisionOutcome,
+    decisionImpactReason: input.decisionImpactReason,
+    agentforgeChangedDecision: input.agentforgeChangedDecision,
+    triggerRefs: input.triggerRefs ?? prefill?.entry.triggerRefs ?? [],
+    confirmedRisks: input.confirmedRisks ?? {
+      high: 0,
+      medium: 0,
+      low: 0,
+      noisy: 0,
+      unresolved: 0
+    },
+    confirmedRiskRefs: input.confirmedRiskRefs ?? [],
+    evidence: input.evidence ?? prefill?.entry.evidence ?? { present: [], missing: [], partial: [] },
+    evidenceGapRefs: input.evidenceGapRefs ?? [],
+    workflowStatuses: input.workflowStatuses ?? prefill?.entry.workflowStatuses ?? [],
+    friction: {
+      override: input.friction?.override ?? false,
+      overrideReason: input.friction?.overrideReason,
+      falsePositivePatterns: input.friction?.falsePositivePatterns ?? [],
+      falsePositiveRefs: input.friction?.falsePositiveRefs ?? [],
+      manualSteps: input.friction?.manualSteps ?? [],
+      requestFriction: input.friction?.requestFriction ?? []
+    },
+    notes: input.notes ?? []
+  });
+
+  const existingIndex = existing.document.entries.findIndex((entry) => entry.taskId === mergedEntry.taskId && entry.arm === mergedEntry.arm);
+  const created = existingIndex === -1;
+  const nextEntries = created
+    ? [...existing.document.entries, mergedEntry]
+    : existing.document.entries.map((entry, index) => (index === existingIndex ? mergedEntry : entry));
+  const nextDocument = benchmarkLedgerDocumentSchema.parse({
+    schemaVersion: existing.document.schemaVersion,
+    entries: nextEntries
+  });
+  const path = writeBenchmarkLedgerDocument(root, nextDocument);
+
+  return {
+    path,
+    document: nextDocument,
+    created,
+    prefill,
+    entry: mergedEntry
   };
 }
 

@@ -4,7 +4,11 @@ import type {
   BenchmarkArtifact,
   BenchmarkArtifactPayload,
   BenchmarkComparedRun,
+  BenchmarkDecisionOutcome,
   BenchmarkDeterministicDelta,
+  BenchmarkLedgerDocument,
+  BenchmarkLedgerEntry,
+  BenchmarkLedgerFriction,
   DesignArtifact,
   DesignArtifactOption,
   DesignRequest,
@@ -110,6 +114,17 @@ describe("shared lifecycle artifact types", () => {
     expectTypeOf<BenchmarkDeterministicDelta["classification"]>().toEqualTypeOf<
       "regression" | "improvement" | "unchanged" | "non_comparable"
     >();
+    expectTypeOf<BenchmarkDecisionOutcome>().toEqualTypeOf<
+      | "scope_reduction"
+      | "added_validation"
+      | "blocked_approval"
+      | "remediation_before_merge"
+      | "added_confidence"
+      | "no_meaningful_change"
+    >();
+    expectTypeOf<BenchmarkLedgerEntry["taskId"]>().toEqualTypeOf<string>();
+    expectTypeOf<BenchmarkLedgerEntry["friction"]>().toEqualTypeOf<BenchmarkLedgerFriction>();
+    expectTypeOf<BenchmarkLedgerDocument["entries"]>().toEqualTypeOf<BenchmarkLedgerEntry[]>();
     expectTypeOf<ImplementationRequest["designRecordRef"]>().toEqualTypeOf<string>();
     expectTypeOf<ImplementationRequest["approvalMode"]>().toEqualTypeOf<"proposal-only" | "apply-capable">();
     expectTypeOf<IncidentRequest["incidentSummary"]>().toEqualTypeOf<string>();

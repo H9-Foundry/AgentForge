@@ -565,12 +565,12 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
     </section>
     <section class="panel" id="decision-impact">
       <h2>Decision Outcomes</h2>
-      <p class="muted">Did AgentForge change the plan, add validation, or simply confirm the current path?</p>
+      <p class="muted">Did AgentForge change the plan, add validation, or simply confirm the current path? Release-domain chains are counted once at their most downstream blocked or decisive stage in the summary cards below.</p>
       ${renderOutcomeSummaryCards(view.summaries.decision)}
       <div class="metrics">
         ${metricCard("Scope reduction", view.decisionImpact.scopeReductionCount)}
         ${metricCard("Added validation", view.decisionImpact.addedValidationCount)}
-        ${metricCard("Blocked approval", view.decisionImpact.blockedApprovalCount)}
+        ${metricCard("Blocked approval chains", view.decisionImpact.blockedApprovalCount)}
         ${metricCard("Remediation", view.decisionImpact.remediationCount)}
         ${metricCard("Added confidence", view.decisionImpact.addedConfidenceCount)}
         ${metricCard("No meaningful change", view.decisionImpact.noMeaningfulChangeCount)}
@@ -579,13 +579,13 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
     </section>
     <section class="panel" id="risk">
       <h2>Risk And Gates</h2>
-      <p class="muted">Confirmed medium/high values come from the optional local ledger. Gate blocks and unresolved risks still render from local artifacts when no ledger exists.</p>
+      <p class="muted">Confirmed medium/high values come from the optional local ledger. Release-chain gate blocks are deduped to one most-downstream representative in the summary cards, while practitioner rows still show each stage run.</p>
       ${renderOutcomeSummaryCards(view.summaries.risk)}
       <div class="metrics">
         ${metricCard("Confirmed high", view.risk.confirmedHighCount)}
         ${metricCard("Confirmed medium", view.risk.confirmedMediumCount)}
         ${metricCard("Noisy findings", view.risk.noisyFindingCount)}
-        ${metricCard("Blocked approvals prevented", view.risk.blockedApprovalPreventedCount)}
+        ${metricCard("Blocked approval chains prevented", view.risk.blockedApprovalPreventedCount)}
         ${metricCard("Unresolved risks", view.risk.unresolvedRiskCount)}
       </div>
       ${renderOutcomeDetailTable(view.details.risk, "No risk rows match the current filters.")}
