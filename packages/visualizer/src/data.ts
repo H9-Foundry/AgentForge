@@ -54,6 +54,11 @@ export interface RunListItemView {
   summaryPath: string;
   hasBenchmarkSummary: boolean;
   invalidArtifactCount: number;
+  decisionImpactKind?: DecisionOutcomeKind;
+  riskKinds: string[];
+  evidenceStatuses: Array<{ category: string; status: "present" | "missing" | "partial" }>;
+  workflowStage?: string;
+  hasOverride: boolean;
 }
 
 export interface InvalidRunView {
@@ -83,6 +88,21 @@ export interface ArtifactPanelView {
   rawPayload: string;
   isKnownArtifact: boolean;
   parseError?: string;
+}
+
+export interface TraceReferenceView {
+  runId?: string;
+  artifactKind?: string;
+  section?: string;
+  findingId?: string;
+  note: string;
+}
+
+export interface DerivedReasonView {
+  source: "ledger" | "inferred" | "run-findings" | "artifact-blockers";
+  rule: string;
+  fields: string[];
+  summary: string;
 }
 
 export interface RunDetailView extends RunListItemView {
@@ -160,8 +180,11 @@ export interface BenchmarkLedgerEntry {
   agent?: string;
   startedAt?: string;
   finishedAt?: string;
+  summary?: string;
   decisionOutcome?: DecisionOutcomeKind;
+  decisionImpactReason?: string;
   agentforgeChangedDecision?: boolean;
+  triggerRefs: TraceReferenceView[];
   confirmedRisks: {
     high: number;
     medium: number;
@@ -169,15 +192,25 @@ export interface BenchmarkLedgerEntry {
     noisy: number;
     unresolved: number;
   };
+  confirmedRiskRefs: Array<{
+    severity: "high" | "medium" | "low";
+    title: string;
+    runId?: string;
+    artifactKind?: string;
+    note?: string;
+  }>;
   evidence: {
     present: string[];
     missing: string[];
     partial: string[];
   };
+  evidenceGapRefs: TraceReferenceView[];
+  workflowStatuses: Array<{ workflow: string; status: string }>;
   friction: {
     override: boolean;
     overrideReason?: string;
     falsePositivePatterns: string[];
+    falsePositiveRefs: TraceReferenceView[];
     manualSteps: string[];
     requestFriction: string[];
   };
@@ -195,6 +228,9 @@ export interface DecisionImpactView {
   changedDecision: boolean;
   source: "ledger" | "inferred";
   summary: string;
+  reason: DerivedReasonView;
+  traceRefs: TraceReferenceView[];
+  benchmarkTaskId?: string;
 }
 
 export interface RiskSummaryView {
@@ -206,6 +242,8 @@ export interface RiskSummaryView {
   blockedApprovalPrevented: boolean;
   blockerCount: number;
   summary: string[];
+  reason: DerivedReasonView;
+  traceRefs: TraceReferenceView[];
 }
 
 export interface EvidenceCategoryView {
@@ -213,6 +251,8 @@ export interface EvidenceCategoryView {
   label: string;
   status: "present" | "missing" | "partial";
   detail: string;
+  reason: DerivedReasonView;
+  traceRefs: TraceReferenceView[];
 }
 
 export interface EvidenceCompletenessView {
@@ -225,11 +265,34 @@ export interface WorkflowChainStageView {
   label: string;
   status: "present" | "missing" | "current";
   detail: string;
+  reason: DerivedReasonView;
+  required: boolean;
+  traceRefs: TraceReferenceView[];
 }
 
 export interface WorkflowChainView {
   currentStage: string;
   stages: WorkflowChainStageView[];
+}
+
+export interface OutcomeSummaryView {
+  label: string;
+  value: number;
+  detail: string;
+  href: string;
+}
+
+export interface OutcomeDetailRowView {
+  id: string;
+  workflow: string;
+  runId: string;
+  status: string;
+  title: string;
+  summary: string;
+  source: string;
+  detailHref: string;
+  runsHref: string;
+  traceRefs: TraceReferenceView[];
 }
 
 export interface DecisionImpactSummaryView {
@@ -286,7 +349,7 @@ export interface WorkflowChainSummaryView {
   missingUpstreamEvidenceCount: number;
 }
 
-export interface ValueDashboardView {
+export interface OutcomesDashboardView {
   ledger: BenchmarkLedgerView;
   decisionImpact: DecisionImpactSummaryView;
   risk: RiskDashboardView;
@@ -294,13 +357,47 @@ export interface ValueDashboardView {
   friction: FrictionDashboardView;
   workflowChains: WorkflowChainSummaryView[];
   runCount: number;
+  filteredPanel?: string;
+  filters: OutcomesFilters;
+  summaries: {
+    decision: OutcomeSummaryView[];
+    risk: OutcomeSummaryView[];
+    evidence: OutcomeSummaryView[];
+    friction: OutcomeSummaryView[];
+    workflowChain: OutcomeSummaryView[];
+  };
+  details: {
+    decision: OutcomeDetailRowView[];
+    risk: OutcomeDetailRowView[];
+    evidence: OutcomeDetailRowView[];
+    friction: OutcomeDetailRowView[];
+    workflowChain: OutcomeDetailRowView[];
+  };
 }
+
+export type ValueDashboardView = OutcomesDashboardView;
 
 export interface RunFilters {
   workflow?: string;
   status?: string;
   artifactKind?: string;
   search?: string;
+  decisionImpact?: DecisionOutcomeKind;
+  riskKind?: string;
+  evidenceCategory?: string;
+  evidenceStatus?: "present" | "missing" | "partial";
+  hasOverride?: "true" | "false";
+  workflowStage?: string;
+}
+
+export interface OutcomesFilters {
+  panel?: "decision-impact" | "risk" | "evidence" | "friction" | "flow";
+  decision?: "changed" | DecisionOutcomeKind;
+  risk?: string;
+  workflow?: string;
+  evidenceCategory?: string;
+  evidenceStatus?: "present" | "missing" | "partial";
+  stage?: string;
 }
 
 interface LoadedRun {
@@ -350,6 +447,24 @@ function readString(value: unknown, fallback: string): string {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : [];
+}
+
+function readTraceReference(value: unknown): TraceReferenceView | undefined {
+  if (!isRecord(value) || typeof value.note !== "string" || value.note.length === 0) {
+    return undefined;
+  }
+
+  return {
+    runId: typeof value.runId === "string" ? value.runId : undefined,
+    artifactKind: typeof value.artifactKind === "string" ? value.artifactKind : undefined,
+    section: typeof value.section === "string" ? value.section : undefined,
+    findingId: typeof value.findingId === "string" ? value.findingId : undefined,
+    note: value.note
+  };
+}
+
+function readTraceReferenceArray(value: unknown): TraceReferenceView[] {
+  return Array.isArray(value) ? value.map(readTraceReference).filter((entry): entry is TraceReferenceView => !!entry) : [];
 }
 
 function readLooseArtifact(value: unknown): LooseArtifact {
@@ -637,13 +752,12 @@ function sortRunsNewestFirst(left: LoadedRun, right: LoadedRun): number {
   return right.runId.localeCompare(left.runId);
 }
 
-function toRunListItemView(run: LoadedRun): RunListItemView {
+function toRunListItemView(run: LoadedRun, ledgerEntries: readonly BenchmarkLedgerEntry[] = []): RunListItemView {
   const entries = run.bundle?.entries ?? [];
   const findings = run.bundle?.findings ?? [];
   const blockedPlugins = run.bundle?.blockedPlugins ?? [];
   const artifactKinds = run.artifactViews.map((artifact) => artifact.artifactKind);
-
-  return {
+  const base: RunListItemView = {
     runId: run.runId,
     workflow: run.rawBundle.workflow,
     startedAt: run.rawBundle.startedAt,
@@ -656,7 +770,26 @@ function toRunListItemView(run: LoadedRun): RunListItemView {
     bundlePath: run.bundlePath,
     summaryPath: run.summaryPath,
     hasBenchmarkSummary: artifactKinds.includes("benchmark-summary"),
-    invalidArtifactCount: run.invalidArtifactCount
+    invalidArtifactCount: run.invalidArtifactCount,
+    riskKinds: [],
+    evidenceStatuses: [],
+    hasOverride: false
+  };
+  const decisionImpact = inferDecisionImpact(base, findings, run.artifactViews, ledgerEntries);
+  const evidenceCompleteness = buildEvidenceCompleteness(base.workflow, run.artifactViews);
+  const workflowChain = buildWorkflowChain(base.workflow, run.artifactViews);
+  const ledgerEntry = findLedgerEntry(base, ledgerEntries);
+  const riskKinds = deriveRiskKinds(findings, run.artifactViews, ledgerEntry);
+
+  return {
+    ...base,
+    decisionImpactKind: decisionImpact.kind,
+    riskKinds,
+    evidenceStatuses: evidenceCompleteness.flatMap((artifact) =>
+      artifact.categories.map((category) => ({ category: category.key, status: category.status }))
+    ),
+    workflowStage: workflowChain.currentStage,
+    hasOverride: ledgerEntry?.friction.override ?? false
   };
 }
 
@@ -673,6 +806,31 @@ function matchesFilters(run: RunListItemView, filters: RunFilters): boolean {
   if (filters.search && !run.runId.toLowerCase().includes(filters.search.toLowerCase())) {
     return false;
   }
+  if (filters.decisionImpact && run.decisionImpactKind !== filters.decisionImpact) {
+    return false;
+  }
+  if (filters.riskKind && !run.riskKinds.includes(filters.riskKind)) {
+    return false;
+  }
+  if (
+    filters.evidenceCategory &&
+    !run.evidenceStatuses.some(
+      (entry) =>
+        entry.category === filters.evidenceCategory &&
+        (!filters.evidenceStatus || entry.status === filters.evidenceStatus)
+    )
+  ) {
+    return false;
+  }
+  if (filters.evidenceStatus && !filters.evidenceCategory && !run.evidenceStatuses.some((entry) => entry.status === filters.evidenceStatus)) {
+    return false;
+  }
+  if (filters.hasOverride && String(run.hasOverride) !== filters.hasOverride) {
+    return false;
+  }
+  if (filters.workflowStage && run.workflowStage !== filters.workflowStage) {
+    return false;
+  }
   return true;
 }
 
@@ -680,7 +838,12 @@ export function resolveRunsRoot(workspaceRoot: string, configuredRunsRoot?: stri
   return resolve(workspaceRoot, configuredRunsRoot ?? ".agentops/runs");
 }
 
-export function loadRunsIndexView(workspaceRoot: string, runsRoot = resolveRunsRoot(workspaceRoot), filters: RunFilters = {}): RunsIndexView {
+export function loadRunsIndexView(
+  workspaceRoot: string,
+  runsRoot = resolveRunsRoot(workspaceRoot),
+  filters: RunFilters = {},
+  benchmarkLedgerPath?: string
+): RunsIndexView {
   try {
     statSync(runsRoot);
   } catch {
@@ -701,10 +864,11 @@ export function loadRunsIndexView(workspaceRoot: string, runsRoot = resolveRunsR
 
   const loaded = entries.map((entry) => loadRun(workspaceRoot, runsRoot, entry));
   const invalidRuns = loaded.filter((entry): entry is InvalidRunView => "error" in entry);
+  const ledgerEntries = loadBenchmarkLedgerView(workspaceRoot, benchmarkLedgerPath).entries;
   const runs = loaded
     .filter((entry): entry is LoadedRun => !("error" in entry))
     .sort(sortRunsNewestFirst)
-    .map(toRunListItemView)
+    .map((run) => toRunListItemView(run, ledgerEntries))
     .filter((run) => matchesFilters(run, filters));
 
   return { runs, invalidRuns };
@@ -882,8 +1046,11 @@ function readBenchmarkLedgerEntry(value: unknown): BenchmarkLedgerEntry | undefi
     agent: typeof value.agent === "string" ? value.agent : undefined,
     startedAt: typeof value.startedAt === "string" ? value.startedAt : undefined,
     finishedAt: typeof value.finishedAt === "string" ? value.finishedAt : undefined,
+    summary: typeof value.summary === "string" ? value.summary : undefined,
     decisionOutcome: toDecisionOutcomeKind(value.decisionOutcome),
+    decisionImpactReason: typeof value.decisionImpactReason === "string" ? value.decisionImpactReason : undefined,
     agentforgeChangedDecision: typeof value.agentforgeChangedDecision === "boolean" ? value.agentforgeChangedDecision : undefined,
+    triggerRefs: readTraceReferenceArray(value.triggerRefs),
     confirmedRisks: isRecord(value.confirmedRisks)
       ? {
           high: typeof value.confirmedRisks.high === "number" ? value.confirmedRisks.high : 0,
@@ -893,6 +1060,17 @@ function readBenchmarkLedgerEntry(value: unknown): BenchmarkLedgerEntry | undefi
           unresolved: typeof value.confirmedRisks.unresolved === "number" ? value.confirmedRisks.unresolved : 0
         }
       : { high: 0, medium: 0, low: 0, noisy: 0, unresolved: 0 },
+    confirmedRiskRefs: Array.isArray(value.confirmedRiskRefs)
+      ? value.confirmedRiskRefs
+          .filter(isRecord)
+          .map((entry) => ({
+            severity: entry.severity === "high" || entry.severity === "medium" || entry.severity === "low" ? entry.severity : "low",
+            title: readString(entry.title, "Unnamed risk"),
+            runId: typeof entry.runId === "string" ? entry.runId : undefined,
+            artifactKind: typeof entry.artifactKind === "string" ? entry.artifactKind : undefined,
+            note: typeof entry.note === "string" ? entry.note : undefined
+          }))
+      : [],
     evidence: isRecord(value.evidence)
       ? {
           present: readStringArray(value.evidence.present),
@@ -900,15 +1078,25 @@ function readBenchmarkLedgerEntry(value: unknown): BenchmarkLedgerEntry | undefi
           partial: readStringArray(value.evidence.partial)
         }
       : { present: [], missing: [], partial: [] },
+    evidenceGapRefs: readTraceReferenceArray(value.evidenceGapRefs),
+    workflowStatuses: Array.isArray(value.workflowStatuses)
+      ? value.workflowStatuses
+          .filter(isRecord)
+          .map((entry) => ({
+            workflow: readString(entry.workflow, "unknown"),
+            status: readString(entry.status, "unknown")
+          }))
+      : [],
     friction: isRecord(value.friction)
       ? {
           override: readBoolean(value.friction.override),
           overrideReason: typeof value.friction.overrideReason === "string" ? value.friction.overrideReason : undefined,
           falsePositivePatterns: readStringArray(value.friction.falsePositivePatterns),
+          falsePositiveRefs: readTraceReferenceArray(value.friction.falsePositiveRefs),
           manualSteps: readStringArray(value.friction.manualSteps),
           requestFriction: readStringArray(value.friction.requestFriction)
         }
-      : { override: false, falsePositivePatterns: [], manualSteps: [], requestFriction: [] },
+      : { override: false, falsePositivePatterns: [], falsePositiveRefs: [], manualSteps: [], requestFriction: [] },
     notes: readStringArray(value.notes)
   };
 }
@@ -961,6 +1149,48 @@ function findLedgerEntry(
   return ledgerEntries.find((entry) => entry.arm === "agentforge" && (entry.runId === run.runId || entry.workflow === run.workflow));
 }
 
+function toQueryString(params: Record<string, string | undefined>): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  }
+  const serialized = searchParams.toString();
+  return serialized.length > 0 ? `?${serialized}` : "";
+}
+
+function toRunDetailHref(runId: string, anchor?: string): string {
+  return `/runs/${encodeURIComponent(runId)}${anchor ? `#${anchor}` : ""}`;
+}
+
+function toRunsFilterHref(filters: RunFilters): string {
+  return `/runs${toQueryString({
+    workflow: filters.workflow,
+    status: filters.status,
+    artifactKind: filters.artifactKind,
+    search: filters.search,
+    decisionImpact: filters.decisionImpact,
+    riskKind: filters.riskKind,
+    evidenceCategory: filters.evidenceCategory,
+    evidenceStatus: filters.evidenceStatus,
+    hasOverride: filters.hasOverride,
+    workflowStage: filters.workflowStage
+  })}`;
+}
+
+function toOutcomesFilterHref(filters: OutcomesFilters, anchor?: string): string {
+  return `/outcomes${toQueryString({
+    panel: filters.panel,
+    decision: filters.decision,
+    risk: filters.risk,
+    workflow: filters.workflow,
+    evidenceCategory: filters.evidenceCategory,
+    evidenceStatus: filters.evidenceStatus,
+    stage: filters.stage
+  })}${anchor ? `#${anchor}` : ""}`;
+}
+
 function parseArtifactPayload(artifact: ArtifactPanelView): Record<string, unknown> | undefined {
   const parsed = safeParseJson(artifact.rawPayload);
   return isRecord(parsed) ? parsed : undefined;
@@ -986,6 +1216,39 @@ function deriveCiEvidenceStatus(ciEvidenceSummary: unknown): "present" | "missin
   return hasFailures ? "partial" : "present";
 }
 
+function deriveRiskKinds(
+  findings: readonly Finding[],
+  artifacts: readonly ArtifactPanelView[],
+  ledgerEntry?: BenchmarkLedgerEntry
+): string[] {
+  const kinds = new Set<string>();
+  for (const finding of findings) {
+    kinds.add(`finding:${finding.severity}`);
+  }
+  if ((ledgerEntry?.confirmedRisks.high ?? 0) > 0) {
+    kinds.add("confirmed-high");
+  }
+  if ((ledgerEntry?.confirmedRisks.medium ?? 0) > 0) {
+    kinds.add("confirmed-medium");
+  }
+  if ((ledgerEntry?.confirmedRisks.noisy ?? 0) > 0) {
+    kinds.add("noisy");
+  }
+  if ((ledgerEntry?.confirmedRisks.unresolved ?? 0) > 0) {
+    kinds.add("unresolved");
+  }
+  if (artifacts.some((artifact) => readStringArray(parseArtifactPayload(artifact)?.blockers).length > 0)) {
+    kinds.add("artifact-blocker");
+  }
+  if (artifacts.some((artifact) => {
+    const payload = parseArtifactPayload(artifact);
+    return payload?.gateStatus === "blocked" || payload?.approvalStatus === "blocked" || payload?.readinessStatus === "blocked" || payload?.reviewStatus === "blocked";
+  })) {
+    kinds.add("blocked-approval");
+  }
+  return [...kinds].sort();
+}
+
 function buildEvidenceCompleteness(workflow: string, artifacts: readonly ArtifactPanelView[]): EvidenceCompletenessView[] {
   return artifacts.flatMap((artifact) => {
     const payload = parseArtifactPayload(artifact);
@@ -995,8 +1258,33 @@ function buildEvidenceCompleteness(workflow: string, artifacts: readonly Artifac
 
     const referencedKinds = readStringArray(payload.referencedArtifactKinds);
     const categories: EvidenceCategoryView[] = [];
-    const addCategory = (key: string, label: string, status: "present" | "missing" | "partial", detail: string) => {
-      categories.push({ key, label, status, detail });
+    const traceRefs: TraceReferenceView[] = [
+      {
+        artifactKind: artifact.artifactKind,
+        section: "raw-payload",
+        note: `Derived from ${artifact.artifactKind} payload.`
+      }
+    ];
+    const addCategory = (
+      key: string,
+      label: string,
+      status: "present" | "missing" | "partial",
+      detail: string,
+      fields: string[]
+    ) => {
+      categories.push({
+        key,
+        label,
+        status,
+        detail,
+        traceRefs,
+        reason: {
+          source: "inferred",
+          rule: `${label} classification`,
+          fields,
+          summary: detail
+        }
+      });
     };
 
     switch (artifact.artifactKind) {
@@ -1005,13 +1293,15 @@ function buildEvidenceCompleteness(workflow: string, artifacts: readonly Artifac
           "evidence-sources",
           "Evidence Sources",
           readStringArray(payload.evidenceSources).length > 0 ? "present" : "missing",
-          readStringArray(payload.evidenceSources).length > 0 ? "Referenced QA evidence is present." : "No QA evidence sources were recorded."
+          readStringArray(payload.evidenceSources).length > 0 ? "Referenced QA evidence is present." : "No QA evidence sources were recorded.",
+          ["payload.evidenceSources"]
         );
         addCategory(
           "executed-checks",
           "Executed Checks",
           readStringArray(payload.executedChecks).length > 0 ? "present" : "missing",
-          readStringArray(payload.executedChecks).length > 0 ? "Validation commands were captured." : "No validation commands were captured."
+          readStringArray(payload.executedChecks).length > 0 ? "Validation commands were captured." : "No validation commands were captured.",
+          ["payload.executedChecks"]
         );
         addCategory(
           "ci-evidence",
@@ -1021,36 +1311,37 @@ function buildEvidenceCompleteness(workflow: string, artifacts: readonly Artifac
             ? "No CI evidence summary was recorded."
             : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial"
               ? "CI evidence exists but includes failing checks."
-              : "CI evidence summary is present and green."
+              : "CI evidence summary is present and green.",
+          ["payload.ciEvidenceSummary", "payload.ciEvidenceSummary[].failingChecks"]
         );
         break;
       case "release-report":
-        addCategory("version-targets", "Version Targets", Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "present" : "missing", Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "Version targets are recorded." : "No version targets were recorded.");
-        addCategory("verification-checks", "Verification Checks", deriveStatusFromChecks(payload.verificationChecks), deriveStatusFromChecks(payload.verificationChecks) === "missing" ? "No verification checks were recorded." : deriveStatusFromChecks(payload.verificationChecks) === "partial" ? "Verification checks include non-passing results." : "Verification checks are present and passed.");
-        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.");
-        addCategory("provenance", "Provenance Refs", readStringArray(payload.provenanceRefs).length > 0 ? "present" : "missing", readStringArray(payload.provenanceRefs).length > 0 ? "Release provenance refs were captured." : "No provenance refs were captured.");
+        addCategory("version-targets", "Version Targets", Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "present" : "missing", Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "Version targets are recorded." : "No version targets were recorded.", ["payload.versionTargets"]);
+        addCategory("verification-checks", "Verification Checks", deriveStatusFromChecks(payload.verificationChecks), deriveStatusFromChecks(payload.verificationChecks) === "missing" ? "No verification checks were recorded." : deriveStatusFromChecks(payload.verificationChecks) === "partial" ? "Verification checks include non-passing results." : "Verification checks are present and passed.", ["payload.verificationChecks", "payload.verificationChecks[].status"]);
+        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.", ["payload.ciEvidenceSummary", "payload.ciEvidenceSummary[].failingChecks"]);
+        addCategory("provenance", "Provenance Refs", readStringArray(payload.provenanceRefs).length > 0 ? "present" : "missing", readStringArray(payload.provenanceRefs).length > 0 ? "Release provenance refs were captured." : "No provenance refs were captured.", ["payload.provenanceRefs"]);
         break;
       case "pipeline-report":
-        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.");
-        addCategory("qa-report", "QA Report", referencedKinds.includes("qa-report") ? "present" : "missing", referencedKinds.includes("qa-report") ? "A QA report reference is present." : "No QA report reference was recorded.");
-        addCategory("security-report", "Security Report", referencedKinds.includes("security-report") ? "present" : "missing", referencedKinds.includes("security-report") ? "A security report reference is present." : "No security report reference was recorded.");
-        addCategory("release-report", "Release Report", referencedKinds.includes("release-report") ? "present" : "missing", referencedKinds.includes("release-report") ? "A release report reference is present." : "No release report reference was recorded.");
-        addCategory("verification-checks", "Verification Checks", deriveStatusFromChecks(payload.verificationChecks), deriveStatusFromChecks(payload.verificationChecks) === "missing" ? "No verification checks were recorded." : deriveStatusFromChecks(payload.verificationChecks) === "partial" ? "Verification checks include non-passing results." : "Verification checks are present and passed.");
+        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.", ["payload.ciEvidenceSummary", "payload.ciEvidenceSummary[].failingChecks"]);
+        addCategory("qa-report", "QA Report", referencedKinds.includes("qa-report") ? "present" : "missing", referencedKinds.includes("qa-report") ? "A QA report reference is present." : "No QA report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("security-report", "Security Report", referencedKinds.includes("security-report") ? "present" : "missing", referencedKinds.includes("security-report") ? "A security report reference is present." : "No security report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("release-report", "Release Report", referencedKinds.includes("release-report") ? "present" : "missing", referencedKinds.includes("release-report") ? "A release report reference is present." : "No release report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("verification-checks", "Verification Checks", deriveStatusFromChecks(payload.verificationChecks), deriveStatusFromChecks(payload.verificationChecks) === "missing" ? "No verification checks were recorded." : deriveStatusFromChecks(payload.verificationChecks) === "partial" ? "Verification checks include non-passing results." : "Verification checks are present and passed.", ["payload.verificationChecks", "payload.verificationChecks[].status"]);
         break;
       case "deployment-gate-report":
-        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.");
-        addCategory("qa-report", "QA Report", referencedKinds.includes("qa-report") ? "present" : "missing", referencedKinds.includes("qa-report") ? "A QA report reference is present." : "No QA report reference was recorded.");
-        addCategory("security-report", "Security Report", referencedKinds.includes("security-report") ? "present" : "missing", referencedKinds.includes("security-report") ? "A security report reference is present." : "No security report reference was recorded.");
-        addCategory("release-report", "Release Report", referencedKinds.includes("release-report") ? "present" : "missing", referencedKinds.includes("release-report") ? "A release report reference is present." : "No release report reference was recorded.");
-        addCategory("pipeline-report", "Pipeline Report", referencedKinds.includes("pipeline-report") ? "present" : "missing", referencedKinds.includes("pipeline-report") ? "A pipeline report reference is present." : "No pipeline report reference was recorded.");
+        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.", ["payload.ciEvidenceSummary", "payload.ciEvidenceSummary[].failingChecks"]);
+        addCategory("qa-report", "QA Report", referencedKinds.includes("qa-report") ? "present" : "missing", referencedKinds.includes("qa-report") ? "A QA report reference is present." : "No QA report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("security-report", "Security Report", referencedKinds.includes("security-report") ? "present" : "missing", referencedKinds.includes("security-report") ? "A security report reference is present." : "No security report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("release-report", "Release Report", referencedKinds.includes("release-report") ? "present" : "missing", referencedKinds.includes("release-report") ? "A release report reference is present." : "No release report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("pipeline-report", "Pipeline Report", referencedKinds.includes("pipeline-report") ? "present" : "missing", referencedKinds.includes("pipeline-report") ? "A pipeline report reference is present." : "No pipeline report reference was recorded.", ["payload.referencedArtifactKinds"]);
         break;
       case "promotion-approval-report":
-        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.");
-        addCategory("qa-report", "QA Report", referencedKinds.includes("qa-report") ? "present" : "missing", referencedKinds.includes("qa-report") ? "A QA report reference is present." : "No QA report reference was recorded.");
-        addCategory("security-report", "Security Report", referencedKinds.includes("security-report") ? "present" : "missing", referencedKinds.includes("security-report") ? "A security report reference is present." : "No security report reference was recorded.");
-        addCategory("release-report", "Release Report", referencedKinds.includes("release-report") ? "present" : "missing", referencedKinds.includes("release-report") ? "A release report reference is present." : "No release report reference was recorded.");
-        addCategory("deployment-gate-report", "Deployment Gate", referencedKinds.includes("deployment-gate-report") ? "present" : "missing", referencedKinds.includes("deployment-gate-report") ? "A deployment gate report reference is present." : "No deployment gate report reference was recorded.");
-        addCategory("required-approvals", "Required Approvals", readStringArray(payload.requiredApprovals).length > 0 ? "present" : "missing", readStringArray(payload.requiredApprovals).length > 0 ? "Required approvals were captured." : "No required approvals were captured.");
+        addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.", ["payload.ciEvidenceSummary", "payload.ciEvidenceSummary[].failingChecks"]);
+        addCategory("qa-report", "QA Report", referencedKinds.includes("qa-report") ? "present" : "missing", referencedKinds.includes("qa-report") ? "A QA report reference is present." : "No QA report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("security-report", "Security Report", referencedKinds.includes("security-report") ? "present" : "missing", referencedKinds.includes("security-report") ? "A security report reference is present." : "No security report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("release-report", "Release Report", referencedKinds.includes("release-report") ? "present" : "missing", referencedKinds.includes("release-report") ? "A release report reference is present." : "No release report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("deployment-gate-report", "Deployment Gate", referencedKinds.includes("deployment-gate-report") ? "present" : "missing", referencedKinds.includes("deployment-gate-report") ? "A deployment gate report reference is present." : "No deployment gate report reference was recorded.", ["payload.referencedArtifactKinds"]);
+        addCategory("required-approvals", "Required Approvals", readStringArray(payload.requiredApprovals).length > 0 ? "present" : "missing", readStringArray(payload.requiredApprovals).length > 0 ? "Required approvals were captured." : "No required approvals were captured.", ["payload.requiredApprovals"]);
         break;
       default:
         break;
@@ -1065,34 +1356,42 @@ function buildWorkflowChain(workflow: string, artifacts: readonly ArtifactPanelV
   const currentStage = primaryArtifact ? ARTIFACT_STAGE_MAP[primaryArtifact.artifactKind] : WORKFLOW_STAGE_MAP[workflow] ?? "review";
   const payload = primaryArtifact ? parseArtifactPayload(primaryArtifact) : undefined;
   const referencedKinds = payload ? new Set(readStringArray(payload.referencedArtifactKinds)) : new Set<string>();
+  const currentStageIndex = STAGE_ORDER.indexOf(currentStage as (typeof STAGE_ORDER)[number]);
 
   return {
     currentStage,
     stages: STAGE_ORDER.map((stage) => {
       const artifactKind = Object.entries(ARTIFACT_STAGE_MAP).find(([, mappedStage]) => mappedStage === stage)?.[0];
-      const status: WorkflowChainStageView["status"] =
-        stage === currentStage
-          ? "current"
-          : artifactKind && referencedKinds.has(artifactKind)
-            ? "present"
-            : STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(currentStage)
-              ? "missing"
-              : "missing";
-
+      const stageIndex = STAGE_ORDER.indexOf(stage);
+      const status: WorkflowChainStageView["status"] = stage === currentStage ? "current" : artifactKind && referencedKinds.has(artifactKind) ? "present" : "missing";
+      const required = stageIndex < currentStageIndex;
       const detail =
         status === "current"
           ? `Current run is operating at the ${STAGE_LABELS[stage]} stage.`
           : status === "present"
             ? `A ${artifactKind} reference is present for this stage.`
-            : STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(currentStage)
+            : required
               ? `No upstream ${STAGE_LABELS[stage]} evidence is referenced from this run.`
               : `This downstream stage has not run yet from the current evidence chain.`;
+      const traceRefs: TraceReferenceView[] = artifactKind && referencedKinds.has(artifactKind)
+        ? [{ artifactKind, section: "referenced-artifact-kinds", note: `${artifactKind} is referenced by the current workflow artifact.` }]
+        : primaryArtifact
+          ? [{ artifactKind: primaryArtifact.artifactKind, section: "referenced-artifact-kinds", note: detail }]
+          : [{ note: detail }];
 
       return {
         stage,
         label: STAGE_LABELS[stage],
         status,
-        detail
+        detail,
+        required,
+        traceRefs,
+        reason: {
+          source: "inferred",
+          rule: status === "current" ? "current-stage" : status === "present" ? "referenced-upstream-stage" : required ? "missing-upstream-evidence" : "downstream-stage-not-run",
+          fields: artifactKind ? ["payload.referencedArtifactKinds", "artifact.artifactKind"] : ["workflow"],
+          summary: detail
+        }
       };
     })
   };
@@ -1140,6 +1439,27 @@ function buildRiskSummary(
     summary.push("No significant risk signals were recorded for this run.");
   }
 
+  const traceRefs: TraceReferenceView[] = [];
+  for (const finding of findings) {
+    traceRefs.push({
+      runId: run.runId,
+      findingId: finding.id,
+      section: "risk-summary",
+      note: `[${finding.severity}] ${finding.title}`
+    });
+  }
+  for (const artifact of artifacts) {
+    const payload = parseArtifactPayload(artifact);
+    for (const blocker of readStringArray(payload?.blockers)) {
+      traceRefs.push({
+        runId: run.runId,
+        artifactKind: artifact.artifactKind,
+        section: "blockers",
+        note: blocker
+      });
+    }
+  }
+
   return {
     high,
     medium,
@@ -1148,7 +1468,18 @@ function buildRiskSummary(
     unresolved,
     blockedApprovalPrevented,
     blockerCount,
-    summary
+    summary,
+    traceRefs,
+    reason: {
+      source: findLedgerEntry(run, ledgerEntries) ? "ledger" : traceRefs.length > 0 ? "artifact-blockers" : "run-findings",
+      rule: findLedgerEntry(run, ledgerEntries) ? "benchmark-ledger-risk-overlay" : blockerCount > 0 ? "artifact-blockers-and-findings" : "findings-only",
+      fields: findLedgerEntry(run, ledgerEntries)
+        ? ["benchmark-ledger.confirmedRisks", "benchmark-ledger.confirmedRiskRefs"]
+        : blockerCount > 0
+          ? ["bundle.findings", "artifact.payload.blockers"]
+          : ["bundle.findings"],
+      summary: summary[0] ?? "No significant risk signals were recorded for this run."
+    }
   };
 }
 
@@ -1164,7 +1495,15 @@ function inferDecisionImpact(
       kind: ledgerEntry.decisionOutcome,
       changedDecision: ledgerEntry.agentforgeChangedDecision ?? !["added_confidence", "no_meaningful_change"].includes(ledgerEntry.decisionOutcome),
       source: "ledger",
-      summary: `Benchmark ledger marked this run as ${ledgerEntry.decisionOutcome.replaceAll("_", " ")}.`
+      summary: `Benchmark ledger marked this run as ${ledgerEntry.decisionOutcome.replaceAll("_", " ")}.`,
+      benchmarkTaskId: ledgerEntry.taskId,
+      traceRefs: ledgerEntry.triggerRefs,
+      reason: {
+        source: "ledger",
+        rule: "benchmark-ledger-decision-outcome",
+        fields: ["benchmark-ledger.decisionOutcome", "benchmark-ledger.agentforgeChangedDecision", "benchmark-ledger.triggerRefs"],
+        summary: ledgerEntry.decisionImpactReason ?? ledgerEntry.summary ?? `Adjudicated benchmark result: ${ledgerEntry.decisionOutcome.replaceAll("_", " ")}.`
+      }
     };
   }
 
@@ -1178,7 +1517,21 @@ function inferDecisionImpact(
       kind: "blocked_approval",
       changedDecision: true,
       source: "inferred",
-      summary: `The run emitted a blocked ${blockerArtifact.artifactKind}, which would halt approval or release flow.`
+      summary: `The run emitted a blocked ${blockerArtifact.artifactKind}, which would halt approval or release flow.`,
+      traceRefs: [
+        {
+          runId: run.runId,
+          artifactKind: blockerArtifact.artifactKind,
+          section: "decision-impact",
+          note: `Blocked status derived from ${blockerArtifact.artifactKind}.`
+        }
+      ],
+      reason: {
+        source: "inferred",
+        rule: "blocked-artifact-status",
+        fields: ["artifact.status", "payload.readinessStatus", "payload.reviewStatus", "payload.gateStatus", "payload.approvalStatus"],
+        summary: `Derived as blocked approval because ${blockerArtifact.artifactKind} reported a blocked state.`
+      }
     };
   }
 
@@ -1187,16 +1540,49 @@ function inferDecisionImpact(
       kind: "remediation_before_merge",
       changedDecision: true,
       source: "inferred",
-      summary: "The run surfaced blockers or findings that imply remediation before merge or promotion."
+      summary: "The run surfaced blockers or findings that imply remediation before merge or promotion.",
+      traceRefs: [
+        ...findings.map((finding) => ({
+          runId: run.runId,
+          findingId: finding.id,
+          section: "findings",
+          note: `[${finding.severity}] ${finding.title}`
+        })),
+        ...artifacts.flatMap((artifact) =>
+          readStringArray(parseArtifactPayload(artifact)?.blockers).map((blocker) => ({
+            runId: run.runId,
+            artifactKind: artifact.artifactKind,
+            section: "blockers",
+            note: blocker
+          }))
+        )
+      ],
+      reason: {
+        source: "inferred",
+        rule: "findings-or-blockers-present",
+        fields: ["bundle.findings", "artifact.payload.blockers", "bundle.status"],
+        summary: "Derived as remediation before merge because findings, blockers, or non-success bundle status were present."
+      }
     };
   }
 
   if (evidence.some((artifact) => artifact.categories.some((category) => category.status !== "present"))) {
+    const firstGap = evidence.flatMap((artifact) => artifact.categories).find((category) => category.status !== "present");
     return {
       kind: "added_validation",
       changedDecision: true,
       source: "inferred",
-      summary: "The run highlighted missing or partial evidence that should change the validation plan."
+      summary: "The run highlighted missing or partial evidence that should change the validation plan.",
+      traceRefs: firstGap?.traceRefs ?? [{ runId: run.runId, section: "evidence-completeness", note: "Missing or partial evidence was detected." }],
+      reason: {
+        source: "inferred",
+        rule: "evidence-completeness-gap",
+        fields: firstGap?.reason.fields ?? ["artifact.payload"],
+        summary:
+          firstGap
+            ? `Derived as added validation because ${firstGap.label} is ${firstGap.status}: ${firstGap.detail}`
+            : "Derived as added validation because at least one evidence category was not fully present."
+      }
     };
   }
 
@@ -1205,7 +1591,14 @@ function inferDecisionImpact(
       kind: "added_confidence",
       changedDecision: false,
       source: "inferred",
-      summary: "The planning run improved scope clarity but did not clearly force a different implementation path."
+      summary: "The planning run improved scope clarity but did not clearly force a different implementation path.",
+      traceRefs: [{ runId: run.runId, section: "decision-impact", note: "Planning runs improve confidence unless stronger blockers or evidence gaps exist." }],
+      reason: {
+        source: "inferred",
+        rule: "planning-confidence-default",
+        fields: ["workflow"],
+        summary: "Derived as added confidence because the workflow is planning-discovery and no stronger outcome rule matched."
+      }
     };
   }
 
@@ -1213,7 +1606,14 @@ function inferDecisionImpact(
     kind: "no_meaningful_change",
     changedDecision: false,
     source: "inferred",
-    summary: "The run completed cleanly without a clear decision delta beyond baseline inspection."
+    summary: "The run completed cleanly without a clear decision delta beyond baseline inspection.",
+    traceRefs: [{ runId: run.runId, section: "decision-impact", note: "No blockers, findings, or evidence gaps changed the inferred outcome." }],
+    reason: {
+      source: "inferred",
+      rule: "clean-run-default",
+      fields: ["bundle.findings", "artifact.payload.blockers", "evidence-completeness"],
+      summary: "Derived as no meaningful change because the run completed cleanly and no decision-changing signals were found."
+    }
   };
 }
 
@@ -1313,12 +1713,175 @@ function aggregateFriction(
   };
 }
 
-export function loadValueDashboardView(
+function matchesOutcomeFilters(
+  row: OutcomeDetailRowView,
+  filters: OutcomesFilters
+): boolean {
+  if (filters.workflow && row.workflow !== filters.workflow) {
+    return false;
+  }
+  if (filters.panel === "decision-impact") {
+    if (filters.decision === "changed" && !row.id.includes("changed")) {
+      return false;
+    }
+    if (filters.decision && filters.decision !== "changed" && !row.id.includes(filters.decision)) {
+      return false;
+    }
+  }
+  if (filters.panel === "risk" && filters.risk && !row.id.includes(filters.risk)) {
+    return false;
+  }
+  if (filters.panel === "evidence") {
+    if (filters.evidenceCategory && !row.id.includes(filters.evidenceCategory)) {
+      return false;
+    }
+    if (filters.evidenceStatus && !row.id.includes(filters.evidenceStatus)) {
+      return false;
+    }
+  }
+  if (filters.panel === "flow" && filters.stage && !row.id.includes(filters.stage)) {
+    return false;
+  }
+  return true;
+}
+
+function createOutcomeDetailRows(runs: readonly RunDetailView[], ledger: BenchmarkLedgerView, filters: OutcomesFilters): OutcomesDashboardView["details"] {
+  const decision = runs
+    .map((run) => ({
+      id: `decision:${run.decisionImpact.kind}:${run.decisionImpact.changedDecision ? "changed" : "unchanged"}:${run.runId}`,
+      workflow: run.workflow,
+      runId: run.runId,
+      status: run.status,
+      title: run.decisionImpact.kind.replaceAll("_", " "),
+      summary: run.decisionImpact.reason.summary,
+      source: run.decisionImpact.source,
+      detailHref: toRunDetailHref(run.runId, "decision-impact"),
+      runsHref: toRunsFilterHref({ decisionImpact: run.decisionImpact.kind }),
+      traceRefs: run.decisionImpact.traceRefs
+    }))
+    .filter((row) => matchesOutcomeFilters(row, filters));
+
+  const risk = runs
+    .flatMap((run) =>
+      run.riskSummary.traceRefs.length > 0
+        ? run.riskSummary.traceRefs.map((traceRef, index) => ({
+            id: `risk:${run.riskKinds[0] ?? "unresolved"}:${run.runId}:${index}`,
+            workflow: run.workflow,
+            runId: run.runId,
+            status: run.status,
+            title: traceRef.note,
+            summary: run.riskSummary.reason.summary,
+            source: run.riskSummary.reason.source,
+            detailHref: toRunDetailHref(run.runId, "risk-summary"),
+            runsHref: toRunsFilterHref({ riskKind: run.riskKinds[0] ?? "unresolved" }),
+            traceRefs: [traceRef]
+          }))
+        : [{
+            id: `risk:none:${run.runId}`,
+            workflow: run.workflow,
+            runId: run.runId,
+            status: run.status,
+            title: "No significant risk signals",
+            summary: run.riskSummary.reason.summary,
+            source: run.riskSummary.reason.source,
+            detailHref: toRunDetailHref(run.runId, "risk-summary"),
+            runsHref: toRunsFilterHref({ riskKind: "unresolved" }),
+            traceRefs: run.riskSummary.traceRefs
+          }]
+    )
+    .filter((row) => matchesOutcomeFilters(row, filters));
+
+  const evidence = runs
+    .flatMap((run) =>
+      run.evidenceCompleteness.flatMap((artifact) =>
+        artifact.categories.map((category) => ({
+          id: `evidence:${category.key}:${category.status}:${run.runId}`,
+          workflow: run.workflow,
+          runId: run.runId,
+          status: run.status,
+          title: `${category.label} (${category.status})`,
+          summary: category.reason.summary,
+          source: category.reason.source,
+          detailHref: toRunDetailHref(run.runId, "evidence-completeness"),
+          runsHref: toRunsFilterHref({ evidenceCategory: category.key, evidenceStatus: category.status }),
+          traceRefs: category.traceRefs
+        }))
+      )
+    )
+    .filter((row) => matchesOutcomeFilters(row, filters));
+
+  const friction = ledger.entries
+    .filter((entry) => entry.arm === "agentforge")
+    .map((entry) => ({
+      id: `friction:${entry.workflow ?? "unknown"}:${entry.friction.override ? "override" : "no-override"}:${entry.taskId}`,
+      workflow: entry.workflow ?? "unknown",
+      runId: entry.runId ?? "n/a",
+      status: entry.workflowStatuses[0]?.status ?? "unknown",
+      title: entry.summary ?? entry.friction.overrideReason ?? "Benchmark friction entry",
+      summary:
+        entry.friction.overrideReason ??
+        entry.decisionImpactReason ??
+        entry.notes[0] ??
+        "Ledger-backed friction/adjudication entry.",
+      source: "ledger",
+      detailHref: entry.runId ? toRunDetailHref(entry.runId, "decision-impact") : "/outcomes#friction",
+      runsHref: toRunsFilterHref({
+        workflow: entry.workflow,
+        hasOverride: entry.friction.override ? "true" : undefined
+      }),
+      traceRefs: [
+        ...entry.friction.falsePositiveRefs,
+        ...entry.triggerRefs,
+        ...entry.evidenceGapRefs
+      ]
+    }))
+    .filter((row) => matchesOutcomeFilters(row, filters));
+
+  const workflowChain = runs
+    .flatMap((run) =>
+      run.workflowChain.stages
+        .filter((stage) => stage.status !== "present")
+        .map((stage) => ({
+          id: `flow:${stage.stage}:${stage.status}:${run.runId}`,
+          workflow: run.workflow,
+          runId: run.runId,
+          status: run.status,
+          title: `${stage.label} (${stage.status})`,
+          summary: stage.reason.summary,
+          source: stage.reason.source,
+          detailHref: toRunDetailHref(run.runId, "workflow-chain"),
+          runsHref: toRunsFilterHref({ workflowStage: stage.stage }),
+          traceRefs: stage.traceRefs
+        }))
+    )
+    .filter((row) => matchesOutcomeFilters(row, filters));
+
+  return { decision, risk, evidence, friction, workflowChain };
+}
+
+export function parseOutcomesFilters(searchParams: URLSearchParams): OutcomesFilters {
+  const panel = searchParams.get("panel");
+  return {
+    panel:
+      panel === "decision-impact" || panel === "risk" || panel === "evidence" || panel === "friction" || panel === "flow"
+        ? panel
+        : undefined,
+    decision: (searchParams.get("decision") as OutcomesFilters["decision"] | null) ?? undefined,
+    risk: searchParams.get("risk") ?? undefined,
+    workflow: searchParams.get("workflow") ?? undefined,
+    evidenceCategory: searchParams.get("evidenceCategory") ?? undefined,
+    evidenceStatus: (searchParams.get("evidenceStatus") as OutcomesFilters["evidenceStatus"] | null) ?? undefined,
+    stage: searchParams.get("stage") ?? undefined
+  };
+}
+
+export function loadOutcomesDashboardView(
   workspaceRoot: string,
   runsRoot = resolveRunsRoot(workspaceRoot),
-  benchmarkLedgerPath?: string
-): ValueDashboardView {
-  const runsIndex = loadRunsIndexView(workspaceRoot, runsRoot);
+  benchmarkLedgerPath?: string,
+  filters: OutcomesFilters = {}
+): OutcomesDashboardView {
+  const runsIndex = loadRunsIndexView(workspaceRoot, runsRoot, {}, benchmarkLedgerPath);
   const ledger = loadBenchmarkLedgerView(workspaceRoot, benchmarkLedgerPath);
   const runs = runsIndex.runs
     .map((run) => loadRunDetailView(workspaceRoot, run.runId, runsRoot, benchmarkLedgerPath))
@@ -1353,6 +1916,13 @@ export function loadValueDashboardView(
     ];
   }).sort((left, right) => right.missingCount - left.missingCount || right.partialCount - left.partialCount || left.workflow.localeCompare(right.workflow));
 
+  const friction = aggregateFriction(runs, ledger);
+  const workflowChains = aggregateWorkflowChainSummary(runs);
+  const topEvidenceGap = evidence[0]?.frequentMissing[0];
+  const topFrictionWorkflow = friction.workflowHotspots[0];
+  const topWorkflowChain = [...workflowChains].sort((left, right) => right.missingUpstreamEvidenceCount - left.missingUpstreamEvidenceCount)[0];
+  const details = createOutcomeDetailRows(runs, ledger, filters);
+
   return {
     ledger,
     decisionImpact: {
@@ -1373,10 +1943,99 @@ export function loadValueDashboardView(
       unresolvedRiskCount: runs.reduce((total, run) => total + run.riskSummary.unresolved, 0)
     },
     evidence,
-    friction: aggregateFriction(runs, ledger),
-    workflowChains: aggregateWorkflowChainSummary(runs),
-    runCount: runs.length
+    friction,
+    workflowChains,
+    runCount: runs.length,
+    filteredPanel: filters.panel,
+    filters,
+    summaries: {
+      decision: [
+        {
+          label: "Changed decisions",
+          value: runs.filter((run) => run.decisionImpact.changedDecision).length,
+          detail: `${runs.length} run(s) in view`,
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "changed" }, "decision-impact")
+        },
+        {
+          label: "Blocked approvals",
+          value: countOutcome(runs, "blocked_approval"),
+          detail: "Runs where approval or release gates stopped the flow",
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "blocked_approval" }, "decision-impact")
+        },
+        {
+          label: "Added validation",
+          value: countOutcome(runs, "added_validation"),
+          detail: "Runs where evidence gaps changed the next step",
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "added_validation" }, "decision-impact")
+        }
+      ],
+      risk: [
+        {
+          label: "Blocked approvals prevented",
+          value: runs.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
+          detail: "Derived from blocked release, pipeline, deployment, or approval artifacts",
+          href: toOutcomesFilterHref({ panel: "risk", risk: "blocked-approval" }, "risk")
+        },
+        {
+          label: "Confirmed medium/high",
+          value: ledger.entries.reduce((total, entry) => total + entry.confirmedRisks.high + entry.confirmedRisks.medium, 0),
+          detail: "Ledger-backed adjudicated risks",
+          href: toOutcomesFilterHref({ panel: "risk", risk: "confirmed-medium" }, "risk")
+        },
+        {
+          label: "Unresolved risks",
+          value: runs.reduce((total, run) => total + run.riskSummary.unresolved, 0),
+          detail: "Outstanding risk and blocker signals across runs",
+          href: toOutcomesFilterHref({ panel: "risk", risk: "unresolved" }, "risk")
+        }
+      ],
+      evidence: [
+        {
+          label: "Largest evidence gap",
+          value: evidence[0]?.missingCount ?? 0,
+          detail: topEvidenceGap ?? "No recurring gaps found",
+          href: toOutcomesFilterHref(
+            {
+              panel: "evidence",
+              evidenceCategory: topEvidenceGap?.startsWith("CI Evidence") ? "ci-evidence" : undefined,
+              evidenceStatus: "missing"
+            },
+            "evidence"
+          )
+        }
+      ],
+      friction: [
+        {
+          label: "Highest friction workflow",
+          value:
+            (topFrictionWorkflow?.overrideCount ?? 0) +
+            (topFrictionWorkflow?.falsePositiveCount ?? 0) +
+            (topFrictionWorkflow?.manualStepCount ?? 0) +
+            (topFrictionWorkflow?.requestFrictionCount ?? 0),
+          detail: topFrictionWorkflow?.workflow ?? "No ledger-backed friction data",
+          href: toOutcomesFilterHref({ panel: "friction", workflow: topFrictionWorkflow?.workflow }, "friction")
+        }
+      ],
+      workflowChain: [
+        {
+          label: "Release chain breaks",
+          value: topWorkflowChain?.missingUpstreamEvidenceCount ?? 0,
+          detail: topWorkflowChain ? `${topWorkflowChain.label} has the most missing upstream evidence` : "No chain breakpoints detected",
+          href: toOutcomesFilterHref({ panel: "flow", stage: topWorkflowChain?.stage }, "workflow-chain")
+        }
+      ]
+    },
+    details
   };
+}
+
+export function loadValueDashboardView(
+  workspaceRoot: string,
+  runsRoot = resolveRunsRoot(workspaceRoot),
+  benchmarkLedgerPath?: string,
+  filters: OutcomesFilters = {}
+): OutcomesDashboardView {
+  return loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, filters);
 }
 
 function toBenchmarkSummaryView(

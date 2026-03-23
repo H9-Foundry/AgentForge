@@ -6,15 +6,16 @@ import {
   listAvailableStatuses,
   listAvailableWorkflows,
   loadBenchmarkIndexView,
+  loadOutcomesDashboardView,
   loadRunDetailView,
   loadRunsIndexView,
-  loadValueDashboardView,
+  parseOutcomesFilters,
   resolveBenchmarkLedgerPath,
   resolveRunsRoot,
   toRelativeDisplayPath,
   type RunFilters
 } from "./data.js";
-import { renderBenchmarksPage, renderRunDetailPage, renderRunsIndexPage, renderValueDashboardPage, visualizerStyles } from "./html.js";
+import { renderBenchmarksPage, renderOutcomesDashboardPage, renderRunDetailPage, renderRunsIndexPage, visualizerStyles } from "./html.js";
 
 export interface VisualizerServerOptions {
   workspaceRoot: string;
@@ -32,6 +33,11 @@ function json(response: ServerResponse, statusCode: number, body: unknown): void
 function html(response: ServerResponse, statusCode: number, body: string): void {
   response.writeHead(statusCode, { "content-type": "text/html; charset=utf-8" });
   response.end(body);
+}
+
+function redirect(response: ServerResponse, location: string): void {
+  response.writeHead(302, { location });
+  response.end();
 }
 
 function text(response: ServerResponse, statusCode: number, body: string, contentType = "text/plain; charset=utf-8"): void {
@@ -52,7 +58,13 @@ function toFilters(searchParams: URLSearchParams): RunFilters {
     search: searchParams.get("search") ?? undefined,
     workflow: searchParams.get("workflow") ?? undefined,
     status: searchParams.get("status") ?? undefined,
-    artifactKind: searchParams.get("artifactKind") ?? undefined
+    artifactKind: searchParams.get("artifactKind") ?? undefined,
+    decisionImpact: (searchParams.get("decisionImpact") as RunFilters["decisionImpact"] | null) ?? undefined,
+    riskKind: searchParams.get("riskKind") ?? undefined,
+    evidenceCategory: searchParams.get("evidenceCategory") ?? undefined,
+    evidenceStatus: (searchParams.get("evidenceStatus") as RunFilters["evidenceStatus"] | null) ?? undefined,
+    hasOverride: (searchParams.get("hasOverride") as RunFilters["hasOverride"] | null) ?? undefined,
+    workflowStage: searchParams.get("workflowStage") ?? undefined
   };
 }
 
@@ -71,14 +83,18 @@ export function createVisualizerServer(options: VisualizerServerOptions) {
     }
 
     if (pathname === "/" || pathname === "/runs") {
-      const view = loadRunsIndexView(workspaceRoot, runsRoot, toFilters(url.searchParams));
+      const view = loadRunsIndexView(workspaceRoot, runsRoot, toFilters(url.searchParams), benchmarkLedgerPath);
       html(
         response,
         200,
         renderRunsIndexPage(view.runs, view.invalidRuns, toFilters(url.searchParams), {
           workflows: listAvailableWorkflows(view.runs),
           statuses: listAvailableStatuses(view.runs),
-          artifactKinds: listAvailableArtifactKinds(view.runs)
+          artifactKinds: listAvailableArtifactKinds(view.runs),
+          decisionImpacts: [...new Set(view.runs.flatMap((run) => (run.decisionImpactKind ? [run.decisionImpactKind] : [])))].sort(),
+          riskKinds: [...new Set(view.runs.flatMap((run) => run.riskKinds))].sort(),
+          evidenceCategories: [...new Set(view.runs.flatMap((run) => run.evidenceStatuses.map((status) => status.category)))].sort(),
+          workflowStages: [...new Set(view.runs.flatMap((run) => (run.workflowStage ? [run.workflowStage] : [])))].sort()
         })
       );
       return;
@@ -91,13 +107,20 @@ export function createVisualizerServer(options: VisualizerServerOptions) {
     }
 
     if (pathname === "/value") {
-      const view = loadValueDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath);
-      html(response, 200, renderValueDashboardPage(view));
+      const suffix = url.search ? `${url.search}` : "";
+      const hashless = `/outcomes${suffix}`;
+      redirect(response, hashless);
+      return;
+    }
+
+    if (pathname === "/outcomes") {
+      const view = loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, parseOutcomesFilters(url.searchParams));
+      html(response, 200, renderOutcomesDashboardPage(view));
       return;
     }
 
     if (pathname === "/api/runs") {
-      const view = loadRunsIndexView(workspaceRoot, runsRoot, toFilters(url.searchParams));
+      const view = loadRunsIndexView(workspaceRoot, runsRoot, toFilters(url.searchParams), benchmarkLedgerPath);
       json(response, 200, view);
       return;
     }
@@ -107,8 +130,8 @@ export function createVisualizerServer(options: VisualizerServerOptions) {
       return;
     }
 
-    if (pathname === "/api/value") {
-      json(response, 200, loadValueDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath));
+    if (pathname === "/api/value" || pathname === "/api/outcomes") {
+      json(response, 200, loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, parseOutcomesFilters(url.searchParams)));
       return;
     }
 

@@ -6,11 +6,13 @@ import type {
   BenchmarkSummaryView,
   EvidenceCategoryView,
   InvalidRunView,
+  OutcomeDetailRowView,
+  OutcomeSummaryView,
+  OutcomesDashboardView,
   RiskSummaryView,
   RunDetailView,
   RunFilters,
   RunListItemView,
-  ValueDashboardView,
   WorkflowChainStageView
 } from "./data.js";
 
@@ -23,7 +25,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function layout(title: string, active: "runs" | "benchmarks" | "value", body: string): string {
+function layout(title: string, active: "runs" | "benchmarks" | "outcomes", body: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -40,7 +42,7 @@ function layout(title: string, active: "runs" | "benchmarks" | "value", body: st
       </div>
       <nav class="nav">
         <a href="/" class="${active === "runs" ? "active" : ""}">Runs</a>
-        <a href="/value" class="${active === "value" ? "active" : ""}">Value</a>
+        <a href="/outcomes" class="${active === "outcomes" ? "active" : ""}">Outcomes</a>
         <a href="/benchmarks" class="${active === "benchmarks" ? "active" : ""}">Benchmarks</a>
       </nav>
     </header>
@@ -95,6 +97,10 @@ export function renderRunsIndexPage(
     workflows: readonly string[];
     statuses: readonly string[];
     artifactKinds: readonly string[];
+    decisionImpacts: readonly string[];
+    riskKinds: readonly string[];
+    evidenceCategories: readonly string[];
+    workflowStages: readonly string[];
   }
 ): string {
   const rows =
@@ -127,6 +133,12 @@ export function renderRunsIndexPage(
         <label>Workflow <select name="workflow">${renderOptions(options.workflows, filters.workflow)}</select></label>
         <label>Status <select name="status">${renderOptions(options.statuses, filters.status)}</select></label>
         <label>Artifact <select name="artifactKind">${renderOptions(options.artifactKinds, filters.artifactKind)}</select></label>
+        <label>Decision <select name="decisionImpact">${renderOptions(options.decisionImpacts, filters.decisionImpact)}</select></label>
+        <label>Risk <select name="riskKind">${renderOptions(options.riskKinds, filters.riskKind)}</select></label>
+        <label>Evidence category <select name="evidenceCategory">${renderOptions(options.evidenceCategories, filters.evidenceCategory)}</select></label>
+        <label>Evidence status <select name="evidenceStatus">${renderOptions(["present", "missing", "partial"], filters.evidenceStatus)}</select></label>
+        <label>Override <select name="hasOverride">${renderOptions(["true", "false"], filters.hasOverride)}</select></label>
+        <label>Workflow stage <select name="workflowStage">${renderOptions(options.workflowStages, filters.workflowStage)}</select></label>
         <button type="submit">Apply</button>
       </form>
       <table class="data-table">
@@ -199,6 +211,28 @@ function renderArtifactSections(artifact: ArtifactPanelView): string {
   return sections || `<p class="muted">No structured section renderer for this artifact kind.</p>`;
 }
 
+function renderArtifactRelatedLinks(artifact: ArtifactPanelView): string {
+  const links: string[] = [];
+
+  if (artifact.artifactKind === "benchmark-summary") {
+    links.push(`<a href="/benchmarks">Benchmark dashboard</a>`);
+  }
+  if (["release-report", "pipeline-report", "deployment-gate-report", "promotion-approval-report"].includes(artifact.artifactKind)) {
+    links.push(`<a href="#workflow-chain">Workflow chain</a>`);
+    links.push(`<a href="#risk-summary">Risk summary</a>`);
+  }
+  if (["planning-brief", "qa-report", "release-report", "pipeline-report", "deployment-gate-report", "promotion-approval-report"].includes(artifact.artifactKind)) {
+    links.push(`<a href="#decision-impact">Decision impact</a>`);
+    links.push(`<a href="#evidence-completeness">Evidence completeness</a>`);
+  }
+
+  if (links.length === 0) {
+    return "";
+  }
+
+  return `<p class="backlinks">Related sections: ${links.join(" · ")}</p>`;
+}
+
 function renderArtifactPanel(artifact: ArtifactPanelView): string {
   return `<article class="panel">
     <div class="row between">
@@ -212,6 +246,7 @@ function renderArtifactPanel(artifact: ArtifactPanelView): string {
       <div><dt>Known schema</dt><dd>${artifact.isKnownArtifact ? "yes" : "no"}</dd></div>
     </dl>
     ${artifact.parseError ? `<p class="warning">Artifact parsed with fallback mode: ${escapeHtml(artifact.parseError)}</p>` : ""}
+    ${renderArtifactRelatedLinks(artifact)}
     ${renderArtifactSections(artifact)}
     ${listSection("Source Refs", artifact.sourceRefs)}
     ${listSection("Issue Refs", artifact.issueRefs)}
@@ -255,7 +290,93 @@ function renderWorkflowChainStages(stages: readonly WorkflowChainStageView[]): s
     .join("")}</ol>`;
 }
 
+function renderTraceRefs(traceRefs: readonly { note: string; runId?: string; artifactKind?: string; section?: string; findingId?: string }[]): string {
+  if (traceRefs.length === 0) {
+    return `<p class="muted">No trace references recorded.</p>`;
+  }
+
+  return `<ul>${traceRefs
+    .map((traceRef) => {
+      const location = [traceRef.runId, traceRef.artifactKind, traceRef.section, traceRef.findingId].filter(Boolean).join(" / ");
+      const runHref = traceRef.runId ? `/runs/${encodeURIComponent(traceRef.runId)}${traceRef.section ? `#${encodeURIComponent(traceRef.section)}` : ""}` : undefined;
+      const locationHtml = location
+        ? runHref
+          ? `<br/><a class="muted" href="${escapeHtml(runHref)}">${escapeHtml(location)}</a>`
+          : `<br/><span class="muted">${escapeHtml(location)}</span>`
+        : "";
+      return `<li>${escapeHtml(traceRef.note)}${locationHtml}</li>`;
+    })
+    .join("")}</ul>`;
+}
+
+function renderOutcomeSummaryCards(cards: readonly OutcomeSummaryView[]): string {
+  return `<div class="metrics">${cards
+    .map(
+      (card) => `<a class="metric metric-link" href="${escapeHtml(card.href)}">
+        <div class="metric-label">${escapeHtml(card.label)}</div>
+        <div class="metric-value">${escapeHtml(String(card.value))}</div>
+        <div class="metric-detail">${escapeHtml(card.detail)}</div>
+      </a>`
+    )
+    .join("")}</div>`;
+}
+
+function renderOutcomeDetailTable(rows: readonly OutcomeDetailRowView[], emptyMessage: string): string {
+  if (rows.length === 0) {
+    return `<p class="muted">${escapeHtml(emptyMessage)}</p>`;
+  }
+
+  return `<table class="data-table">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Workflow</th>
+        <th>Run</th>
+        <th>Source</th>
+        <th>Why</th>
+        <th>Links</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows
+        .map(
+          (row) => `<tr>
+            <td>${escapeHtml(row.title)}</td>
+            <td>${escapeHtml(row.workflow)}</td>
+            <td>${escapeHtml(row.runId)}</td>
+            <td>${escapeHtml(row.source)}</td>
+            <td>
+              <div>${escapeHtml(row.summary)}</div>
+              <div class="trace-list">${renderTraceRefs(row.traceRefs)}</div>
+            </td>
+            <td>
+              <a href="${escapeHtml(row.detailHref)}">Run detail</a><br/>
+              <a href="${escapeHtml(row.runsHref)}">Filtered runs</a>
+            </td>
+          </tr>`
+        )
+        .join("")}
+    </tbody>
+  </table>`;
+}
+
+function renderDerivedReason(reason: { source: string; rule: string; fields: readonly string[]; summary: string }): string {
+  return `<dl class="meta-grid">
+    <div><dt>Source</dt><dd>${escapeHtml(reason.source)}</dd></div>
+    <div><dt>Rule</dt><dd>${escapeHtml(reason.rule)}</dd></div>
+    <div><dt>Fields</dt><dd>${reason.fields.length > 0 ? reason.fields.map((field) => `<span class="chip">${escapeHtml(field)}</span>`).join("") : `<span class="muted">none</span>`}</dd></div>
+    <div><dt>Summary</dt><dd>${escapeHtml(reason.summary)}</dd></div>
+  </dl>`;
+}
+
 export function renderRunDetailPage(run: RunDetailView): string {
+  const backToRunsHref = [
+    run.decisionImpact.kind ? `decisionImpact=${encodeURIComponent(run.decisionImpact.kind)}` : "",
+    run.workflowChain.currentStage ? `workflowStage=${encodeURIComponent(run.workflowChain.currentStage)}` : ""
+  ]
+    .filter((value) => value.length > 0)
+    .join("&");
+
   const body = `
     <section class="panel">
       <div class="row between">
@@ -277,6 +398,7 @@ export function renderRunDetailPage(run: RunDetailView): string {
         <div><dt>Bundle</dt><dd><a href="/api/runs/${encodeURIComponent(run.runId)}/bundle.json">bundle.json</a></dd></div>
         <div><dt>Summary</dt><dd><a href="/api/runs/${encodeURIComponent(run.runId)}/summary.md">summary.md</a></dd></div>
       </dl>
+      <p class="backlinks"><a href="/outcomes">Back to Outcomes</a> · <a href="/runs${backToRunsHref ? `?${backToRunsHref}` : ""}">Back to filtered runs</a></p>
       <details>
         <summary>summary.md</summary>
         <pre>${escapeHtml(run.summaryMarkdown)}</pre>
@@ -291,7 +413,7 @@ export function renderRunDetailPage(run: RunDetailView): string {
       <section class="panel"><h2>Blocked Plugins</h2>${renderBlockedPlugins(run.blockedPluginsList)}</section>
     </section>
     <section class="grid">
-      <section class="panel">
+      <section class="panel" id="decision-impact">
         <h2>Decision Impact</h2>
         <p>${escapeHtml(run.decisionImpact.summary)}</p>
         <div class="metrics">
@@ -299,14 +421,24 @@ export function renderRunDetailPage(run: RunDetailView): string {
           ${metricCard("Changed decision", run.decisionImpact.changedDecision ? "yes" : "no")}
           ${metricCard("Source", run.decisionImpact.source)}
         </div>
+        <section class="artifact-section">
+          <h3>Why this outcome?</h3>
+          ${renderDerivedReason(run.decisionImpact.reason)}
+          ${renderTraceRefs(run.decisionImpact.traceRefs)}
+        </section>
       </section>
-      <section class="panel">
+      <section class="panel" id="risk-summary">
         <h2>Risk Summary</h2>
         ${renderRiskSummary(run.riskSummary)}
+        <section class="artifact-section">
+          <h3>Why this risk summary?</h3>
+          ${renderDerivedReason(run.riskSummary.reason)}
+          ${renderTraceRefs(run.riskSummary.traceRefs)}
+        </section>
       </section>
     </section>
     <section class="grid">
-      <section class="panel">
+      <section class="panel" id="evidence-completeness">
         <h2>Evidence Completeness</h2>
         ${
           run.evidenceCompleteness.length === 0
@@ -316,21 +448,55 @@ export function renderRunDetailPage(run: RunDetailView): string {
                   (artifact) => `<article class="artifact-section">
                     <h3>${escapeHtml(artifact.workflow)}</h3>
                     <ul>${artifact.categories.map(renderEvidenceCategory).join("")}</ul>
+                    <h4>How evidence status was derived</h4>
+                    <div class="stack">
+                      ${artifact.categories
+                        .map(
+                          (category) => `<section class="panel panel-subtle">
+                            <div class="row between">
+                              <strong>${escapeHtml(category.label)}</strong>
+                              ${statusBadge(category.status)}
+                            </div>
+                            ${renderDerivedReason(category.reason)}
+                            ${renderTraceRefs(category.traceRefs)}
+                          </section>`
+                        )
+                        .join("")}
+                    </div>
                   </article>`
                 )
                 .join("")
         }
       </section>
-      <section class="panel">
+      <section class="panel" id="workflow-chain">
         <h2>Workflow Chain</h2>
         <p class="muted">Read-only SDLC chain inferred from the current artifact and its referenced upstream evidence.</p>
         ${renderWorkflowChainStages(run.workflowChain.stages)}
+        <section class="artifact-section">
+          <h3>Chain dependencies</h3>
+          <div class="stack">
+            ${run.workflowChain.stages
+              .map(
+                (stage) => `<section class="panel panel-subtle">
+                  <div class="row between">
+                    <strong>${escapeHtml(stage.label)}</strong>
+                    ${statusBadge(stage.status)}
+                  </div>
+                  <p>${escapeHtml(stage.detail)}</p>
+                  <p class="muted">${escapeHtml(stage.required ? "Required for current flow" : "Not required for current flow")}</p>
+                  ${renderDerivedReason(stage.reason)}
+                  ${renderTraceRefs(stage.traceRefs)}
+                </section>`
+              )
+              .join("")}
+          </div>
+        </section>
       </section>
     </section>
     <section class="panel"><h2>Audit Entries</h2>${renderAuditEntries(run.entries)}</section>
     <section class="stack">
       <h2>Lifecycle Artifacts</h2>
-      ${run.artifacts.map(renderArtifactPanel).join("")}
+      ${run.artifacts.map((artifact) => `<div id="${escapeHtml(artifact.id)}">${renderArtifactPanel(artifact)}</div>`).join("")}
     </section>
   `;
 
@@ -387,54 +553,47 @@ export function renderBenchmarksPage(view: BenchmarkIndexView): string {
   return layout("AgentForge Visualizer - Benchmarks", "benchmarks", body);
 }
 
-export function renderValueDashboardPage(view: ValueDashboardView): string {
+export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string {
   const body = `
     <section class="panel">
-      <h2>Decision Impact</h2>
-      <p class="muted">This view answers whether AgentForge changed decisions, caught risk, or exposed process gaps across the local run corpus.</p>
+      <h2>Outcomes</h2>
+      <p class="muted">Leadership summary first, practitioner drill-down second. Every metric below links to filtered details and then down to the exact runs that produced it.</p>
       <div class="metrics">
-        ${stackedMetricCard("Changed decisions", view.decisionImpact.changedDecisionCount, `${view.runCount} run(s) in view`)}
+        ${stackedMetricCard("Runs in scope", view.runCount, view.filteredPanel ? `Filtered to ${view.filteredPanel}` : "Full local run corpus")}
+        ${stackedMetricCard("Comparable pairs", view.decisionImpact.comparableBenchmarkPairs, "Control + AgentForge ledger pairs")}
+      </div>
+    </section>
+    <section class="panel" id="decision-impact">
+      <h2>Decision Outcomes</h2>
+      <p class="muted">Did AgentForge change the plan, add validation, or simply confirm the current path?</p>
+      ${renderOutcomeSummaryCards(view.summaries.decision)}
+      <div class="metrics">
         ${metricCard("Scope reduction", view.decisionImpact.scopeReductionCount)}
         ${metricCard("Added validation", view.decisionImpact.addedValidationCount)}
         ${metricCard("Blocked approval", view.decisionImpact.blockedApprovalCount)}
         ${metricCard("Remediation", view.decisionImpact.remediationCount)}
         ${metricCard("Added confidence", view.decisionImpact.addedConfidenceCount)}
         ${metricCard("No meaningful change", view.decisionImpact.noMeaningfulChangeCount)}
-        ${stackedMetricCard("Comparable pairs", view.decisionImpact.comparableBenchmarkPairs, "Control + AgentForge ledger pairs")}
       </div>
+      ${renderOutcomeDetailTable(view.details.decision, "No decision outcome rows match the current filters.")}
     </section>
-    <section class="grid">
-      <section class="panel">
-        <h2>Risk Caught</h2>
-        <div class="metrics">
-          ${metricCard("Confirmed high", view.risk.confirmedHighCount)}
-          ${metricCard("Confirmed medium", view.risk.confirmedMediumCount)}
-          ${metricCard("Noisy findings", view.risk.noisyFindingCount)}
-          ${metricCard("Blocked approvals prevented", view.risk.blockedApprovalPreventedCount)}
-          ${metricCard("Unresolved risks", view.risk.unresolvedRiskCount)}
-        </div>
-        <p class="muted">Confirmed high/medium/noisy counts come from the optional local benchmark ledger when present. Blocked approvals and unresolved risks are derived from local run artifacts.</p>
-      </section>
-      <section class="panel">
-        <h2>Friction And Overrides</h2>
-        ${
-          !view.friction.ledgerAvailable
-            ? `<p class="muted">No local benchmark ledger overlays detected. Add <code>.agentops/benchmark-ledger.json</code> to surface override reasons, false positives, and request friction directly in the dashboard.</p>`
-            : `
-              <div class="metrics">
-                ${metricCard("Overrides", view.friction.overrideCount)}
-                ${metricCard("False positives", view.friction.falsePositiveCount)}
-                ${metricCard("Manual steps", view.friction.manualStepCount)}
-                ${metricCard("Request friction", view.friction.requestFrictionCount)}
-              </div>
-              ${view.friction.repeatedOverrideReasons.length > 0 ? `<h3>Repeated Override Reasons</h3><ul>${view.friction.repeatedOverrideReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : `<p class="muted">No override reasons recorded.</p>`}
-              ${view.friction.noisyPatterns.length > 0 ? `<h3>Noisy Patterns</h3><ul>${view.friction.noisyPatterns.map((pattern) => `<li>${escapeHtml(pattern)}</li>`).join("")}</ul>` : `<p class="muted">No repeated false-positive patterns recorded.</p>`}
-            `
-        }
-      </section>
+    <section class="panel" id="risk">
+      <h2>Risk And Gates</h2>
+      <p class="muted">Confirmed medium/high values come from the optional local ledger. Gate blocks and unresolved risks still render from local artifacts when no ledger exists.</p>
+      ${renderOutcomeSummaryCards(view.summaries.risk)}
+      <div class="metrics">
+        ${metricCard("Confirmed high", view.risk.confirmedHighCount)}
+        ${metricCard("Confirmed medium", view.risk.confirmedMediumCount)}
+        ${metricCard("Noisy findings", view.risk.noisyFindingCount)}
+        ${metricCard("Blocked approvals prevented", view.risk.blockedApprovalPreventedCount)}
+        ${metricCard("Unresolved risks", view.risk.unresolvedRiskCount)}
+      </div>
+      ${renderOutcomeDetailTable(view.details.risk, "No risk rows match the current filters.")}
     </section>
-    <section class="panel">
-      <h2>Evidence Completeness</h2>
+    <section class="panel" id="evidence">
+      <h2>Evidence Hygiene</h2>
+      <p class="muted">This shows where evidence is strong, partial, or missing and which gaps recur across workflows.</p>
+      ${renderOutcomeSummaryCards(view.summaries.evidence)}
       ${
         view.evidence.length === 0
           ? `<p class="muted">No evidence completeness data is available for the current run corpus yet.</p>`
@@ -463,10 +622,31 @@ export function renderValueDashboardPage(view: ValueDashboardView): string {
               </tbody>
             </table>`
       }
+      ${renderOutcomeDetailTable(view.details.evidence, "No evidence rows match the current filters.")}
     </section>
-    <section class="panel">
+    <section class="panel" id="friction">
+      <h2>Friction Hotspots</h2>
+      ${renderOutcomeSummaryCards(view.summaries.friction)}
+      ${
+        !view.friction.ledgerAvailable
+          ? `<p class="muted">No local benchmark ledger overlays detected. Add <code>.agentops/benchmark-ledger.json</code> to surface override reasons, false positives, and request friction directly in the outcomes page.</p>`
+          : `
+            <div class="metrics">
+              ${metricCard("Overrides", view.friction.overrideCount)}
+              ${metricCard("False positives", view.friction.falsePositiveCount)}
+              ${metricCard("Manual steps", view.friction.manualStepCount)}
+              ${metricCard("Request friction", view.friction.requestFrictionCount)}
+            </div>
+            ${view.friction.repeatedOverrideReasons.length > 0 ? `<h3>Repeated Override Reasons</h3><ul>${view.friction.repeatedOverrideReasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>` : `<p class="muted">No override reasons recorded.</p>`}
+            ${view.friction.noisyPatterns.length > 0 ? `<h3>Noisy Patterns</h3><ul>${view.friction.noisyPatterns.map((pattern) => `<li>${escapeHtml(pattern)}</li>`).join("")}</ul>` : `<p class="muted">No repeated false-positive patterns recorded.</p>`}
+          `
+      }
+      ${renderOutcomeDetailTable(view.details.friction, "No friction rows match the current filters.")}
+    </section>
+    <section class="panel" id="workflow-chain">
       <h2>Workflow Chain Coverage</h2>
-      <p class="muted">Stages below are inferred from local artifact kinds and upstream references. Use this to see where release chains break or skip earlier evidence.</p>
+      <p class="muted">Stages below distinguish current state, missing required upstream evidence, and flow segments that are simply not required yet.</p>
+      ${renderOutcomeSummaryCards(view.summaries.workflowChain)}
       ${
         view.workflowChains.length === 0
           ? `<p class="muted">No chain-aware workflow runs were found.</p>`
@@ -493,6 +673,7 @@ export function renderValueDashboardPage(view: ValueDashboardView): string {
               </tbody>
             </table>`
       }
+      ${renderOutcomeDetailTable(view.details.workflowChain, "No workflow-chain rows match the current filters.")}
     </section>
     <section class="panel">
       <h2>Benchmark Ledger Overlay</h2>
@@ -507,7 +688,11 @@ export function renderValueDashboardPage(view: ValueDashboardView): string {
     </section>
   `;
 
-  return layout("AgentForge Visualizer - Value", "value", body);
+  return layout("AgentForge Visualizer - Outcomes", "outcomes", body);
+}
+
+export function renderValueDashboardPage(view: OutcomesDashboardView): string {
+  return renderOutcomesDashboardPage(view);
 }
 
 export function visualizerStyles(): string {
@@ -616,6 +801,14 @@ button {
   border-radius: 12px;
   padding: 0.8rem;
 }
+.metric-link {
+  color: inherit;
+  text-decoration: none;
+}
+.metric-link:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.1);
+}
 .metric-label { color: var(--muted); font-size: 0.85rem; }
 .metric-value { font-size: 1.2rem; font-weight: 700; margin-top: 0.2rem; }
 .metric-detail { color: var(--muted); font-size: 0.82rem; margin-top: 0.3rem; }
@@ -653,6 +846,8 @@ button {
 .meta-grid dt { color: var(--muted); font-size: 0.85rem; }
 .meta-grid dd { margin: 0.2rem 0 0; }
 .artifact-section { margin-top: 1rem; }
+.panel-subtle { background: #f8fbfb; }
+.trace-list ul { margin: 0.5rem 0 0 1rem; }
 .workflow-chain {
   list-style: none;
   margin: 0;
@@ -669,6 +864,7 @@ button {
 .workflow-chain-stage-current { background: #edf7f6; border-color: #cbeae5; }
 .workflow-chain-stage-present { background: #f8fbfb; }
 .workflow-chain-stage-missing { background: #fff6f3; border-color: #f2d0c4; }
+.backlinks { margin-top: 1rem; }
 pre {
   margin: 0.8rem 0 0;
   padding: 1rem;

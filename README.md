@@ -50,7 +50,7 @@ If you want to develop AgentForge itself, use the contributor/source-build path 
 
 Source-build only:
 
-- `pnpm visualizer:dev` starts a local read-only visualizer for `.agentops/runs`, including value, risk, and benchmark views
+- `pnpm visualizer:dev` starts a local read-only visualizer for `.agentops/runs`, including outcomes, risk, and benchmark views
 - see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current boundary and launch path
 
 ## What Success Looks Like

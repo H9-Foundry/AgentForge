@@ -21,7 +21,7 @@ It does **not** currently provide:
 The current visualization layer includes:
 
 - a runs index
-- a value dashboard for decision impact, risk, evidence completeness, friction, and workflow-chain coverage
+- an outcomes dashboard for decision impact, risk, evidence completeness, friction, and workflow-chain coverage
 - a single run detail view
 - a benchmark dashboard for local `benchmark-summary` artifacts
 
@@ -40,6 +40,8 @@ Default behavior:
 
 - serves a local web app on `http://127.0.0.1:4313`
 - reads runs from `.agentops/runs` under the current workspace root
+- uses `/outcomes` as the canonical route for process-impact inspection
+- keeps `/value` as a local compatibility alias for one transition cycle
 
 Optional flags:
 
@@ -49,7 +51,7 @@ pnpm visualizer:dev -- --runs-root /absolute/path/to/.agentops/runs --benchmark-
 
 ## Optional Benchmark Ledger Overlay
 
-To surface decision-impact, override, false-positive, and friction summaries directly in the value dashboard, add an optional local JSON file at:
+To surface adjudicated decision-impact, override, false-positive, evidence-gap, and friction summaries directly in the outcomes dashboard, add an optional local JSON file at:
 
 - `.agentops/benchmark-ledger.json`
 
@@ -68,6 +70,24 @@ The visualizer treats this file as an internal overlay, not a product contract. 
       "workflow": "planning-discovery",
       "decisionOutcome": "added_validation",
       "agentforgeChangedDecision": true,
+      "summary": "AgentForge forced a release-evidence follow-up before merge.",
+      "decisionImpactReason": "Derived from missing release evidence and required verification checks.",
+      "triggerRefs": [
+        {
+          "runId": "1774182026977-5f74df",
+          "artifactKind": "release-report",
+          "section": "required-verification",
+          "note": "Release report still had missing CI evidence."
+        }
+      ],
+      "confirmedRiskRefs": [
+        {
+          "severity": "medium",
+          "title": "Missing CI evidence before release decision",
+          "runId": "1774182026977-5f74df",
+          "artifactKind": "release-report"
+        }
+      ],
       "confirmedRisks": {
         "high": 0,
         "medium": 1,
@@ -80,8 +100,23 @@ The visualizer treats this file as an internal overlay, not a product contract. 
         "missing": ["release-report"],
         "partial": ["ci-evidence"]
       },
+      "evidenceGapRefs": [
+        {
+          "runId": "1774182026977-5f74df",
+          "artifactKind": "release-report",
+          "section": "evidence",
+          "note": "CI evidence was only partial."
+        }
+      ],
+      "workflowStatuses": [
+        {
+          "workflow": "planning-discovery",
+          "status": "success"
+        }
+      ],
       "friction": {
         "override": false,
+        "falsePositiveRefs": [],
         "falsePositivePatterns": [],
         "manualSteps": [],
         "requestFriction": []

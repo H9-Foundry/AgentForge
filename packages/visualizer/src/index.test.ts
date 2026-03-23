@@ -11,11 +11,12 @@ import {
   listAvailableWorkflows,
   loadBenchmarkIndexView,
   loadBenchmarkLedgerView,
+  loadOutcomesDashboardView,
   loadRunDetailView,
-  loadRunsIndexView,
-  loadValueDashboardView
+  loadRunsIndexView
 } from "./data.js";
-import { renderBenchmarksPage, renderRunDetailPage, renderRunsIndexPage, renderValueDashboardPage } from "./html.js";
+import { renderBenchmarksPage, renderOutcomesDashboardPage, renderRunDetailPage, renderRunsIndexPage } from "./html.js";
+import { createVisualizerServer } from "./index.js";
 
 function cloneFixture<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -167,7 +168,7 @@ describe("visualizer data loading", () => {
     expect(benchmarks.benchmarks[0]?.comparedRuns[0]?.hasLocalRunLink).toBe(true);
   });
 
-  it("loads benchmark ledger overlays and derives value dashboard summaries", () => {
+  it("loads benchmark ledger overlays and derives outcomes dashboard summaries", () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-promotion", [cloneFixture(schemaFixtures.promotionApprovalArtifact)], {
       workflow: "promotion-approval"
@@ -211,16 +212,18 @@ describe("visualizer data loading", () => {
 
     const ledger = loadBenchmarkLedgerView(root);
     const detail = loadRunDetailView(root, "run-promotion");
-    const value = loadValueDashboardView(root);
+    const outcomes = loadOutcomesDashboardView(root);
 
     expect(ledger.entries).toHaveLength(2);
     expect(detail?.decisionImpact.kind).toBe("blocked_approval");
     expect(detail?.decisionImpact.source).toBe("ledger");
+    expect(detail?.decisionImpact.reason.source).toBe("ledger");
     expect(detail?.evidenceCompleteness[0]?.categories.some((category) => category.key === "deployment-gate-report")).toBe(true);
-    expect(value.decisionImpact.changedDecisionCount).toBeGreaterThan(0);
-    expect(value.risk.confirmedHighCount).toBe(1);
-    expect(value.friction.overrideCount).toBe(1);
-    expect(value.workflowChains.some((stage) => stage.stage === "promotion")).toBe(true);
+    expect(outcomes.decisionImpact.changedDecisionCount).toBeGreaterThan(0);
+    expect(outcomes.risk.confirmedHighCount).toBe(1);
+    expect(outcomes.friction.overrideCount).toBe(1);
+    expect(outcomes.workflowChains.some((stage) => stage.stage === "promotion")).toBe(true);
+    expect(outcomes.details.friction[0]?.source).toBe("ledger");
   });
 
   it("falls back to a generic artifact panel for unknown artifact kinds", () => {
@@ -276,7 +279,7 @@ describe("visualizer data loading", () => {
 });
 
 describe("visualizer html rendering", () => {
-  it("renders runs, run detail, and benchmarks pages", () => {
+  it("renders runs, run detail, benchmarks, and outcomes pages", () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-qa", [cloneFixture(schemaFixtures.qaArtifact)], {
       workflow: "qa-review",
@@ -298,29 +301,78 @@ describe("visualizer html rendering", () => {
     const runsView = loadRunsIndexView(root);
     const runDetail = loadRunDetailView(root, "run-qa");
     const benchmarks = loadBenchmarkIndexView(root);
-    const value = loadValueDashboardView(root);
+    const outcomes = loadOutcomesDashboardView(root);
 
     const runsHtml = renderRunsIndexPage(runsView.runs, runsView.invalidRuns, {}, {
       workflows: listAvailableWorkflows(runsView.runs),
       statuses: listAvailableStatuses(runsView.runs),
-      artifactKinds: listAvailableArtifactKinds(runsView.runs)
+      artifactKinds: listAvailableArtifactKinds(runsView.runs),
+      decisionImpacts: [...new Set(runsView.runs.flatMap((run) => (run.decisionImpactKind ? [run.decisionImpactKind] : [])))].sort(),
+      riskKinds: [...new Set(runsView.runs.flatMap((run) => run.riskKinds))].sort(),
+      evidenceCategories: [...new Set(runsView.runs.flatMap((run) => run.evidenceStatuses.map((status) => status.category)))].sort(),
+      workflowStages: [...new Set(runsView.runs.flatMap((run) => (run.workflowStage ? [run.workflowStage] : [])))].sort()
     });
     const detailHtml = renderRunDetailPage(runDetail!);
     const benchmarkHtml = renderBenchmarksPage(benchmarks);
-    const valueHtml = renderValueDashboardPage(value);
+    const outcomesHtml = renderOutcomesDashboardPage(outcomes);
 
     expect(runsHtml).toContain("AgentForge Visualizer");
     expect(runsHtml).toContain("run-qa");
-    expect(runsHtml).toContain("Value");
+    expect(runsHtml).toContain("Outcomes");
+    expect(runsHtml).toContain("decisionImpact");
     expect(detailHtml).toContain("Lifecycle Artifacts");
     expect(detailHtml).toContain("qa-report");
     expect(detailHtml).toContain("bundle.json");
     expect(detailHtml).toContain("Decision Impact");
     expect(detailHtml).toContain("Workflow Chain");
+    expect(detailHtml).toContain("Back to Outcomes");
+    expect(detailHtml).toContain("Why this outcome?");
+    expect(detailHtml).toContain("id=\"decision-impact\"");
+    expect(detailHtml).toContain("id=\"workflow-chain\"");
     expect(benchmarkHtml).toContain("Benchmark Dashboard");
     expect(benchmarkHtml).toContain("Detected 1 deterministic regression");
-    expect(valueHtml).toContain("Decision Impact");
-    expect(valueHtml).toContain("Evidence Completeness");
-    expect(valueHtml).toContain("Workflow Chain Coverage");
+    expect(outcomesHtml).toContain("Decision Outcomes");
+    expect(outcomesHtml).toContain("Evidence Hygiene");
+    expect(outcomesHtml).toContain("Workflow Chain Coverage");
+    expect(outcomesHtml).toContain("/runs?decisionImpact=");
+  });
+
+  it("serves outcomes as the canonical route and keeps value as an alias", async () => {
+    const root = createWorkspace();
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)], {
+      workflow: "release-readiness"
+    });
+
+    const server = createVisualizerServer({ workspaceRoot: root });
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const serverUrl = `http://127.0.0.1:${port}`;
+    try {
+      const outcomesResponse = await fetch(`${serverUrl}/outcomes`);
+      const outcomesHtml = await outcomesResponse.text();
+
+      const valueResponse = await fetch(`${serverUrl}/value`, { redirect: "manual" });
+      const apiOutcomes = await fetch(`${serverUrl}/api/outcomes`);
+      const apiValue = await fetch(`${serverUrl}/api/value`);
+
+      expect(outcomesResponse.status).toBe(200);
+      expect(outcomesHtml).toContain("Outcomes");
+      expect(valueResponse.status).toBe(302);
+      expect(valueResponse.headers.get("location")).toBe("/outcomes");
+      expect(await apiOutcomes.text()).toBe(await apiValue.text());
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
   });
 });
