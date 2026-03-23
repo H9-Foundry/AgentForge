@@ -53,6 +53,19 @@ Yes, if all of these are acceptable:
 - the team accepts proposal/reporting workflows rather than autonomous write-heavy behavior
 - the team can inspect `.agentops/runs/<run-id>/bundle.json` and `.agentops/runs/<run-id>/summary.md`
 
+## Next Proof Phase
+
+The next adoption proof step is not a broad plug-and-play claim. It is the first bounded external portability benchmark in a real second repository.
+
+Current next target:
+
+- `CreateCVs`
+- use the published CLI plus official workflows only
+- use the embedded pilot contract already merged in that repository
+- compare the same agent's default flow versus the AgentForge-gated flow using the same benchmark rules established in the AgentForge-first dogfood phase
+
+See [docs/CREATECVS_PORTABILITY_PHASE.md](CREATECVS_PORTABILITY_PHASE.md) for the current portability benchmark contract.
+
 ### Do Not Describe As Plug-And-Play Yet
 
 Do not describe AgentForge as plug-and-play for less technical adopters until:
