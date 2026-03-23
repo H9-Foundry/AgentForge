@@ -1,0 +1,19 @@
+{
+  "name": "@h9-foundry/agentforge-visualizer",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Source-build-only local web app for inspecting AgentForge run bundles.",
+  "license": "MIT",
+  "author": "H9 Foundry",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@h9-foundry/agentforge-schemas": "workspace:*",
+    "@h9-foundry/agentforge-shared-types": "workspace:*"
+  }
+}

@@ -342,6 +342,18 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  packages/visualizer:
+    dependencies:
+      '@h9-foundry/agentforge-schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@h9-foundry/agentforge-shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+
 packages:
 
   '@babel/runtime@7.28.6':
