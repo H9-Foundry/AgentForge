@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.dev.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
+  "references": [
+    { "path": "../schemas" },
+    { "path": "../shared-types" }
+  ]
+}

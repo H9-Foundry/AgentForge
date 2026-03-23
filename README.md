@@ -48,6 +48,11 @@ The preset writes an explicit starter request to `.agentops/requests/planning.ya
 
 If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
 
+Source-build only:
+
+- `pnpm visualizer:dev` starts a local read-only visualizer for `.agentops/runs`, including outcomes, risk, and benchmark views
+- see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current boundary and launch path
+
 ## What Success Looks Like
 
 After a clean official workflow run, the CLI returns a compact JSON summary like this:

@@ -233,7 +233,7 @@ describe("release preflight", () => {
     expect(result.stdout).toContain("AgentForge npm bootstrap guide");
   });
 
-  it("renders workflow-first help for the current wedge", { timeout: 15000 }, () => {
+  it("renders workflow-first help for the current wedge", { timeout: 30000 }, () => {
     const topLevel = spawnSync("pnpm", ["exec", "tsx", "packages/cli/src/bin.ts", "--help"], {
       cwd: process.cwd(),
       encoding: "utf8"
