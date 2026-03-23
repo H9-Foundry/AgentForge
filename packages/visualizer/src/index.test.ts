@@ -226,6 +226,102 @@ describe("visualizer data loading", () => {
     expect(outcomes.details.friction[0]?.source).toBe("ledger");
   });
 
+  it("dedupes blocked approval leadership metrics across one release chain and preserves practitioner rows", () => {
+    const root = createWorkspace();
+    const releaseArtifact = cloneFixture(schemaFixtures.releaseArtifact);
+    const pipelineArtifact: any = cloneFixture(schemaFixtures.pipelineArtifact);
+    const deploymentArtifact: any = cloneFixture(schemaFixtures.deploymentGateArtifact);
+    const promotionArtifact: any = cloneFixture(schemaFixtures.promotionApprovalArtifact);
+
+    pipelineArtifact.payload.reviewStatus = "blocked";
+    pipelineArtifact.payload.blockers = ["Imported CI evidence still reports failing checks: CI / lint."];
+    pipelineArtifact.source.inputRefs = [".agentops/runs/run-release/bundle.json"];
+    deploymentArtifact.payload.gateStatus = "blocked";
+    deploymentArtifact.payload.blockers = [
+      "Pipeline report /private/tmp/agentforge-benchmark2/.agentops/runs/run-pipeline/bundle.json is blocked and cannot satisfy a deployment gate yet."
+    ];
+    deploymentArtifact.source.inputRefs = [
+      ".agentops/runs/run-release/bundle.json",
+      ".agentops/runs/run-pipeline/bundle.json"
+    ];
+    promotionArtifact.payload.approvalStatus = "blocked";
+    promotionArtifact.payload.blockers = [
+      "Deployment gate report /private/tmp/agentforge-benchmark2/.agentops/runs/run-deployment/bundle.json is blocked and cannot satisfy promotion approval yet."
+    ];
+    promotionArtifact.source.inputRefs = [
+      ".agentops/runs/run-release/bundle.json",
+      ".agentops/runs/run-deployment/bundle.json"
+    ];
+
+    writeBundleFixture(root, "run-release", [releaseArtifact], {
+      workflow: "release-readiness"
+    });
+    writeBundleFixture(root, "run-pipeline", [pipelineArtifact], {
+      workflow: "pipeline-evidence-review"
+    });
+    writeBundleFixture(root, "run-deployment", [deploymentArtifact], {
+      workflow: "deployment-gate-review"
+    });
+    writeBundleFixture(root, "run-promotion", [promotionArtifact], {
+      workflow: "promotion-approval"
+    });
+
+    const outcomes = loadOutcomesDashboardView(root);
+
+    expect(outcomes.decisionImpact.blockedApprovalCount).toBe(1);
+    expect(outcomes.risk.blockedApprovalPreventedCount).toBe(1);
+    expect(outcomes.details.decision.filter((row) => row.title === "blocked approval")).toHaveLength(3);
+  });
+
+  it("explains deployment and promotion blocking in terms of the upstream release chain stage", () => {
+    const root = createWorkspace();
+    const releaseArtifact = cloneFixture(schemaFixtures.releaseArtifact);
+    const pipelineArtifact: any = cloneFixture(schemaFixtures.pipelineArtifact);
+    const deploymentArtifact: any = cloneFixture(schemaFixtures.deploymentGateArtifact);
+    const promotionArtifact: any = cloneFixture(schemaFixtures.promotionApprovalArtifact);
+
+    pipelineArtifact.payload.reviewStatus = "blocked";
+    pipelineArtifact.payload.blockers = ["Imported CI evidence still reports failing checks: CI / lint."];
+    pipelineArtifact.source.inputRefs = [".agentops/runs/run-release/bundle.json"];
+    deploymentArtifact.payload.gateStatus = "blocked";
+    deploymentArtifact.payload.blockers = [
+      "Pipeline report /private/tmp/agentforge-benchmark2/.agentops/runs/run-pipeline/bundle.json is blocked and cannot satisfy a deployment gate yet."
+    ];
+    deploymentArtifact.source.inputRefs = [
+      ".agentops/runs/run-release/bundle.json",
+      ".agentops/runs/run-pipeline/bundle.json"
+    ];
+    promotionArtifact.payload.approvalStatus = "blocked";
+    promotionArtifact.payload.blockers = [
+      "Deployment gate report /private/tmp/agentforge-benchmark2/.agentops/runs/run-deployment/bundle.json is blocked and cannot satisfy promotion approval yet."
+    ];
+    promotionArtifact.source.inputRefs = [
+      ".agentops/runs/run-release/bundle.json",
+      ".agentops/runs/run-deployment/bundle.json"
+    ];
+
+    writeBundleFixture(root, "run-release", [releaseArtifact], {
+      workflow: "release-readiness"
+    });
+    writeBundleFixture(root, "run-pipeline", [pipelineArtifact], {
+      workflow: "pipeline-evidence-review"
+    });
+    writeBundleFixture(root, "run-deployment", [deploymentArtifact], {
+      workflow: "deployment-gate-review"
+    });
+    writeBundleFixture(root, "run-promotion", [promotionArtifact], {
+      workflow: "promotion-approval"
+    });
+
+    const deployment = loadRunDetailView(root, "run-deployment");
+    const promotion = loadRunDetailView(root, "run-promotion");
+
+    expect(deployment?.decisionImpact.reason.summary).toContain("depends on a blocked pipeline report in the same release chain");
+    expect(deployment?.decisionImpact.traceRefs.some((trace) => trace.runId === "run-pipeline")).toBe(true);
+    expect(promotion?.decisionImpact.reason.summary).toContain("depends on a blocked deployment gate report in the same release chain");
+    expect(promotion?.decisionImpact.traceRefs.some((trace) => trace.runId === "run-deployment")).toBe(true);
+  });
+
   it("falls back to a generic artifact panel for unknown artifact kinds", () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-unknown", [

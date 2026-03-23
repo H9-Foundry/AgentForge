@@ -227,6 +227,7 @@ export interface WorkflowChainStageView {
 export interface WorkflowChainView {
   currentStage: string;
   stages: WorkflowChainStageView[];
+  chainKey?: string;
 }
 
 export interface OutcomeSummaryView {
@@ -401,6 +402,10 @@ function readString(value: unknown, fallback: string): string {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : [];
+}
+
+function readRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> => isRecord(entry)) : [];
 }
 
 function readLooseArtifact(value: unknown): LooseArtifact {
@@ -1248,6 +1253,137 @@ function buildWorkflowChain(workflow: string, artifacts: readonly ArtifactPanelV
   };
 }
 
+function extractRunIdFromRef(ref: string): string | undefined {
+  const match = ref.match(/\.agentops\/runs\/([^/]+)\/bundle\.json$/);
+  return match?.[1];
+}
+
+function extractRunIdFromText(text: string): string | undefined {
+  const match = text.match(/\.agentops\/runs\/([^/]+)\/bundle\.json/);
+  return match?.[1];
+}
+
+function extractReferencedRunIds(artifacts: readonly ArtifactPanelView[]): string[] {
+  return [...new Set(artifacts.flatMap((artifact) => artifact.sourceRefs.map(extractRunIdFromRef).filter((value): value is string => Boolean(value))))];
+}
+
+function isReleaseChainStage(stage: string): boolean {
+  return stage === "release" || stage === "pipeline" || stage === "deployment" || stage === "promotion";
+}
+
+function resolveReleaseChainRootRunId(
+  run: RunDetailView,
+  runsById: ReadonlyMap<string, RunDetailView>,
+  visited = new Set<string>()
+): string {
+  if (!isReleaseChainStage(run.workflowChain.currentStage)) {
+    return run.runId;
+  }
+
+  if (run.workflowChain.currentStage === "release" || visited.has(run.runId)) {
+    return run.runId;
+  }
+
+  const nextVisited = new Set(visited);
+  nextVisited.add(run.runId);
+  const referencedRuns = extractReferencedRunIds(run.artifacts)
+    .map((runId) => runsById.get(runId))
+    .filter((candidate): candidate is RunDetailView => Boolean(candidate));
+
+  const releaseAncestor = referencedRuns.find((candidate) => candidate.workflowChain.currentStage === "release");
+  if (releaseAncestor) {
+    return releaseAncestor.runId;
+  }
+
+  const releaseChainAncestor = referencedRuns.find((candidate) => isReleaseChainStage(candidate.workflowChain.currentStage));
+  if (releaseChainAncestor) {
+    return resolveReleaseChainRootRunId(releaseChainAncestor, runsById, nextVisited);
+  }
+
+  return run.runId;
+}
+
+function describeBlockedApproval(
+  run: RunListItemView,
+  artifact: ArtifactPanelView
+): {
+  summary: string;
+  traceRefs: TraceReferenceView[];
+} {
+  const payload = parseArtifactPayload(artifact);
+  const blockerMessages = [
+    ...readStringArray(payload?.blockers),
+    ...readRecordArray(payload?.verificationChecks)
+      .filter((check) => readString(check.status, "") === "failed")
+      .map((check) => readString(check.detail, ""))
+      .filter((detail) => detail.length > 0)
+  ];
+  const blockerRunId = blockerMessages.map(extractRunIdFromText).find((value): value is string => Boolean(value));
+
+  if (artifact.artifactKind === "pipeline-report") {
+    const failingEvidence = blockerMessages.find((message) => message.includes("Imported CI evidence still reports failing checks"));
+    if (failingEvidence) {
+      return {
+        summary: "Derived as blocked approval because the pipeline stage still has failing imported CI evidence in the current release chain.",
+        traceRefs: [
+          {
+            runId: run.runId,
+            artifactKind: artifact.artifactKind,
+            section: "blockers",
+            note: failingEvidence
+          }
+        ]
+      };
+    }
+  }
+
+  if (artifact.artifactKind === "deployment-gate-report") {
+    const blockedPipelineMessage = blockerMessages.find((message) => message.includes("Pipeline report"));
+    if (blockedPipelineMessage) {
+      return {
+        summary: "Derived as blocked approval because this deployment gate still depends on a blocked pipeline report in the same release chain.",
+        traceRefs: [
+          {
+            runId: blockerRunId,
+            artifactKind: "pipeline-report",
+            section: "decision-impact",
+            note: blockedPipelineMessage
+          }
+        ]
+      };
+    }
+  }
+
+  if (artifact.artifactKind === "promotion-approval-report") {
+    const blockedDeploymentMessage = blockerMessages.find((message) => message.includes("Deployment gate report"));
+    if (blockedDeploymentMessage) {
+      return {
+        summary: "Derived as blocked approval because promotion still depends on a blocked deployment gate report in the same release chain.",
+        traceRefs: [
+          {
+            runId: blockerRunId,
+            artifactKind: "deployment-gate-report",
+            section: "decision-impact",
+            note: blockedDeploymentMessage
+          }
+        ]
+      };
+    }
+  }
+
+  return {
+    summary: `Derived as blocked approval because ${artifact.artifactKind} reported a blocked state.`,
+    traceRefs: [
+      {
+        runId: blockerRunId ?? run.runId,
+        artifactKind: artifact.artifactKind,
+        section: "decision-impact",
+        note: blockerMessages[0] ?? `Blocked status derived from ${artifact.artifactKind}.`
+      }
+    ]
+  };
+}
+
 function buildRiskSummary(
   run: RunListItemView,
   findings: readonly Finding[],
@@ -1364,24 +1500,18 @@ function inferDecisionImpact(
     return artifact.status === "blocked" || payload?.gateStatus === "blocked" || payload?.approvalStatus === "blocked" || payload?.reviewStatus === "blocked" || payload?.readinessStatus === "blocked";
   });
   if (blockerArtifact) {
+    const blockedApproval = describeBlockedApproval(run, blockerArtifact);
     return {
       kind: "blocked_approval",
       changedDecision: true,
       source: "inferred",
       summary: `The run emitted a blocked ${blockerArtifact.artifactKind}, which would halt approval or release flow.`,
-      traceRefs: [
-        {
-          runId: run.runId,
-          artifactKind: blockerArtifact.artifactKind,
-          section: "decision-impact",
-          note: `Blocked status derived from ${blockerArtifact.artifactKind}.`
-        }
-      ],
+      traceRefs: blockedApproval.traceRefs,
       reason: {
         source: "inferred",
         rule: "blocked-artifact-status",
         fields: ["artifact.status", "payload.readinessStatus", "payload.reviewStatus", "payload.gateStatus", "payload.approvalStatus"],
-        summary: `Derived as blocked approval because ${blockerArtifact.artifactKind} reported a blocked state.`
+        summary: blockedApproval.summary
       }
     };
   }
@@ -1502,6 +1632,55 @@ function aggregateWorkflowChainSummary(runs: readonly RunDetailView[]): Workflow
       ).length
     };
   }).filter((stage) => stage.runCount > 0);
+}
+
+function buildLeadershipRuns(runs: readonly RunDetailView[]): RunDetailView[] {
+  const runsById = new Map(runs.map((run) => [run.runId, run]));
+  const grouped = new Map<string, RunDetailView>();
+
+  for (const run of runs) {
+    if (!isReleaseChainStage(run.workflowChain.currentStage)) {
+      grouped.set(`run:${run.runId}`, run);
+      continue;
+    }
+
+    const rootRunId = resolveReleaseChainRootRunId(run, runsById);
+    const key = `release-chain:${rootRunId}`;
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, {
+        ...run,
+        workflowChain: {
+          ...run.workflowChain,
+          chainKey: key
+        }
+      });
+      continue;
+    }
+
+    const currentStageIndex = STAGE_ORDER.indexOf(current.workflowChain.currentStage as (typeof STAGE_ORDER)[number]);
+    const nextStageIndex = STAGE_ORDER.indexOf(run.workflowChain.currentStage as (typeof STAGE_ORDER)[number]);
+    if (nextStageIndex >= currentStageIndex) {
+      grouped.set(key, {
+        ...run,
+        workflowChain: {
+          ...run.workflowChain,
+          chainKey: key
+        }
+      });
+    }
+  }
+
+  return [...grouped.values()].sort((left, right) => {
+    const leftCompletedAt = parseRunTimestampMs(left.finishedAt) ?? parseRunTimestampMs(left.startedAt) ?? parseRunTimestampMs(left.runId) ?? 0;
+    const rightCompletedAt = parseRunTimestampMs(right.finishedAt) ?? parseRunTimestampMs(right.startedAt) ?? parseRunTimestampMs(right.runId) ?? 0;
+
+    if (leftCompletedAt === rightCompletedAt) {
+      return right.runId.localeCompare(left.runId);
+    }
+
+    return rightCompletedAt - leftCompletedAt;
+  });
 }
 
 function aggregateFriction(
@@ -1769,6 +1948,7 @@ export function loadOutcomesDashboardView(
 
   const friction = aggregateFriction(runs, ledger);
   const workflowChains = aggregateWorkflowChainSummary(runs);
+  const leadershipRuns = buildLeadershipRuns(runs);
   const topEvidenceGap = evidence[0]?.frequentMissing[0];
   const topFrictionWorkflow = friction.workflowHotspots[0];
   const topWorkflowChain = [...workflowChains].sort((left, right) => right.missingUpstreamEvidenceCount - left.missingUpstreamEvidenceCount)[0];
@@ -1777,21 +1957,21 @@ export function loadOutcomesDashboardView(
   return {
     ledger,
     decisionImpact: {
-      changedDecisionCount: runs.filter((run) => run.decisionImpact.changedDecision).length,
-      scopeReductionCount: countOutcome(runs, "scope_reduction"),
-      addedValidationCount: countOutcome(runs, "added_validation"),
-      blockedApprovalCount: countOutcome(runs, "blocked_approval"),
-      remediationCount: countOutcome(runs, "remediation_before_merge"),
-      addedConfidenceCount: countOutcome(runs, "added_confidence"),
-      noMeaningfulChangeCount: countOutcome(runs, "no_meaningful_change"),
+      changedDecisionCount: leadershipRuns.filter((run) => run.decisionImpact.changedDecision).length,
+      scopeReductionCount: countOutcome(leadershipRuns, "scope_reduction"),
+      addedValidationCount: countOutcome(leadershipRuns, "added_validation"),
+      blockedApprovalCount: countOutcome(leadershipRuns, "blocked_approval"),
+      remediationCount: countOutcome(leadershipRuns, "remediation_before_merge"),
+      addedConfidenceCount: countOutcome(leadershipRuns, "added_confidence"),
+      noMeaningfulChangeCount: countOutcome(leadershipRuns, "no_meaningful_change"),
       comparableBenchmarkPairs: comparableTaskIds.size
     },
     risk: {
       confirmedHighCount: ledger.entries.reduce((total, entry) => total + entry.confirmedRisks.high, 0),
       confirmedMediumCount: ledger.entries.reduce((total, entry) => total + entry.confirmedRisks.medium, 0),
       noisyFindingCount: ledger.entries.reduce((total, entry) => total + entry.confirmedRisks.noisy, 0),
-      blockedApprovalPreventedCount: runs.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
-      unresolvedRiskCount: runs.reduce((total, run) => total + run.riskSummary.unresolved, 0)
+      blockedApprovalPreventedCount: leadershipRuns.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
+      unresolvedRiskCount: leadershipRuns.reduce((total, run) => total + run.riskSummary.unresolved, 0)
     },
     evidence,
     friction,
@@ -1803,28 +1983,28 @@ export function loadOutcomesDashboardView(
       decision: [
         {
           label: "Changed decisions",
-          value: runs.filter((run) => run.decisionImpact.changedDecision).length,
-          detail: `${runs.length} run(s) in view`,
+          value: leadershipRuns.filter((run) => run.decisionImpact.changedDecision).length,
+          detail: `${leadershipRuns.length} leadership-scoped run or chain outcome(s) in view`,
           href: toOutcomesFilterHref({ panel: "decision-impact", decision: "changed" }, "decision-impact")
         },
         {
-          label: "Blocked approvals",
-          value: countOutcome(runs, "blocked_approval"),
-          detail: "Runs where approval or release gates stopped the flow",
+          label: "Blocked approval chains",
+          value: countOutcome(leadershipRuns, "blocked_approval"),
+          detail: "Release chains are counted once at their most downstream blocked gate",
           href: toOutcomesFilterHref({ panel: "decision-impact", decision: "blocked_approval" }, "decision-impact")
         },
         {
           label: "Added validation",
-          value: countOutcome(runs, "added_validation"),
+          value: countOutcome(leadershipRuns, "added_validation"),
           detail: "Runs where evidence gaps changed the next step",
           href: toOutcomesFilterHref({ panel: "decision-impact", decision: "added_validation" }, "decision-impact")
         }
       ],
       risk: [
         {
-          label: "Blocked approvals prevented",
-          value: runs.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
-          detail: "Derived from blocked release, pipeline, deployment, or approval artifacts",
+          label: "Blocked approval chains prevented",
+          value: leadershipRuns.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
+          detail: "Release chains are counted once at their most downstream blocked gate",
           href: toOutcomesFilterHref({ panel: "risk", risk: "blocked-approval" }, "risk")
         },
         {
@@ -1835,7 +2015,7 @@ export function loadOutcomesDashboardView(
         },
         {
           label: "Unresolved risks",
-          value: runs.reduce((total, run) => total + run.riskSummary.unresolved, 0),
+          value: leadershipRuns.reduce((total, run) => total + run.riskSummary.unresolved, 0),
           detail: "Outstanding risk and blocker signals across runs",
           href: toOutcomesFilterHref({ panel: "risk", risk: "unresolved" }, "risk")
         }
