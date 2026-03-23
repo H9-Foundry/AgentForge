@@ -20,7 +20,9 @@ function parseJsonOption<T>(value: string, label: string): T {
   try {
     return JSON.parse(value) as T;
   } catch (error) {
-    throw new Error(`Invalid ${label} JSON: ${error instanceof Error ? error.message : "unknown parse error"}`);
+    throw new Error(`Invalid ${label} JSON: ${error instanceof Error ? error.message : "unknown parse error"}`, {
+      cause: error
+    });
   }
 }
 
