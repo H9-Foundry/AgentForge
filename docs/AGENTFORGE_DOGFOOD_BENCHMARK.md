@@ -186,6 +186,8 @@ Do not treat the benchmark as ready to expand to another repository until:
 - median cycle-time penalty stays acceptable for the team
 - at least two workflows clearly produce reusable value instead of generic noise
 
+When those conditions are met, move to the first external portability benchmark defined in [docs/CREATECVS_PORTABILITY_PHASE.md](CREATECVS_PORTABILITY_PHASE.md).
+
 ## Non-Goals
 
 This benchmark does not:
