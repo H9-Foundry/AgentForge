@@ -350,9 +350,6 @@ importers:
       '@h9-foundry/agentforge-shared-types':
         specifier: workspace:*
         version: link:../shared-types
-      zod:
-        specifier: ^4.3.6
-        version: 4.3.6
 
 packages:
 
