@@ -1,6 +1,6 @@
 # Quickstart
 
-This quickstart walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation-to-QA-to-security-to-maintenance lifecycle handoff, all with auditable outputs.
+This quickstart is the expanded published-CLI walkthrough for external evaluators. It starts with the zero-install `npx` path, then walks through the current official AgentForge wedges: secure local repository review plus the planning-to-design-to-implementation-to-QA-to-security-to-maintenance lifecycle handoff, all with auditable outputs.
 
 Published CLI wording rule:
 
@@ -25,6 +25,8 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 ```
 
 That flow creates `.agentops/` locally and writes run artifacts under `.agentops/runs/<run-id>/`.
+
+All examples in this document use `npx @h9-foundry/agentforge-cli ...` as the default invocation method. If you plan to run AgentForge repeatedly, a persistent install is optional, but it is not required for the first-run path.
 
 ## Canonical Quick Path
 
@@ -237,6 +239,8 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 The maintenance bundle should include one `maintenance-report` lifecycle artifact with deterministic evidence sources, affected packages or docs, routing recommendation, and bounded next-step guidance. The default path remains read-only and does not apply dependency updates or docs edits automatically.
 
 ## Contributor And Source-Build Path
+
+This section is for contributors working on AgentForge itself. If you are only evaluating the product in another repository, stop at the published-CLI sections above.
 
 If you want to work on AgentForge itself, build the monorepo locally:
 

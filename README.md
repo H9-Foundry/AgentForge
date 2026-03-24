@@ -4,6 +4,32 @@ AgentForge is an open-source, secure-by-default SDLC workflow platform core for 
 
 It is workflow-first, not chat-first: workflows define the job, policy defines what is allowed, the runtime decides what executes, tools perform the work, and humans approve side effects when required.
 
+## Try AgentForge Now
+
+If you want to evaluate AgentForge in another repository, use the published CLI through `npx`. This is the primary first-run path for external evaluators and does not require cloning this monorepo.
+
+```bash
+mkdir agentforge-demo
+cd agentforge-demo
+git init
+npx @h9-foundry/agentforge-cli init --preset planning-discovery
+npx @h9-foundry/agentforge-cli run planning-discovery --json
+npx @h9-foundry/agentforge-cli explain last-run --json
+```
+
+That path is intentionally four steps only:
+1. create a local repo
+2. start the preset
+3. run the planning workflow
+4. inspect the latest run through `agentforge explain last-run`
+
+After the first run, inspect:
+
+- `.agentops/runs/<run-id>/bundle.json`
+- `.agentops/runs/<run-id>/summary.md`
+
+These docs use `npx` throughout because it is the lowest-friction evaluator path. If you plan to run AgentForge repeatedly, a persistent install is optional, but it is not the default path here.
+
 ## What You Can Do Today
 
 - try the current official workflow surface with the published CLI, without cloning this monorepo
@@ -13,9 +39,11 @@ It is workflow-first, not chat-first: workflows define the job, policy defines w
 - run `agentforge eval run` and `agentforge eval compare` locally against the deterministic workflow fixture corpus in the latest published CLI
 - evaluate the secure-by-default runtime model before broader provider, adapter, and integration support lands
 
-## Adoption Target
+## Audience And Adoption Target
 
 AgentForge is ready now for technical early adopters who want local-first, read-only workflow tooling before PR creation. Plug-and-play external adoption for less technical users is an active product target, not a completed claim: the goal is to make the published CLI installable, understandable, and usable in other repositories without monorepo knowledge or hand-authoring request YAML for common paths.
+
+If you are trying the product, stay on the published CLI path in this README and in [docs/quickstart.md](docs/quickstart.md). If you want to work on AgentForge itself, use [CONTRIBUTING.md](CONTRIBUTING.md) and the contributor/source-build section lower in this README.
 
 See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md) for the current local-only readiness rubric and the exact constraints on external use today.
 
@@ -25,7 +53,7 @@ Published CLI wording rule:
 - `source-build only` means the capability exists on `main` but has not reached the latest npm release yet
 - product-facing docs must use those terms consistently whenever repo `main` is ahead of npm
 
-## Quick Path
+## Canonical Quick Path
 
 The current canonical quick path for the first request-driven workflow is available in the published CLI.
 
@@ -46,7 +74,7 @@ That path is intentionally four steps only:
 
 The preset writes an explicit starter request to `.agentops/requests/planning.yaml`, never auto-runs the workflow, and never overwrites an existing request file.
 
-If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
+If you want the fuller published-CLI walkthrough, use [docs/quickstart.md](docs/quickstart.md). If you want to develop AgentForge itself, use [CONTRIBUTING.md](CONTRIBUTING.md) and the contributor/source-build path lower in this README.
 
 CLI surface on `main`:
 
@@ -228,7 +256,7 @@ Internal packages remain private until their APIs stabilize and their support ex
 
 See [docs/EXTERNAL_STARTER_AGENT_PACKAGING.md](docs/EXTERNAL_STARTER_AGENT_PACKAGING.md) for the current external support boundary for starter agents, presets, and registry-facing surfaces.
 
-## Quickstart
+## Expanded CLI Walkthrough
 
 ### Fastest Evaluator Path
 
@@ -303,6 +331,8 @@ That flow gives you:
 - a fully local, read-only planning-to-design evaluator path
 
 ### Contributor And Source-Build Path
+
+This section is for contributors working on AgentForge itself, not for evaluators trying the published CLI in another repository.
 
 Install and build the monorepo if you want to work on AgentForge itself:
 
