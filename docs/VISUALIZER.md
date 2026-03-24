@@ -1,6 +1,6 @@
 # Visualizer
 
-AgentForge now includes an officially supported local visualizer surface in the CLI on `main` for inspecting workflow runs, outcomes, and benchmark summaries.
+AgentForge now includes an officially supported local visualizer surface in the published CLI for inspecting workflow runs, outcomes, and benchmark summaries.
 
 The visualizer is shipped through `@h9-foundry/agentforge-cli`, not as a separately installed public npm package.
 
@@ -33,13 +33,13 @@ The visualizer reads the same audit bundles and lifecycle artifacts that `agentf
 
 ## Local Launch
 
-Current release-ready command surface:
+Published CLI launch path:
 
 ```bash
 agentforge visualizer --open
 ```
 
-Until the next npm publish lands, use it from a source checkout or a locally built CLI:
+Contributor/source-build path:
 
 ```bash
 pnpm build:packages
@@ -56,10 +56,10 @@ Default behavior:
 Optional flags:
 
 ```bash
-node packages/cli/dist/bin.js visualizer --runs-root /absolute/path/to/.agentops/runs --benchmark-ledger /absolute/path/to/.agentops/benchmark-ledger.json --port 4314 --host 127.0.0.1
+agentforge visualizer --runs-root /absolute/path/to/.agentops/runs --benchmark-ledger /absolute/path/to/.agentops/benchmark-ledger.json --port 4314 --host 127.0.0.1
 ```
 
-Contributor/source-build path:
+Contributor/source-build path for local package development:
 
 ```bash
 pnpm install
@@ -152,7 +152,7 @@ Use it to inspect local run state and benchmark value signals more quickly than 
 
 Supported in this phase:
 
-- packaged local app via the official CLI surface on `main`
+- packaged local app via the published CLI
 - local outcomes export for sharing
 - local benchmark-ledger workflows
 

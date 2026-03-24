@@ -76,7 +76,7 @@ The preset writes an explicit starter request to `.agentops/requests/planning.ya
 
 If you want the fuller published-CLI walkthrough, use [docs/quickstart.md](docs/quickstart.md). If you want to develop AgentForge itself, use [CONTRIBUTING.md](CONTRIBUTING.md) and the contributor/source-build path lower in this README.
 
-CLI surface on `main`:
+Available in the published CLI:
 
 - `agentforge visualizer --open` now launches the official local read-only visualizer for `.agentops/runs`, including runs, `/outcomes`, run detail, and benchmark views
 - `agentforge visualizer export --format json|markdown` now exports a normalized outcomes snapshot for CI artifacts or team review without introducing a hosted dependency
@@ -277,14 +277,14 @@ The last command should point you to:
 
 ### Visualizer Quickstart
 
-Once local runs exist, the CLI surface on `main` also supports the local visualizer directly:
+Once local runs exist, the published CLI also supports the local visualizer directly:
 
 ```bash
 agentforge visualizer --open
 agentforge visualizer export --format markdown
 ```
 
-Use the first command for local inspection and the second command when you want a shareable outcomes snapshot without standing up a hosted dashboard. Until the next npm publish lands, use the source-build/local-build path documented in [docs/VISUALIZER.md](docs/VISUALIZER.md).
+Use the first command for local inspection and the second command when you want a shareable outcomes snapshot without standing up a hosted dashboard. If you are developing AgentForge itself, the contributor/source-build path remains documented in [docs/VISUALIZER.md](docs/VISUALIZER.md).
 
 ### Planning To Design Evaluator Path
 

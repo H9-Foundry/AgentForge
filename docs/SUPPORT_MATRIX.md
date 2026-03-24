@@ -16,7 +16,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 - **Published now**: available in the latest npm release of `@h9-foundry/agentforge-cli`
 - **Source-build only**: implemented on `main`, but not yet in the latest npm release
 - Product-facing docs must say `available in the published CLI` only after published parity is verified
-- The packaged visualizer and benchmark CLI surface are release-ready on `main`, but they must keep `source-build only` or equivalent wording until the next npm publish is verified
+- The packaged visualizer and benchmark CLI surface are now available in the published CLI through `@h9-foundry/agentforge-cli`, not as a separately installed npm package
 
 ## Workflow Support
 
@@ -84,6 +84,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `@h9-foundry/agentforge-policy-engine` | Official | Public policy engine package. |
 | `@h9-foundry/agentforge-runtime` | Official | Public runtime package. |
 | `@h9-foundry/agentforge-audit` | Official | Public audit/reporting package. |
+| `visualizer` CLI surface | Official | Shipped through `@h9-foundry/agentforge-cli`, not as a separately installed public package. |
 | `packages/registry-client` | Internal | Future-facing registry surface. |
 | `agents/*` | Internal | Official in-repo agents used by the workflow surface, not individually supported public packages. |
 | `adapters/*` | Internal | Internal starter adapters, not yet public packages. |
@@ -123,7 +124,7 @@ See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](EXTERNAL_LOCAL_ADOPTION_READINES
 
 ## Compatibility Notes
 
-- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it; the current quick path, preset startup, and release/CI review family are already available in the published CLI.
+- Workflow maturity and published CLI availability are related but not identical. A workflow can be official on `main` and still need an explicit `source-build only` note until the latest npm release includes it; the current quick path, preset startup, release/CI review family, and visualizer/benchmark CLI surface are now available in the published CLI.
 - Current support is strongest for local repository execution and GitHub-centric release workflows.
 - Public compatibility commitments are intentionally narrow until broader workflow and integration support exists.
 - Planned support in this matrix should be treated as roadmap direction, not shipped capability.
