@@ -9,7 +9,19 @@ import { renderGitHubHandoffSummary } from "@h9-foundry/agentforge-audit";
 import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import type { ReleaseArtifact } from "@h9-foundry/agentforge-shared-types";
 
-import { compareLocalEvalRuns, explainLastRun, initProject, mapWorkflowRunStatusToGitHubStatus, readBenchmarkLedger, recordBenchmarkLedgerEntry, runLocalEval, runLocalWorkflow, scanProject } from "./index.js";
+import {
+  compareLocalEvalRuns,
+  explainLastRun,
+  exportVisualizerOutcomes,
+  initProject,
+  launchVisualizer,
+  mapWorkflowRunStatusToGitHubStatus,
+  readBenchmarkLedger,
+  recordBenchmarkLedgerEntry,
+  runLocalEval,
+  runLocalWorkflow,
+  scanProject
+} from "./index.js";
 
 function createGitFixture(prefix: string, repositoryUrl = "https://github.com/H9-Foundry/fixture.git"): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -3070,6 +3082,81 @@ describe("cli smoke flows", () => {
     });
 
     const planningRun = await runLocalWorkflow("planning-discovery", root);
+    const planningBundle = readJson<Record<string, unknown>>(planningRun.jsonPath);
+    writeFileSync(
+      planningRun.jsonPath,
+      JSON.stringify(
+        {
+          ...planningBundle,
+          startedAt: "2026-03-23T10:00:00.000Z",
+          finishedAt: "2026-03-23T10:03:30.000Z",
+          usage: {
+            totalInputTokens: 1200,
+            totalOutputTokens: 400,
+            totalTokens: 1600,
+            totalRequests: 4,
+            totalEstimatedCostUsd: 0.009,
+            costStatus: "estimated",
+            byModel: [
+              {
+                provider: "openai",
+                model: "gpt-5.4",
+                inputTokens: 1200,
+                outputTokens: 400,
+                totalTokens: 1600,
+                requestCount: 4,
+                estimatedCostUsd: 0.009,
+                costStatus: "estimated",
+                pricing: {
+                  source: "local_registry",
+                  version: "openai-api-pricing-2026-03-24",
+                  effectiveDate: "2026-03-24",
+                  currency: "USD",
+                  inputCostPerMillionTokensUsd: 2.5,
+                  outputCostPerMillionTokensUsd: 15
+                }
+              }
+            ],
+            byNode: [
+              {
+                nodeId: "planning",
+                nodeName: "planning-analyst",
+                kind: "reasoning",
+                totalInputTokens: 1200,
+                totalOutputTokens: 400,
+                totalTokens: 1600,
+                totalRequests: 4,
+                totalEstimatedCostUsd: 0.009,
+                costStatus: "estimated",
+                byModel: [
+                  {
+                    provider: "openai",
+                    model: "gpt-5.4",
+                    inputTokens: 1200,
+                    outputTokens: 400,
+                    totalTokens: 1600,
+                    requestCount: 4,
+                    estimatedCostUsd: 0.009,
+                    costStatus: "estimated",
+                    pricing: {
+                      source: "local_registry",
+                      version: "openai-api-pricing-2026-03-24",
+                      effectiveDate: "2026-03-24",
+                      currency: "USD",
+                      inputCostPerMillionTokensUsd: 2.5,
+                      outputCostPerMillionTokensUsd: 15
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
 
     const created = recordBenchmarkLedgerEntry(
       {
@@ -3082,22 +3169,11 @@ describe("cli smoke flows", () => {
         decisionOutcome: "added_validation",
         agentforgeChangedDecision: true,
         decisionImpactReason: "Workflow review exposed the need for a validated local benchmark-ledger contract.",
-        startedAt: "2026-03-23T10:00:00.000Z",
-        finishedAt: "2026-03-23T10:03:30.000Z",
         releaseDecision: "conditional",
         decisionClarity: "clear",
         finalRecommendationSummary: "Do not approve until the benchmark ledger is present and validated.",
         rerunCount: 1,
         blockedStateCount: 1,
-        tokenUsage: {
-          provider: "openai",
-          model: "gpt-5.4",
-          inputTokens: 1200,
-          outputTokens: 400,
-          totalTokens: 1600,
-          estimatedCostUsd: 0.24,
-          requestCount: 4
-        },
         prefillRunRef: planningRun.runId,
         confirmedRisks: {
           high: 0,
@@ -3116,11 +3192,15 @@ describe("cli smoke flows", () => {
     expect(created.entry.benchmarkCategory).toBe("release");
     expect(created.entry.workflow).toBe("planning-discovery");
     expect(created.entry.cycleTimeSeconds).toBe(210);
+    expect(created.entry.startedAt).toBe("2026-03-23T10:00:00.000Z");
+    expect(created.entry.finishedAt).toBe("2026-03-23T10:03:30.000Z");
     expect(created.entry.releaseDecision).toBe("conditional");
     expect(created.entry.decisionClarity).toBe("clear");
     expect(created.entry.rerunCount).toBe(1);
     expect(created.entry.blockedStateCount).toBe(1);
     expect(created.entry.tokenUsage?.totalTokens).toBe(1600);
+    expect(created.entry.tokenUsage?.estimatedCostUsd).toBe(0.009);
+    expect(created.entry.tokenUsage?.pricingVersion).toBe("openai-api-pricing-2026-03-24");
     expect(created.entry.workflowStatuses[0]).toEqual({
       workflow: "planning-discovery",
       status: "success"
@@ -3189,6 +3269,77 @@ describe("cli smoke flows", () => {
     const ledger = readBenchmarkLedger(root);
     expect(ledger.document.entries).toHaveLength(1);
     expect(ledger.document.entries[0]?.summary).toBe("Updated adjudication after local review.");
+  });
+
+  it("exports outcomes snapshots and launches the packaged visualizer surface", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    const bundlePath = writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)]);
+    const releaseBundle = readJson<Record<string, unknown>>(bundlePath);
+    writeFileSync(
+      bundlePath,
+      JSON.stringify(
+        {
+          ...releaseBundle,
+          workflow: "release-readiness",
+          usage: {
+            totalInputTokens: 1000,
+            totalOutputTokens: 200,
+            totalTokens: 1200,
+            totalRequests: 2,
+            totalEstimatedCostUsd: 0.0055,
+            costStatus: "estimated",
+            byModel: [
+              {
+                provider: "openai",
+                model: "gpt-5.4",
+                inputTokens: 1000,
+                outputTokens: 200,
+                totalTokens: 1200,
+                requestCount: 2,
+                estimatedCostUsd: 0.0055,
+                costStatus: "estimated",
+                pricing: {
+                  source: "local_registry",
+                  version: "openai-api-pricing-2026-03-24",
+                  effectiveDate: "2026-03-24",
+                  currency: "USD",
+                  inputCostPerMillionTokensUsd: 2.5,
+                  outputCostPerMillionTokensUsd: 15
+                }
+              }
+            ],
+            byNode: []
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const jsonExport = exportVisualizerOutcomes({ format: "json" }, root);
+    expect(JSON.parse(jsonExport.contents) as { schemaVersion: string; runCount: number }).toMatchObject({
+      schemaVersion: "1.0.0",
+      runCount: 1
+    });
+
+    const markdownExport = exportVisualizerOutcomes({ format: "markdown" }, root);
+    expect(markdownExport.contents).toContain("# AgentForge Outcomes Export");
+    expect(markdownExport.contents).toContain("## Decision Impact");
+
+    const launched = await launchVisualizer({ port: 0 }, root);
+    try {
+      expect(launched.serverUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(launched.runCount).toBe(1);
+
+      const response = await fetch(`${launched.serverUrl}/outcomes`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toContain("Outcomes");
+    } finally {
+      await launched.close();
+    }
   });
 
   it("propagates normalized GitHub references through downstream lifecycle artifacts", async () => {

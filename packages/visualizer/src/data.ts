@@ -10,7 +10,8 @@ import type {
   BenchmarkLedgerEntry,
   BlockedPlugin,
   Finding,
-  LifecycleArtifact
+  LifecycleArtifact,
+  ProviderUsageAggregate
 } from "@h9-foundry/agentforge-shared-types";
 
 type RunStatus = AuditBundle["status"];
@@ -114,6 +115,7 @@ export interface RunDetailView extends RunListItemView {
   artifacts: ArtifactPanelView[];
   summaryMarkdown: string;
   rawBundleJson: string;
+  usage?: ProviderUsageAggregate;
   decisionImpact: DecisionImpactView;
   riskSummary: RiskSummaryView;
   evidenceCompleteness: EvidenceCompletenessView[];
@@ -235,6 +237,7 @@ export interface OutcomeSummaryView {
   value: number;
   detail: string;
   href: string;
+  provenance?: string;
 }
 
 export interface OutcomeDetailRowView {
@@ -316,6 +319,7 @@ export interface ReleaseBenchmarkArmSummaryView {
   totalOutputTokens: number;
   totalTokens: number;
   totalRequests: number;
+  measuredTokenEntryCount: number;
   totalEstimatedCostUsd?: number;
   knownCostEntryCount: number;
   costPerConfirmedRiskCaught?: number;
@@ -356,6 +360,23 @@ export interface OutcomesDashboardView {
     friction: OutcomeDetailRowView[];
     workflowChain: OutcomeDetailRowView[];
   };
+}
+
+export interface OutcomesExportDocument {
+  schemaVersion: string;
+  generatedAt: string;
+  workspaceRoot: string;
+  runsRoot: string;
+  benchmarkLedgerPath?: string;
+  runCount: number;
+  ledgerAvailable: boolean;
+  decisionImpact: DecisionImpactSummaryView;
+  risk: RiskDashboardView;
+  releaseBenchmark: ReleaseBenchmarkDashboardView;
+  evidence: WorkflowEvidenceSummaryRowView[];
+  friction: FrictionDashboardView;
+  workflowChains: WorkflowChainSummaryView[];
+  summaries: OutcomesDashboardView["summaries"];
 }
 
 export type ValueDashboardView = OutcomesDashboardView;
@@ -881,6 +902,7 @@ export function loadRunDetailView(
     artifacts: run.artifactViews,
     summaryMarkdown: run.summaryMarkdown,
     rawBundleJson: run.rawBundleJson,
+    usage: run.bundle?.usage,
     decisionImpact,
     riskSummary,
     evidenceCompleteness,
@@ -1818,6 +1840,12 @@ function toReleaseBenchmarkSummary(
   const cycleTimes = entries
     .map((entry) => deriveReleaseCycleTimeSeconds(entry))
     .filter((value): value is number => typeof value === "number");
+  const measuredTokenEntries = entries.filter(
+    (entry) =>
+      typeof entry.tokenUsage?.inputTokens === "number" ||
+      typeof entry.tokenUsage?.outputTokens === "number" ||
+      typeof entry.tokenUsage?.totalTokens === "number"
+  );
   const totalInputTokens = entries.reduce((total, entry) => total + (entry.tokenUsage?.inputTokens ?? 0), 0);
   const totalOutputTokens = entries.reduce((total, entry) => total + (entry.tokenUsage?.outputTokens ?? 0), 0);
   const totalTokens = entries.reduce((total, entry) => total + (entry.tokenUsage?.totalTokens ?? 0), 0);
@@ -1846,6 +1874,7 @@ function toReleaseBenchmarkSummary(
     totalOutputTokens,
     totalTokens,
     totalRequests,
+    measuredTokenEntryCount: measuredTokenEntries.length,
     totalEstimatedCostUsd,
     knownCostEntryCount: knownCostEntries.length,
     costPerConfirmedRiskCaught:
@@ -1969,10 +1998,15 @@ function createOutcomeDetailRows(runs: readonly RunDetailView[], ledger: Benchma
       status: entry.workflowStatuses[0]?.status ?? "unknown",
       title: `${entry.arm} ${entry.releaseDecision ?? "unclear"} decision`,
       summary:
-        entry.finalRecommendationSummary ??
-        entry.summary ??
-        entry.decisionImpactReason ??
-        "Release benchmark adjudication entry.",
+        [
+          entry.finalRecommendationSummary ?? entry.summary ?? entry.decisionImpactReason ?? "Release benchmark adjudication entry.",
+          typeof entry.tokenUsage?.totalTokens === "number"
+            ? `Tokens measured from run metadata: ${entry.tokenUsage.totalTokens}.`
+            : "Token usage not recorded.",
+          typeof entry.tokenUsage?.estimatedCostUsd === "number"
+            ? `Cost estimated from local pricing: $${entry.tokenUsage.estimatedCostUsd.toFixed(6)}.`
+            : "Cost unavailable because pricing metadata was missing."
+        ].join(" "),
       source: entry.runId ? "ledger+run" : "ledger",
       detailHref: entry.runId ? toRunDetailHref(entry.runId, "decision-impact") : "/outcomes?panel=release-benchmark#release-benchmark",
       runsHref:
@@ -2164,19 +2198,22 @@ export function loadOutcomesDashboardView(
           label: "Changed decisions",
           value: leadershipRuns.filter((run) => run.decisionImpact.changedDecision).length,
           detail: `${leadershipRuns.length} leadership-scoped run or chain outcome(s) in view`,
-          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "changed" }, "decision-impact")
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "changed" }, "decision-impact"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         },
         {
           label: "Blocked approval chains",
           value: countOutcome(leadershipRuns, "blocked_approval"),
           detail: "Release chains are counted once at their most downstream blocked gate",
-          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "blocked_approval" }, "decision-impact")
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "blocked_approval" }, "decision-impact"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         },
         {
           label: "Added validation",
           value: countOutcome(leadershipRuns, "added_validation"),
           detail: "Runs where evidence gaps changed the next step",
-          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "added_validation" }, "decision-impact")
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "added_validation" }, "decision-impact"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         }
       ],
       risk: [
@@ -2184,19 +2221,22 @@ export function loadOutcomesDashboardView(
           label: "Blocked approval chains prevented",
           value: leadershipRuns.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
           detail: "Release chains are counted once at their most downstream blocked gate",
-          href: toOutcomesFilterHref({ panel: "risk", risk: "blocked-approval" }, "risk")
+          href: toOutcomesFilterHref({ panel: "risk", risk: "blocked-approval" }, "risk"),
+          provenance: "mixed"
         },
         {
           label: "Confirmed medium/high",
           value: ledger.entries.reduce((total, entry) => total + entry.confirmedRisks.high + entry.confirmedRisks.medium, 0),
           detail: "Ledger-backed adjudicated risks",
-          href: toOutcomesFilterHref({ panel: "risk", risk: "confirmed-medium" }, "risk")
+          href: toOutcomesFilterHref({ panel: "risk", risk: "confirmed-medium" }, "risk"),
+          provenance: "ledger"
         },
         {
           label: "Unresolved risks",
           value: leadershipRuns.reduce((total, run) => total + run.riskSummary.unresolved, 0),
           detail: "Outstanding risk and blocker signals across runs",
-          href: toOutcomesFilterHref({ panel: "risk", risk: "unresolved" }, "risk")
+          href: toOutcomesFilterHref({ panel: "risk", risk: "unresolved" }, "risk"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         }
       ],
       releaseBenchmark: [
@@ -2204,25 +2244,31 @@ export function loadOutcomesDashboardView(
           label: "AgentForge median cycle",
           value: agentforgeReleaseSummary?.medianCycleTimeSeconds ?? 0,
           detail: agentforgeReleaseSummary?.medianCycleTimeSeconds !== undefined ? "Seconds to final release recommendation" : "No AgentForge release benchmark entries yet",
-          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "agentforge" }, "release-benchmark")
+          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "agentforge" }, "release-benchmark"),
+          provenance: "ledger"
         },
         {
           label: "Control median cycle",
           value: controlReleaseSummary?.medianCycleTimeSeconds ?? 0,
           detail: controlReleaseSummary?.medianCycleTimeSeconds !== undefined ? "Seconds to final release recommendation" : "No control release benchmark entries yet",
-          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "control" }, "release-benchmark")
+          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "control" }, "release-benchmark"),
+          provenance: "ledger"
         },
         {
           label: "AgentForge total tokens",
           value: agentforgeReleaseSummary?.totalTokens ?? 0,
-          detail: agentforgeReleaseSummary?.entryCount ? `${agentforgeReleaseSummary.entryCount} release entry/entries` : "No AgentForge release benchmark entries yet",
-          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "agentforge" }, "release-benchmark")
+          detail: agentforgeReleaseSummary?.entryCount
+            ? `${agentforgeReleaseSummary.measuredTokenEntryCount}/${agentforgeReleaseSummary.entryCount} release entries with measured run usage`
+            : "No AgentForge release benchmark entries yet",
+          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "agentforge" }, "release-benchmark"),
+          provenance: "run-measured"
         },
         {
           label: "Blocked release decisions",
           value: (agentforgeReleaseSummary?.blockedReleaseCount ?? 0) + (controlReleaseSummary?.blockedReleaseCount ?? 0),
           detail: "Across both benchmark arms",
-          href: toOutcomesFilterHref({ panel: "release-benchmark", releaseDecision: "no-go" }, "release-benchmark")
+          href: toOutcomesFilterHref({ panel: "release-benchmark", releaseDecision: "no-go" }, "release-benchmark"),
+          provenance: "ledger"
         }
       ],
       evidence: [
@@ -2237,7 +2283,8 @@ export function loadOutcomesDashboardView(
               evidenceStatus: "missing"
             },
             "evidence"
-          )
+          ),
+          provenance: "inferred"
         }
       ],
       friction: [
@@ -2249,7 +2296,8 @@ export function loadOutcomesDashboardView(
             (topFrictionWorkflow?.manualStepCount ?? 0) +
             (topFrictionWorkflow?.requestFrictionCount ?? 0),
           detail: topFrictionWorkflow?.workflow ?? "No ledger-backed friction data",
-          href: toOutcomesFilterHref({ panel: "friction", workflow: topFrictionWorkflow?.workflow }, "friction")
+          href: toOutcomesFilterHref({ panel: "friction", workflow: topFrictionWorkflow?.workflow }, "friction"),
+          provenance: "ledger"
         }
       ],
       workflowChain: [
@@ -2257,7 +2305,8 @@ export function loadOutcomesDashboardView(
           label: "Release chain breaks",
           value: topWorkflowChain?.missingUpstreamEvidenceCount ?? 0,
           detail: topWorkflowChain ? `${topWorkflowChain.label} has the most missing upstream evidence` : "No chain breakpoints detected",
-          href: toOutcomesFilterHref({ panel: "flow", stage: topWorkflowChain?.stage }, "workflow-chain")
+          href: toOutcomesFilterHref({ panel: "flow", stage: topWorkflowChain?.stage }, "workflow-chain"),
+          provenance: "inferred"
         }
       ]
     },
@@ -2272,6 +2321,32 @@ export function loadValueDashboardView(
   filters: OutcomesFilters = {}
 ): OutcomesDashboardView {
   return loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, filters);
+}
+
+export function createOutcomesExportDocument(
+  workspaceRoot: string,
+  runsRoot = resolveRunsRoot(workspaceRoot),
+  benchmarkLedgerPath?: string,
+  filters: OutcomesFilters = {}
+): OutcomesExportDocument {
+  const view = loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, filters);
+
+  return {
+    schemaVersion: "1.0.0",
+    generatedAt: new Date().toISOString(),
+    workspaceRoot,
+    runsRoot: toRelativeDisplayPath(workspaceRoot, runsRoot),
+    benchmarkLedgerPath: view.ledger.entries.length > 0 ? toRelativeDisplayPath(workspaceRoot, resolveBenchmarkLedgerPath(workspaceRoot, benchmarkLedgerPath)) : undefined,
+    runCount: view.runCount,
+    ledgerAvailable: view.ledger.entries.length > 0,
+    decisionImpact: view.decisionImpact,
+    risk: view.risk,
+    releaseBenchmark: view.releaseBenchmark,
+    evidence: view.evidence,
+    friction: view.friction,
+    workflowChains: view.workflowChains,
+    summaries: view.summaries
+  };
 }
 
 function toBenchmarkSummaryView(

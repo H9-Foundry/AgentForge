@@ -231,7 +231,52 @@ export const auditEntrySchema = z.object({
   toolsRequested: z.array(toolRequestSchema).default([]),
   toolsExecuted: z.array(toolResultSchema).default([]),
   blockedActions: z.array(z.string()).default([]),
-  validationPassed: z.boolean()
+  validationPassed: z.boolean(),
+  usage: z.lazy(() => providerUsageAggregateSummarySchema).optional()
+});
+
+export const providerUsagePricingSchema = z.object({
+  source: z.literal("local_registry"),
+  version: z.string().min(1),
+  effectiveDate: z.string().min(1),
+  currency: z.literal("USD"),
+  inputCostPerMillionTokensUsd: z.number().min(0),
+  outputCostPerMillionTokensUsd: z.number().min(0)
+});
+
+export const providerUsageStatusSchema = z.enum(["estimated", "partial", "unavailable"]);
+
+export const providerUsageByModelSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  totalTokens: z.number().int().min(0),
+  requestCount: z.number().int().min(0).default(1),
+  estimatedCostUsd: z.number().min(0).optional(),
+  costStatus: providerUsageStatusSchema.default("unavailable"),
+  pricing: providerUsagePricingSchema.optional(),
+  raw: z.unknown().optional()
+});
+
+export const providerUsageAggregateSummarySchema = z.object({
+  totalInputTokens: z.number().int().min(0),
+  totalOutputTokens: z.number().int().min(0),
+  totalTokens: z.number().int().min(0),
+  totalRequests: z.number().int().min(0),
+  totalEstimatedCostUsd: z.number().min(0).optional(),
+  costStatus: providerUsageStatusSchema.default("unavailable"),
+  byModel: z.array(providerUsageByModelSchema).default([])
+});
+
+export const providerUsageNodeBreakdownSchema = providerUsageAggregateSummarySchema.extend({
+  nodeId: z.string().min(1),
+  nodeName: z.string().min(1),
+  kind: nodeKindSchema
+});
+
+export const providerUsageAggregateSchema = providerUsageAggregateSummarySchema.extend({
+  byNode: z.array(providerUsageNodeBreakdownSchema).default([])
 });
 
 export const agentOutputSchema = z.object({
@@ -242,6 +287,7 @@ export const agentOutputSchema = z.object({
   requestedTools: z.array(toolRequestSchema).default([]),
   blockedActionFlags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).optional(),
+  usage: providerUsageAggregateSummarySchema.optional(),
   metadata: z.record(z.string(), z.unknown()).default({})
 });
 
@@ -781,7 +827,8 @@ export const workflowStateEnvelopeSchema = z.object({
   blockedPlugins: z.array(blockedPluginSchema).default([]),
   workflowInputs: z.record(z.string(), z.unknown()).default({}),
   agentResults: z.record(z.string(), agentOutputSchema).default({}),
-  auditTrail: z.array(auditEntrySchema).default([])
+  auditTrail: z.array(auditEntrySchema).default([]),
+  usage: providerUsageAggregateSchema.optional()
 });
 
 export const auditComponentSchema = z.object({
@@ -1426,7 +1473,10 @@ export const benchmarkLedgerTokenUsageSchema = z.object({
   outputTokens: z.number().int().nonnegative().nullable().optional(),
   totalTokens: z.number().int().nonnegative().nullable().optional(),
   estimatedCostUsd: z.number().nonnegative().nullable().optional(),
-  requestCount: z.number().int().nonnegative().nullable().optional()
+  requestCount: z.number().int().nonnegative().nullable().optional(),
+  costStatus: providerUsageStatusSchema.optional(),
+  pricingVersion: z.string().min(1).optional(),
+  pricingEffectiveDate: z.string().min(1).optional()
 });
 
 export const benchmarkLedgerFrictionSchema = z.object({
@@ -1610,6 +1660,7 @@ export const auditBundleSchema = z.object({
     json: z.string().min(1),
     markdown: z.string().min(1)
   }),
+  usage: providerUsageAggregateSchema.optional(),
   provenance: auditProvenanceSchema,
   redaction: auditRedactionSchema,
   components: z.array(auditComponentSchema).default([])
@@ -1623,6 +1674,11 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   toolResult: toolResultSchema,
   approvalCheckpoint: approvalCheckpointSchema,
   auditEntry: auditEntrySchema,
+  providerUsagePricing: providerUsagePricingSchema,
+  providerUsageByModel: providerUsageByModelSchema,
+  providerUsageAggregateSummary: providerUsageAggregateSummarySchema,
+  providerUsageNodeBreakdown: providerUsageNodeBreakdownSchema,
+  providerUsageAggregate: providerUsageAggregateSchema,
   auditComponent: auditComponentSchema,
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,

@@ -17,6 +17,11 @@ import {
   lifecycleArtifactSourceReferenceSchema,
   lifecycleArtifactWorkflowReferenceSchema,
   auditProvenanceSchema,
+  providerUsageAggregateSchema,
+  providerUsageAggregateSummarySchema,
+  providerUsageByModelSchema,
+  providerUsageNodeBreakdownSchema,
+  providerUsagePricingSchema,
   auditRedactionSchema,
   auditEntrySchema,
   blockedPluginSchema,
@@ -145,6 +150,11 @@ export type AttestationVerificationEvidence = Infer<typeof attestationVerificati
 export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
+export type ProviderUsagePricing = Infer<typeof providerUsagePricingSchema>;
+export type ProviderUsageByModel = Infer<typeof providerUsageByModelSchema>;
+export type ProviderUsageAggregateSummary = Infer<typeof providerUsageAggregateSummarySchema>;
+export type ProviderUsageNodeBreakdown = Infer<typeof providerUsageNodeBreakdownSchema>;
+export type ProviderUsageAggregate = Infer<typeof providerUsageAggregateSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
 export type CiArtifactEvidence = Infer<typeof ciArtifactEvidenceSchema>;
 export type CiJobEvidence = Infer<typeof ciJobEvidenceSchema>;

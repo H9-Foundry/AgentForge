@@ -5,12 +5,16 @@ import type {
   AuditBundle,
   EffectivePolicySnapshot,
   LifecycleArtifact,
+  ProviderUsageByModel,
+  ProviderUsageNodeBreakdown,
   ToolRequest,
   ToolResult,
   WorkflowDefinition,
   WorkflowStateEnvelope
 } from "@h9-foundry/agentforge-shared-types";
-import type { ReasoningProvider, RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
+import type { ReasoningProvider, ReasoningProviderRequest, RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
+
+import { buildProviderUsageAggregate, buildProviderUsageSummary, enrichProviderUsage } from "./usage.js";
 
 export interface PolicyEngineLike {
   readonly snapshot: EffectivePolicySnapshot;
@@ -228,6 +232,7 @@ function linkLifecycleArtifacts(
 
 export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ state: WorkflowStateEnvelope; bundle: AuditBundle }> {
   const startedAt = new Date().toISOString();
+  const usageByNode: ProviderUsageNodeBreakdown[] = [];
   const state: WorkflowStateEnvelope = {
     ...deps.initialState,
     findings: [...(deps.initialState.findings ?? [])],
@@ -267,15 +272,33 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
     const nodeStartedAt = new Date().toISOString();
     const toolsRequested: ToolRequest[] = [];
     const toolsExecuted: ToolResult[] = [];
+    const nodeUsageEntries: ProviderUsageByModel[] = [];
 
-    const output = agentOutputSchema.parse(
+    const trackedProvider: ReasoningProvider | undefined = deps.provider
+      ? {
+          name: deps.provider.name,
+          runStructured: async <T>(
+            request: ReasoningProviderRequest,
+            outputSchema: Parameters<ReasoningProvider["runStructured"]>[1]
+          ) => {
+            const result = await deps.provider!.runStructured<T>(request, outputSchema);
+            if (result.usage) {
+              nodeUsageEntries.push(enrichProviderUsage(result.usage, deps.provider!.name));
+            }
+
+            return result;
+          }
+        }
+      : undefined;
+
+    const parsedOutput = agentOutputSchema.parse(
       sanitizeOutput(
         deps.policyEngine,
         await agent.execute({
           state,
           stateSlice: sliceState(state, agent.manifest.contextPolicy.sections),
           policy: deps.policyEngine.snapshot,
-          provider: deps.provider,
+          provider: trackedProvider,
           invokeTool: async (request) => {
             toolsRequested.push(request);
             const result = await invokeTool(request, deps.adapters, deps.policyEngine, state.repo.root);
@@ -285,6 +308,13 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
         })
       )
     );
+    const nodeUsage = buildProviderUsageSummary(nodeUsageEntries);
+    const output = nodeUsage
+      ? agentOutputSchema.parse({
+          ...parsedOutput,
+          usage: nodeUsage
+        })
+      : parsedOutput;
 
     const auditEntryId = `${state.runId}-${node.id}`;
     const linkedLifecycleArtifacts = linkLifecycleArtifacts(output.lifecycleArtifacts, {
@@ -302,6 +332,14 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
     state.findings.push(...output.findings);
     state.proposedActions.push(...output.proposedActions);
     state.lifecycleArtifacts.push(...linkedLifecycleArtifacts);
+    if (nodeUsage) {
+      usageByNode.push({
+        ...nodeUsage,
+        nodeId: node.id,
+        nodeName: agent.manifest.name,
+        kind: agent.manifest.runtime.kind
+      });
+    }
 
     state.auditTrail.push(
       createAuditEntry({
@@ -320,9 +358,15 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
           ...output.blockedActionFlags,
           ...toolsExecuted.filter((tool) => tool.status === "blocked").map((tool) => tool.blockedReason ?? tool.tool)
         ],
-        validationPassed: true
+        validationPassed: true,
+        usage: nodeUsage
       })
     );
+  }
+
+  const aggregatedUsage = buildProviderUsageAggregate(usageByNode);
+  if (aggregatedUsage) {
+    state.usage = aggregatedUsage;
   }
 
   const status = state.auditTrail.some((entry) => entry.status === "failed") ? "partial" : "success";

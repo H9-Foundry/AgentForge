@@ -269,6 +269,7 @@ export function buildAuditBundle(
       json: options.jsonPath,
       markdown: options.markdownPath
     },
+    usage: state.usage,
     provenance: options.provenance,
     redaction: options.redaction,
     components: options.components
@@ -290,6 +291,19 @@ export function renderAuditBundleMarkdown(bundle: AuditBundle): string {
     `- Trusted components recorded: ${bundle.components.length}`,
     ""
   ];
+
+  if (bundle.usage) {
+    lines.splice(
+      lines.length - 1,
+      0,
+      `- Total input tokens: ${bundle.usage.totalInputTokens}`,
+      `- Total output tokens: ${bundle.usage.totalOutputTokens}`,
+      `- Total tokens: ${bundle.usage.totalTokens}`,
+      `- Total requests: ${bundle.usage.totalRequests}`,
+      `- Estimated cost (USD): ${typeof bundle.usage.totalEstimatedCostUsd === "number" ? bundle.usage.totalEstimatedCostUsd.toFixed(6) : "unavailable"}`,
+      `- Cost status: ${bundle.usage.costStatus}`
+    );
+  }
 
   if (bundle.findings.length > 0) {
     lines.push("## Findings", "");

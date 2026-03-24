@@ -38,6 +38,7 @@ function writeBundleFixture(
     entries?: Array<{ id: string; nodeId: string; nodeName: string; kind: "deterministic" | "reasoning" | "report"; status: "success" | "partial" | "failed"; summary: string; blockedActions?: string[] }>;
     findings?: unknown[];
     blockedPlugins?: unknown[];
+    usage?: Record<string, unknown>;
   }
 ): void {
   const runRoot = join(root, ".agentops", "runs", runId);
@@ -79,6 +80,7 @@ function writeBundleFixture(
           json: `.agentops/runs/${runId}/bundle.json`,
           markdown: `.agentops/runs/${runId}/summary.md`
         },
+        usage: options?.usage,
         provenance: {
           generatedBy: "agentforge-runtime",
           schemaVersion: "1.0.0",
@@ -168,10 +170,148 @@ describe("visualizer data loading", () => {
     expect(benchmarks.benchmarks[0]?.comparedRuns[0]?.hasLocalRunLink).toBe(true);
   });
 
+  it("renders measured usage and estimated cost on the run detail page", () => {
+    const root = createWorkspace();
+    writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)], {
+      workflow: "release-readiness",
+      usage: {
+        totalInputTokens: 1200,
+        totalOutputTokens: 400,
+        totalTokens: 1600,
+        totalRequests: 2,
+        totalEstimatedCostUsd: 0.009,
+        costStatus: "estimated",
+        byModel: [
+          {
+            provider: "openai",
+            model: "gpt-5.4",
+            inputTokens: 1200,
+            outputTokens: 400,
+            totalTokens: 1600,
+            requestCount: 2,
+            estimatedCostUsd: 0.009,
+            costStatus: "estimated",
+            pricing: {
+              source: "local_registry",
+              version: "openai-api-pricing-2026-03-24",
+              effectiveDate: "2026-03-24",
+              currency: "USD",
+              inputCostPerMillionTokensUsd: 2.5,
+              outputCostPerMillionTokensUsd: 15
+            }
+          }
+        ],
+        byNode: [
+          {
+            nodeId: "release",
+            nodeName: "release-analyst",
+            kind: "reasoning",
+            totalInputTokens: 1200,
+            totalOutputTokens: 400,
+            totalTokens: 1600,
+            totalRequests: 2,
+            totalEstimatedCostUsd: 0.009,
+            costStatus: "estimated",
+            byModel: [
+              {
+                provider: "openai",
+                model: "gpt-5.4",
+                inputTokens: 1200,
+                outputTokens: 400,
+                totalTokens: 1600,
+                requestCount: 2,
+                estimatedCostUsd: 0.009,
+                costStatus: "estimated",
+                pricing: {
+                  source: "local_registry",
+                  version: "openai-api-pricing-2026-03-24",
+                  effectiveDate: "2026-03-24",
+                  currency: "USD",
+                  inputCostPerMillionTokensUsd: 2.5,
+                  outputCostPerMillionTokensUsd: 15
+                }
+              }
+            ]
+          }
+        ]
+      }
+    });
+
+    const runDetail = loadRunDetailView(root, "run-release");
+    const html = renderRunDetailPage(runDetail!);
+
+    expect(runDetail?.usage?.totalTokens).toBe(1600);
+    expect(html).toContain("Usage Summary");
+    expect(html).toContain("Measured total tokens");
+    expect(html).toContain("openai/gpt-5.4");
+    expect(html).toContain("estimated from the local pricing table");
+  });
+
   it("loads benchmark ledger overlays and derives outcomes dashboard summaries", () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-promotion", [cloneFixture(schemaFixtures.promotionApprovalArtifact)], {
-      workflow: "promotion-approval"
+      workflow: "promotion-approval",
+      usage: {
+        totalInputTokens: 1500,
+        totalOutputTokens: 500,
+        totalTokens: 2000,
+        totalRequests: 4,
+        totalEstimatedCostUsd: 0.3,
+        costStatus: "estimated",
+        byModel: [
+          {
+            provider: "openai",
+            model: "gpt-5.4",
+            inputTokens: 1500,
+            outputTokens: 500,
+            totalTokens: 2000,
+            requestCount: 4,
+            estimatedCostUsd: 0.3,
+            costStatus: "estimated",
+            pricing: {
+              source: "local_registry",
+              version: "openai-api-pricing-2026-03-24",
+              effectiveDate: "2026-03-24",
+              currency: "USD",
+              inputCostPerMillionTokensUsd: 2.5,
+              outputCostPerMillionTokensUsd: 15
+            }
+          }
+        ],
+        byNode: [
+          {
+            nodeId: "promotion",
+            nodeName: "promotion-approval",
+            kind: "reasoning",
+            totalInputTokens: 1500,
+            totalOutputTokens: 500,
+            totalTokens: 2000,
+            totalRequests: 4,
+            totalEstimatedCostUsd: 0.3,
+            costStatus: "estimated",
+            byModel: [
+              {
+                provider: "openai",
+                model: "gpt-5.4",
+                inputTokens: 1500,
+                outputTokens: 500,
+                totalTokens: 2000,
+                requestCount: 4,
+                estimatedCostUsd: 0.3,
+                costStatus: "estimated",
+                pricing: {
+                  source: "local_registry",
+                  version: "openai-api-pricing-2026-03-24",
+                  effectiveDate: "2026-03-24",
+                  currency: "USD",
+                  inputCostPerMillionTokensUsd: 2.5,
+                  outputCostPerMillionTokensUsd: 15
+                }
+              }
+            ]
+          }
+        ]
+      }
     });
     writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)], {
       workflow: "release-readiness"
@@ -197,7 +337,8 @@ describe("visualizer data loading", () => {
           outputTokens: 0,
           totalTokens: 0,
           requestCount: 0,
-          estimatedCostUsd: null
+          estimatedCostUsd: null,
+          costStatus: "unavailable"
         },
         confirmedRisks: { high: 0, medium: 0, low: 0, noisy: 0, unresolved: 0 },
         evidence: { present: ["release-report"], missing: [], partial: [] },
@@ -229,7 +370,10 @@ describe("visualizer data loading", () => {
           outputTokens: 500,
           totalTokens: 2000,
           requestCount: 4,
-          estimatedCostUsd: 0.3
+          estimatedCostUsd: 0.3,
+          costStatus: "estimated",
+          pricingVersion: "openai-api-pricing-2026-03-24",
+          pricingEffectiveDate: "2026-03-24"
         },
         confirmedRisks: { high: 1, medium: 1, low: 0, noisy: 1, unresolved: 2 },
         evidence: { present: ["release-report"], missing: ["deployment-gate-report"], partial: ["ci-evidence"] },
@@ -258,12 +402,14 @@ describe("visualizer data loading", () => {
     expect(outcomes.releaseBenchmark.available).toBe(true);
     expect(outcomes.releaseBenchmark.comparablePairs).toBe(1);
     expect(outcomes.releaseBenchmark.arms.find((arm) => arm.arm === "agentforge")?.totalTokens).toBe(2000);
+    expect(outcomes.releaseBenchmark.arms.find((arm) => arm.arm === "agentforge")?.measuredTokenEntryCount).toBe(1);
     expect(outcomes.releaseBenchmark.arms.find((arm) => arm.arm === "control")?.totalTokens).toBe(0);
     expect(outcomes.summaries.releaseBenchmark).toHaveLength(4);
     expect(outcomes.friction.overrideCount).toBe(1);
     expect(outcomes.workflowChains.some((stage) => stage.stage === "promotion")).toBe(true);
     expect(outcomes.details.friction[0]?.source).toBe("ledger");
     expect(outcomes.details.releaseBenchmark[0]?.source).toContain("ledger");
+    expect(detail?.usage?.totalTokens).toBe(2000);
   });
 
   it("dedupes blocked approval leadership metrics across one release chain and preserves practitioner rows", () => {
@@ -472,6 +618,8 @@ describe("visualizer html rendering", () => {
     expect(outcomesHtml).toContain("Evidence Hygiene");
     expect(outcomesHtml).toContain("Workflow Chain Coverage");
     expect(outcomesHtml).toContain("/runs?decisionImpact=");
+    expect(outcomesHtml).toContain("/api/outcomes/export.json");
+    expect(outcomesHtml).toContain("metric-provenance");
   });
 
   it("serves outcomes as the canonical route and keeps value as an alias", async () => {
@@ -494,12 +642,18 @@ describe("visualizer html rendering", () => {
       const valueResponse = await fetch(`${serverUrl}/value`, { redirect: "manual" });
       const apiOutcomes = await fetch(`${serverUrl}/api/outcomes`);
       const apiValue = await fetch(`${serverUrl}/api/value`);
+      const exportJson = await fetch(`${serverUrl}/api/outcomes/export.json`);
+      const exportMarkdown = await fetch(`${serverUrl}/outcomes/export.md`);
 
       expect(outcomesResponse.status).toBe(200);
       expect(outcomesHtml).toContain("Outcomes");
       expect(valueResponse.status).toBe(302);
       expect(valueResponse.headers.get("location")).toBe("/outcomes");
       expect(await apiOutcomes.text()).toBe(await apiValue.text());
+      expect(exportJson.status).toBe(200);
+      expect(await exportJson.text()).toContain("\"schemaVersion\"");
+      expect(exportMarkdown.status).toBe(200);
+      expect(await exportMarkdown.text()).toContain("# AgentForge Outcomes Export");
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {

@@ -4,6 +4,7 @@ import type {
   AgentManifest,
   AgentOutput,
   EffectivePolicySnapshot,
+  ProviderUsageByModel,
   TrustMetadata,
   ToolRequest,
   ToolResult,
@@ -24,9 +25,14 @@ export interface ReasoningProviderRequest {
   readonly input: unknown;
 }
 
+export interface ReasoningProviderResponse<T> {
+  readonly output: T;
+  readonly usage?: Omit<ProviderUsageByModel, "estimatedCostUsd" | "costStatus" | "pricing">;
+}
+
 export interface ReasoningProvider {
   readonly name: string;
-  runStructured<T>(request: ReasoningProviderRequest, outputSchema: ZodTypeAny): Promise<T>;
+  runStructured<T>(request: ReasoningProviderRequest, outputSchema: ZodTypeAny): Promise<ReasoningProviderResponse<T>>;
 }
 
 export interface RuntimeAgent {

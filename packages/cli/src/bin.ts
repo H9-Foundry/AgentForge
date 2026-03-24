@@ -4,8 +4,11 @@ import { Command } from "commander";
 import {
   checkReleaseReadiness,
   compareLocalEvalRuns,
+  exportVisualizerOutcomes,
+  launchVisualizer,
   readBenchmarkLedger,
   recordBenchmarkLedgerEntry,
+  runBenchmarkLedgerWizard,
   runLocalEval,
   explainLastRun,
   initProject,
@@ -50,6 +53,25 @@ function parseNonNegativeIntegerOption(value: string | undefined, label: string)
   }
 
   return parsed;
+}
+
+async function waitForVisualizerShutdown(close: () => Promise<void>): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let closing = false;
+
+    const shutdown = () => {
+      if (closing) {
+        return;
+      }
+      closing = true;
+      process.off("SIGINT", shutdown);
+      process.off("SIGTERM", shutdown);
+      void close().then(resolve).catch(reject);
+    };
+
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+  });
 }
 
 const program = new Command();
@@ -340,6 +362,126 @@ evalCommand
     }
     console.log(`Workflow: ${result.entry.workflow ?? "unresolved"}`);
     console.log(`Decision outcome: ${result.entry.decisionOutcome ?? "unrecorded"}`);
+  });
+
+evalCommand
+  .command("benchmark-wizard")
+  .description("Interactively create or update one local benchmark-ledger entry with run-prefill support.")
+  .argument("<task-id>", "Benchmark task id.")
+  .argument("<arm>", "Benchmark arm: control or agentforge.")
+  .option("--source <source>", "Initial benchmark source: replay or live.")
+  .option("--task-type <taskType>", "Initial benchmark task type.")
+  .option("--benchmark-category <category>", "Initial benchmark category: general or release.")
+  .option("--prefill-run <runRef>", "Prefill measurable fields from an existing local run id or bundle path.")
+  .option("--run-id <runId>", "Explicit run id to seed the wizard.")
+  .option("--workflow <workflow>", "Explicit workflow name to seed the wizard.")
+  .option("--agent <agent>", "Agent or model label to seed the wizard.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action(async (taskId, arm, options: {
+    source?: string;
+    taskType?: string;
+    benchmarkCategory?: string;
+    prefillRun?: string;
+    runId?: string;
+    workflow?: string;
+    agent?: string;
+    json?: boolean;
+  }) => {
+    const result = await runBenchmarkLedgerWizard({
+      taskId,
+      arm: arm as "control" | "agentforge",
+      source: options.source as "replay" | "live" | undefined,
+      taskType: options.taskType,
+      benchmarkCategory: options.benchmarkCategory as "general" | "release" | undefined,
+      prefillRunRef: options.prefillRun,
+      runId: options.runId,
+      workflow: options.workflow,
+      agent: options.agent
+    });
+
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    console.log(`${result.created ? "Created" : "Updated"} benchmark ledger entry for ${result.entry.taskId} [${result.entry.arm}]`);
+    console.log(`Ledger: ${result.path}`);
+    if (result.prefill) {
+      console.log(`Prefilled from run ${result.prefill.runId} (${result.prefill.workflow}/${result.prefill.status})`);
+    }
+    console.log(`Workflow: ${result.entry.workflow ?? "unresolved"}`);
+    console.log(`Decision outcome: ${result.entry.decisionOutcome ?? "unrecorded"}`);
+  });
+
+const visualizer = program
+  .command("visualizer")
+  .alias("ui")
+  .description("Launch or export the official local AgentForge visualizer.");
+
+visualizer
+  .option("--runs-root <path>", "Use an explicit runs root instead of .agentops/runs under the current workspace.")
+  .option("--benchmark-ledger <path>", "Use an explicit benchmark-ledger JSON path.")
+  .option("--host <host>", "Bind the local visualizer server to a specific host.")
+  .option("--port <port>", "Bind the local visualizer server to a specific port. Use 0 for an ephemeral port.")
+  .option("--open", "Open the local /outcomes page in the default browser after launch.")
+  .action(async (options: {
+    runsRoot?: string;
+    benchmarkLedger?: string;
+    host?: string;
+    port?: string;
+    open?: boolean;
+  }) => {
+    const result = await launchVisualizer({
+      runsRoot: options.runsRoot,
+      benchmarkLedgerPath: options.benchmarkLedger,
+      host: options.host,
+      port: parseNonNegativeIntegerOption(options.port, "port"),
+      open: options.open
+    });
+
+    console.log(`AgentForge visualizer ready at ${result.serverUrl}`);
+    console.log(`Runs root: ${result.runsRoot}`);
+    console.log(`Benchmark ledger: ${result.benchmarkLedgerPath}`);
+    console.log(`Visible runs: ${result.runCount}`);
+    console.log(`Visible benchmarks: ${result.benchmarkCount}`);
+    console.log("Press Ctrl+C to stop the local visualizer.");
+
+    await waitForVisualizerShutdown(result.close);
+  });
+
+visualizer
+  .command("export")
+  .description("Export a normalized outcomes snapshot from local runs and the optional benchmark ledger.")
+  .option("--runs-root <path>", "Use an explicit runs root instead of .agentops/runs under the current workspace.")
+  .option("--benchmark-ledger <path>", "Use an explicit benchmark-ledger JSON path.")
+  .option("--format <format>", "Export format: json or markdown.", "json")
+  .option("--output <path>", "Write the export to a file instead of stdout.")
+  .action((options: {
+    runsRoot?: string;
+    benchmarkLedger?: string;
+    format?: string;
+    output?: string;
+  }) => {
+    if (options.format !== "json" && options.format !== "markdown") {
+      throw new Error(`Unsupported visualizer export format: ${options.format}. Supported formats: json, markdown`);
+    }
+
+    const result = exportVisualizerOutcomes({
+      runsRoot: options.runsRoot,
+      benchmarkLedgerPath: options.benchmarkLedger,
+      format: options.format,
+      outputPath: options.output
+    });
+
+    if (options.output) {
+      console.log(`Wrote ${result.format} outcomes export to ${result.outputPath}`);
+      return;
+    }
+
+    process.stdout.write(result.contents);
+    if (!result.contents.endsWith("\n")) {
+      process.stdout.write("\n");
+    }
   });
 
 program

@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { createInterface } from "node:readline/promises";
+import process from "node:process";
 
 import yaml from "js-yaml";
 
@@ -9,11 +11,21 @@ import { createWorkflowState, findWorkspaceRoot } from "@h9-foundry/agentforge-c
 import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@h9-foundry/agentforge-policy-engine";
 import { runWorkflow } from "@h9-foundry/agentforge-runtime";
 import {
+  createOutcomesExportDocument,
+  readVisualizerSummary,
+  renderOutcomesExportMarkdown,
+  resolveBenchmarkLedgerPath as resolveVisualizerBenchmarkLedgerPath,
+  resolveRunsRoot as resolveVisualizerRunsRoot,
+  startVisualizerServer
+} from "@h9-foundry/agentforge-visualizer";
+import type { OutcomesExportDocument } from "@h9-foundry/agentforge-visualizer";
+import {
   agentforgeConfigSchema,
   auditBundleSchema,
   benchmarkArtifactSchema,
   benchmarkLedgerDocumentSchema,
   benchmarkLedgerEntrySchema,
+  benchmarkLedgerTokenUsageSchema,
   designArtifactSchema,
   designRequestSchema,
   deploymentRequestSchema,
@@ -66,6 +78,7 @@ import type {
   PlanningArtifact,
   PlanningRequest,
   PromotionRequest,
+  ProviderUsageAggregate,
   QaRequest,
   ReleaseRequest,
   ScmReference,
@@ -1779,6 +1792,10 @@ export interface BenchmarkLedgerPrefill {
   workflow: string;
   status: string;
   artifactKinds: string[];
+  startedAt?: string;
+  finishedAt?: string;
+  cycleTimeSeconds?: number;
+  tokenUsage?: BenchmarkLedgerTokenUsage;
   entry: Partial<BenchmarkLedgerEntry>;
 }
 
@@ -1820,6 +1837,49 @@ export interface BenchmarkLedgerRecordResult extends BenchmarkLedgerResult {
   created: boolean;
   prefill?: BenchmarkLedgerPrefill;
   entry: BenchmarkLedgerEntry;
+}
+
+export interface BenchmarkLedgerWizardInput {
+  taskId: string;
+  arm: BenchmarkLedgerArm;
+  source?: BenchmarkLedgerRecordInput["source"];
+  taskType?: string;
+  benchmarkCategory?: BenchmarkCategory;
+  prefillRunRef?: string;
+  runId?: string;
+  workflow?: string;
+  agent?: string;
+}
+
+export interface VisualizerLaunchOptions {
+  runsRoot?: string;
+  benchmarkLedgerPath?: string;
+  host?: string;
+  port?: number;
+  open?: boolean;
+}
+
+export interface VisualizerLaunchResult {
+  serverUrl: string;
+  runsRoot: string;
+  benchmarkLedgerPath: string;
+  runCount: number;
+  benchmarkCount: number;
+  close: () => Promise<void>;
+}
+
+export interface VisualizerExportOptions {
+  runsRoot?: string;
+  benchmarkLedgerPath?: string;
+  outputPath?: string;
+  format?: "json" | "markdown";
+}
+
+export interface VisualizerExportResult {
+  format: "json" | "markdown";
+  outputPath?: string;
+  contents: string;
+  document: OutcomesExportDocument;
 }
 
 function resolveBenchmarkLedgerPath(root: string): string {
@@ -1954,15 +2014,25 @@ function buildBenchmarkLedgerPrefill(root: string, runRef: string): BenchmarkLed
   const artifactKinds = bundle.lifecycleArtifacts
     .map((artifact) => artifact.artifactKind)
     .filter((artifactKind): artifactKind is NonNullable<typeof artifactKind> => typeof artifactKind === "string" && artifactKind.length > 0);
+  const tokenUsage = summarizeBundleTokenUsage(bundle.usage);
+  const cycleTimeSeconds = deriveCycleTimeSeconds(bundle.startedAt, bundle.finishedAt);
 
   return {
     runId,
     workflow: bundle.workflow,
     status: bundle.status,
     artifactKinds,
+    startedAt: bundle.startedAt,
+    finishedAt: bundle.finishedAt,
+    cycleTimeSeconds,
+    tokenUsage,
     entry: {
       runId,
       workflow: bundle.workflow,
+      startedAt: bundle.startedAt,
+      finishedAt: bundle.finishedAt,
+      cycleTimeSeconds,
+      tokenUsage,
       workflowStatuses: [
         {
           workflow: bundle.workflow,
@@ -1982,6 +2052,29 @@ function buildBenchmarkLedgerPrefill(root: string, runRef: string): BenchmarkLed
       ]
     }
   };
+}
+
+function summarizeBundleTokenUsage(usage?: ProviderUsageAggregate): BenchmarkLedgerTokenUsage | undefined {
+  if (!usage) {
+    return undefined;
+  }
+
+  const primaryModel = usage.byModel[0];
+  const provider = usage.byModel.length === 1 ? primaryModel?.provider : "multiple";
+  const model = usage.byModel.length === 1 ? primaryModel?.model : `${usage.byModel.length} models`;
+
+  return benchmarkLedgerTokenUsageSchema.parse({
+    provider,
+    model,
+    inputTokens: usage.totalInputTokens,
+    outputTokens: usage.totalOutputTokens,
+    totalTokens: usage.totalTokens,
+    estimatedCostUsd: usage.totalEstimatedCostUsd,
+    requestCount: usage.totalRequests,
+    costStatus: usage.costStatus,
+    pricingVersion: usage.byModel.length === 1 ? primaryModel?.pricing?.version : undefined,
+    pricingEffectiveDate: usage.byModel.length === 1 ? primaryModel?.pricing?.effectiveDate : undefined
+  });
 }
 
 function deriveCycleTimeSeconds(startedAt?: string, finishedAt?: string): number | undefined {
@@ -3308,9 +3401,12 @@ export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cw
     runId: input.runId ?? prefill?.entry.runId,
     workflow: input.workflow ?? prefill?.entry.workflow,
     agent: input.agent,
-    startedAt: input.startedAt,
-    finishedAt: input.finishedAt,
-    cycleTimeSeconds: input.cycleTimeSeconds ?? deriveCycleTimeSeconds(input.startedAt, input.finishedAt),
+    startedAt: input.startedAt ?? prefill?.entry.startedAt,
+    finishedAt: input.finishedAt ?? prefill?.entry.finishedAt,
+    cycleTimeSeconds:
+      input.cycleTimeSeconds ??
+      prefill?.entry.cycleTimeSeconds ??
+      deriveCycleTimeSeconds(input.startedAt ?? prefill?.entry.startedAt, input.finishedAt ?? prefill?.entry.finishedAt),
     summary: input.summary,
     decisionOutcome: input.decisionOutcome,
     decisionImpactReason: input.decisionImpactReason,
@@ -3329,7 +3425,7 @@ export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cw
       unresolved: 0
     },
     confirmedRiskRefs: input.confirmedRiskRefs ?? [],
-    tokenUsage: input.tokenUsage,
+    tokenUsage: input.tokenUsage ?? prefill?.entry.tokenUsage,
     evidence: input.evidence ?? prefill?.entry.evidence ?? { present: [], missing: [], partial: [] },
     evidenceGapRefs: input.evidenceGapRefs ?? [],
     workflowStatuses: input.workflowStatuses ?? prefill?.entry.workflowStatuses ?? [],
@@ -3361,6 +3457,231 @@ export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cw
     created,
     prefill,
     entry: mergedEntry
+  };
+}
+
+function normalizeOptionalString(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseBooleanString(value: string | undefined): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`Boolean values must be 'true' or 'false', received: ${value}`);
+}
+
+function parseNonNegativeIntegerString(value: string | undefined, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative integer, received: ${value}`);
+  }
+
+  return parsed;
+}
+
+function parseCsvList(value: string): string[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+async function promptWithDefault(question: string, defaultValue?: string): Promise<string> {
+  const prompt = defaultValue ? `${question} [${defaultValue}]: ` : `${question}: `;
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const answer = await rl.question(prompt);
+    return answer.trim().length > 0 ? answer.trim() : (defaultValue ?? "");
+  } finally {
+    rl.close();
+  }
+}
+
+export async function runBenchmarkLedgerWizard(input: BenchmarkLedgerWizardInput, cwd = process.cwd()): Promise<BenchmarkLedgerRecordResult> {
+  const root = findWorkspaceRoot(cwd);
+  const existing = readBenchmarkLedgerDocument(root);
+  const existingEntry = existing.document.entries.find((entry) => entry.taskId === input.taskId && entry.arm === input.arm);
+  const prefill = input.prefillRunRef ? buildBenchmarkLedgerPrefill(root, input.prefillRunRef) : undefined;
+
+  const source = (await promptWithDefault("Benchmark source (replay/live)", input.source ?? existingEntry?.source ?? "live")) as "replay" | "live";
+  const taskType = await promptWithDefault("Task type", input.taskType ?? existingEntry?.taskType ?? "feature/refactor");
+  const benchmarkCategory = normalizeOptionalString(
+    await promptWithDefault("Benchmark category (general/release, blank keeps current)", input.benchmarkCategory ?? existingEntry?.benchmarkCategory ?? "general")
+  ) as BenchmarkCategory | undefined;
+  const summary = normalizeOptionalString(await promptWithDefault("Short summary", existingEntry?.summary));
+  const decisionOutcome = normalizeOptionalString(
+    await promptWithDefault(
+      "Decision outcome (scope_reduction/added_validation/blocked_approval/remediation_before_merge/added_confidence/no_meaningful_change)",
+      existingEntry?.decisionOutcome
+    )
+  ) as BenchmarkDecisionOutcome | undefined;
+  const changedDecisionAnswer = await promptWithDefault(
+    "Did AgentForge change the decision? (true/false)",
+    existingEntry?.agentforgeChangedDecision === undefined ? "false" : String(existingEntry.agentforgeChangedDecision)
+  );
+  const decisionImpactReason = normalizeOptionalString(await promptWithDefault("Decision impact reason", existingEntry?.decisionImpactReason));
+  const releaseDecision = benchmarkCategory === "release"
+    ? normalizeOptionalString(
+        await promptWithDefault("Release decision (go/no-go/conditional/unclear)", existingEntry?.releaseDecision)
+      ) as BenchmarkReleaseDecision | undefined
+    : existingEntry?.releaseDecision;
+  const decisionClarity = benchmarkCategory === "release"
+    ? normalizeOptionalString(
+        await promptWithDefault("Decision clarity (clear/mixed/ambiguous)", existingEntry?.decisionClarity)
+      ) as BenchmarkDecisionClarity | undefined
+    : existingEntry?.decisionClarity;
+  const finalRecommendationSummary = benchmarkCategory === "release"
+    ? normalizeOptionalString(await promptWithDefault("Final recommendation summary", existingEntry?.finalRecommendationSummary))
+    : existingEntry?.finalRecommendationSummary;
+  const mediumRisks = parseNonNegativeIntegerString(
+    await promptWithDefault("Confirmed medium risks", String(existingEntry?.confirmedRisks.medium ?? 0)),
+    "confirmed-medium-risks"
+  ) ?? 0;
+  const highRisks = parseNonNegativeIntegerString(
+    await promptWithDefault("Confirmed high risks", String(existingEntry?.confirmedRisks.high ?? 0)),
+    "confirmed-high-risks"
+  ) ?? 0;
+  const lowRisks = parseNonNegativeIntegerString(
+    await promptWithDefault("Confirmed low risks", String(existingEntry?.confirmedRisks.low ?? 0)),
+    "confirmed-low-risks"
+  ) ?? 0;
+  const noisyRisks = parseNonNegativeIntegerString(
+    await promptWithDefault("Noisy findings", String(existingEntry?.confirmedRisks.noisy ?? 0)),
+    "noisy-findings"
+  ) ?? 0;
+  const unresolvedRisks = parseNonNegativeIntegerString(
+    await promptWithDefault("Unresolved risks", String(existingEntry?.confirmedRisks.unresolved ?? 0)),
+    "unresolved-risks"
+  ) ?? 0;
+  const overrideAnswer = await promptWithDefault(
+    "Override a blocked/partial result? (true/false)",
+    existingEntry?.friction.override === undefined ? "false" : String(existingEntry.friction.override)
+  );
+  const overrideReason = parseBooleanString(overrideAnswer)
+    ? normalizeOptionalString(await promptWithDefault("Override reason", existingEntry?.friction.overrideReason))
+    : undefined;
+  const manualSteps = parseCsvList(await promptWithDefault("Manual steps (comma-separated)", existingEntry?.friction?.manualSteps?.join(", ")));
+  const requestFriction = parseCsvList(await promptWithDefault("Request friction (comma-separated)", existingEntry?.friction?.requestFriction?.join(", ")));
+  const falsePositivePatterns = parseCsvList(
+    await promptWithDefault("False-positive patterns (comma-separated)", existingEntry?.friction?.falsePositivePatterns?.join(", "))
+  );
+  const notes = parseCsvList(await promptWithDefault("Notes (comma-separated)", existingEntry?.notes?.join(", ")));
+
+  return recordBenchmarkLedgerEntry(
+    {
+      taskId: input.taskId,
+      arm: input.arm,
+      source,
+      taskType,
+      benchmarkCategory,
+      prefillRunRef: input.prefillRunRef,
+      runId: input.runId ?? existingEntry?.runId ?? prefill?.runId,
+      workflow: input.workflow ?? existingEntry?.workflow ?? prefill?.workflow,
+      agent: input.agent ?? existingEntry?.agent,
+      summary,
+      decisionOutcome,
+      agentforgeChangedDecision: parseBooleanString(changedDecisionAnswer),
+      decisionImpactReason,
+      releaseDecision,
+      decisionClarity,
+      finalRecommendationSummary,
+      confirmedRisks: {
+        high: highRisks,
+        medium: mediumRisks,
+        low: lowRisks,
+        noisy: noisyRisks,
+        unresolved: unresolvedRisks
+      },
+      friction: {
+        override: parseBooleanString(overrideAnswer),
+        overrideReason,
+        manualSteps,
+        requestFriction,
+        falsePositivePatterns
+      },
+      notes
+    },
+    cwd
+  );
+}
+
+function openUrlInBrowser(url: string): void {
+  const platform = process.platform;
+  if (platform === "darwin") {
+    spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+  if (platform === "win32") {
+    spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
+    return;
+  }
+
+  spawn("xdg-open", [url], { detached: true, stdio: "ignore" }).unref();
+}
+
+export async function launchVisualizer(options: VisualizerLaunchOptions = {}, cwd = process.cwd()): Promise<VisualizerLaunchResult> {
+  const workspaceRoot = findWorkspaceRoot(cwd);
+  const runsRoot = resolveVisualizerRunsRoot(workspaceRoot, options.runsRoot);
+  const benchmarkLedgerPath = resolveVisualizerBenchmarkLedgerPath(workspaceRoot, options.benchmarkLedgerPath);
+  const summary = readVisualizerSummary(workspaceRoot, options.runsRoot);
+  const server = await startVisualizerServer({
+    workspaceRoot,
+    runsRoot: options.runsRoot,
+    benchmarkLedgerPath: options.benchmarkLedgerPath,
+    host: options.host,
+    port: options.port
+  });
+
+  if (options.open) {
+    openUrlInBrowser(`${server.serverUrl}/outcomes`);
+  }
+
+  return {
+    serverUrl: server.serverUrl,
+    runsRoot,
+    benchmarkLedgerPath,
+    runCount: summary.runCount,
+    benchmarkCount: summary.benchmarkCount,
+    close: server.close
+  };
+}
+
+export function exportVisualizerOutcomes(options: VisualizerExportOptions = {}, cwd = process.cwd()): VisualizerExportResult {
+  const workspaceRoot = findWorkspaceRoot(cwd);
+  const runsRoot = resolveVisualizerRunsRoot(workspaceRoot, options.runsRoot);
+  const benchmarkLedgerPath = resolveVisualizerBenchmarkLedgerPath(workspaceRoot, options.benchmarkLedgerPath);
+  const document = createOutcomesExportDocument(workspaceRoot, runsRoot, benchmarkLedgerPath);
+  const format = options.format ?? "json";
+  const contents =
+    format === "markdown"
+      ? renderOutcomesExportMarkdown(document)
+      : JSON.stringify(document, null, 2);
+
+  if (options.outputPath) {
+    writeFileSync(options.outputPath, contents, "utf8");
+  }
+
+  return {
+    format,
+    outputPath: options.outputPath,
+    contents,
+    document
   };
 }
 
