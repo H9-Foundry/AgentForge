@@ -20,7 +20,7 @@ const packageDirs = readdirSync(packagesDir)
 const packDir = mkdtempSync(join(tmpdir(), "agentforge-pack-public-"));
 
 for (const packageDir of packageDirs) {
-  const result = spawnSync("pnpm", ["pack", "--pack-destination", packDir], {
+  const result = spawnSync("npm", ["pack", "--json", "--pack-destination", packDir], {
     cwd: packageDir,
     stdio: "inherit",
     env: process.env

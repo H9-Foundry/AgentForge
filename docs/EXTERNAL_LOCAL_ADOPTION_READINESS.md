@@ -11,7 +11,7 @@ Can AgentForge be used in another repository today as a local-only pre-PR qualit
 
 Today, a technical evaluator can install the published CLI, run the official local workflow surface, and inspect bounded run artifacts without GitHub wiring. That is enough for pilot-style local usage in another repository.
 
-The new visualizer plus benchmark-authoring CLI surface is release-ready on `main`, but it is not yet part of the published-CLI claim until the next npm release is cut and verified.
+The new visualizer plus benchmark-authoring CLI surface is release-ready on `main`, but it is not yet part of the published-CLI claim until the next npm release is cut and verified. That surface is shipped through the CLI, not as a separately installed public package.
 
 It is not yet fully plug-and-play for less technical adopters. The published CLI now includes preset-based startup and the canonical four-step quick path, and the external support boundary is explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. The remaining gap is broader ease-of-use beyond the first bounded local-first path.
 

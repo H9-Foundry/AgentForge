@@ -242,7 +242,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/runtime-model.md](docs/r
 - `@h9-foundry/agentforge-policy-engine`
 - `@h9-foundry/agentforge-runtime`
 - `@h9-foundry/agentforge-audit`
-- `@h9-foundry/agentforge-visualizer`
+
+The visualizer is a supported CLI surface and runtime dependency, but it is not intended as a separately installed public npm package.
 
 ### Internal Workspace Surfaces
 

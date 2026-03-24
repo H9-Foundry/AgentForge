@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -184,11 +184,47 @@ function ensureBuiltCli(): void {
     return;
   }
 
+  const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
+  const visualizerEntry = join(process.cwd(), "packages", "visualizer", "dist", "index.js");
+  if (existsSync(cliEntry) && existsSync(visualizerEntry)) {
+    builtCli = true;
+    return;
+  }
+
   execFileSync("pnpm", ["build:packages"], {
     cwd: process.cwd(),
     stdio: "ignore"
   });
   builtCli = true;
+}
+
+function runBuiltCli(args: string[], cwd: string): ReturnType<typeof spawnSync> {
+  const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
+
+  const attempt = () =>
+    spawnSync("node", [cliEntry, ...args], {
+      cwd,
+      encoding: "utf8"
+    });
+
+  const firstRun = attempt();
+  if (firstRun.status === 0) {
+    return firstRun;
+  }
+
+  return attempt();
+}
+
+function getSpawnErrorText(result: ReturnType<typeof spawnSync>): string | undefined {
+  if (typeof result.stderr === "string") {
+    return result.stderr;
+  }
+
+  if (result.stderr) {
+    return result.stderr.toString();
+  }
+
+  return undefined;
 }
 
 function writeLocalPlugin(root: string, options: { manifestName: string; packageName: string; trust?: Record<string, unknown> }) {
@@ -581,13 +617,9 @@ describe("cli smoke flows", () => {
     const root = createGitFixture("agentops-cli-guidance-");
     ensureBuiltCli();
 
-    const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
-    const run = spawnSync("node", [cliEntry, "run", "pr-review"], {
-      cwd: root,
-      encoding: "utf8"
-    });
+    const run = runBuiltCli(["run", "pr-review"], root);
 
-    expect(run.status).toBe(0);
+    expect(run.status, getSpawnErrorText(run)).toBe(0);
     expect(run.stdout).toContain("Audit bundle:");
     expect(run.stdout).toContain("Summary:");
     expect(run.stdout).toContain("agentforge explain last-run");
@@ -597,13 +629,9 @@ describe("cli smoke flows", () => {
     const root = createGitFixture("agentops-cli-quick-path-");
     ensureBuiltCli();
 
-    const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
-    const run = spawnSync("node", [cliEntry, "init", "--preset", "planning-discovery"], {
-      cwd: root,
-      encoding: "utf8"
-    });
+    const run = runBuiltCli(["init", "--preset", "planning-discovery"], root);
 
-    expect(run.status).toBe(0);
+    expect(run.status, getSpawnErrorText(run)).toBe(0);
     expect(run.stdout).toContain("Created starter request:");
     expect(run.stdout).toContain("inspect or edit");
     expect(run.stdout).toContain("Then run: `agentforge run planning-discovery --json`");
