@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-sdk",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "SDK interfaces for AgentForge agents, adapters, providers, and runtime integrations.",
   "license": "MIT",
   "author": "H9 Foundry",
