@@ -1,4 +1,6 @@
+---
 "@h9-foundry/agentforge-cli": patch
+---
 
 Bundle the visualizer into the published CLI instead of treating it as a separately installed npm package.
 
