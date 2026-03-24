@@ -1,5 +1,23 @@
 # @h9-foundry/agentforge-cli
 
+## 0.12.1
+
+### Patch Changes
+
+- 03a4671: Bundle the visualizer into the published CLI instead of treating it as a separately installed npm package.
+
+  This keeps `agentforge visualizer`, `agentforge ui`, `agentforge visualizer export`, and the benchmark-authoring helpers available through the published CLI while avoiding the standalone first-publish blocker for `@h9-foundry/agentforge-visualizer`.
+
+- Updated dependencies [dc05040]
+  - @h9-foundry/agentforge-runtime@0.12.1
+  - @h9-foundry/agentforge-schemas@0.12.1
+  - @h9-foundry/agentforge-shared-types@0.12.1
+  - @h9-foundry/agentforge-sdk@0.12.1
+  - @h9-foundry/agentforge-context-engine@0.12.1
+  - @h9-foundry/agentforge-policy-engine@0.12.1
+  - @h9-foundry/agentforge-audit@0.12.1
+  - @h9-foundry/agentforge-visualizer@0.12.1
+
 ## 0.12.0
 
 ### Minor Changes

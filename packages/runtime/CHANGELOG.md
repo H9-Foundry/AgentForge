@@ -1,5 +1,16 @@
 # @h9-foundry/agentforge-runtime
 
+## 0.12.1
+
+### Patch Changes
+
+- dc05040: Add a package README for `@h9-foundry/agentforge-runtime` so the npm package page renders documentation directly.
+  - @h9-foundry/agentforge-schemas@0.12.1
+  - @h9-foundry/agentforge-shared-types@0.12.1
+  - @h9-foundry/agentforge-sdk@0.12.1
+  - @h9-foundry/agentforge-policy-engine@0.12.1
+  - @h9-foundry/agentforge-audit@0.12.1
+
 ## 0.12.0
 
 ### Minor Changes
