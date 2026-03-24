@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-runtime",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Deterministic workflow runtime and tool mediation engine for AgentForge.",
   "license": "MIT",
   "author": "H9 Foundry",
