@@ -10,7 +10,8 @@ import type {
   BenchmarkLedgerEntry,
   BlockedPlugin,
   Finding,
-  LifecycleArtifact
+  LifecycleArtifact,
+  ProviderUsageAggregate
 } from "@h9-foundry/agentforge-shared-types";
 
 type RunStatus = AuditBundle["status"];
@@ -114,6 +115,7 @@ export interface RunDetailView extends RunListItemView {
   artifacts: ArtifactPanelView[];
   summaryMarkdown: string;
   rawBundleJson: string;
+  usage?: ProviderUsageAggregate;
   decisionImpact: DecisionImpactView;
   riskSummary: RiskSummaryView;
   evidenceCompleteness: EvidenceCompletenessView[];
@@ -235,6 +237,7 @@ export interface OutcomeSummaryView {
   value: number;
   detail: string;
   href: string;
+  provenance?: string;
 }
 
 export interface OutcomeDetailRowView {
@@ -304,10 +307,37 @@ export interface WorkflowChainSummaryView {
   missingUpstreamEvidenceCount: number;
 }
 
+export interface ReleaseBenchmarkArmSummaryView {
+  arm: "control" | "agentforge";
+  entryCount: number;
+  medianCycleTimeSeconds?: number;
+  clearDecisionCount: number;
+  ambiguousDecisionCount: number;
+  blockedReleaseCount: number;
+  confirmedRiskCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  totalRequests: number;
+  measuredTokenEntryCount: number;
+  totalEstimatedCostUsd?: number;
+  knownCostEntryCount: number;
+  costPerConfirmedRiskCaught?: number;
+  costPerBlockedPrematureRelease?: number;
+}
+
+export interface ReleaseBenchmarkDashboardView {
+  available: boolean;
+  comparablePairs: number;
+  totalEntries: number;
+  arms: ReleaseBenchmarkArmSummaryView[];
+}
+
 export interface OutcomesDashboardView {
   ledger: BenchmarkLedgerView;
   decisionImpact: DecisionImpactSummaryView;
   risk: RiskDashboardView;
+  releaseBenchmark: ReleaseBenchmarkDashboardView;
   evidence: WorkflowEvidenceSummaryRowView[];
   friction: FrictionDashboardView;
   workflowChains: WorkflowChainSummaryView[];
@@ -317,6 +347,7 @@ export interface OutcomesDashboardView {
   summaries: {
     decision: OutcomeSummaryView[];
     risk: OutcomeSummaryView[];
+    releaseBenchmark: OutcomeSummaryView[];
     evidence: OutcomeSummaryView[];
     friction: OutcomeSummaryView[];
     workflowChain: OutcomeSummaryView[];
@@ -324,10 +355,28 @@ export interface OutcomesDashboardView {
   details: {
     decision: OutcomeDetailRowView[];
     risk: OutcomeDetailRowView[];
+    releaseBenchmark: OutcomeDetailRowView[];
     evidence: OutcomeDetailRowView[];
     friction: OutcomeDetailRowView[];
     workflowChain: OutcomeDetailRowView[];
   };
+}
+
+export interface OutcomesExportDocument {
+  schemaVersion: string;
+  generatedAt: string;
+  workspaceRoot: string;
+  runsRoot: string;
+  benchmarkLedgerPath?: string;
+  runCount: number;
+  ledgerAvailable: boolean;
+  decisionImpact: DecisionImpactSummaryView;
+  risk: RiskDashboardView;
+  releaseBenchmark: ReleaseBenchmarkDashboardView;
+  evidence: WorkflowEvidenceSummaryRowView[];
+  friction: FrictionDashboardView;
+  workflowChains: WorkflowChainSummaryView[];
+  summaries: OutcomesDashboardView["summaries"];
 }
 
 export type ValueDashboardView = OutcomesDashboardView;
@@ -346,9 +395,11 @@ export interface RunFilters {
 }
 
 export interface OutcomesFilters {
-  panel?: "decision-impact" | "risk" | "evidence" | "friction" | "flow";
+  panel?: "decision-impact" | "risk" | "release-benchmark" | "evidence" | "friction" | "flow";
   decision?: "changed" | DecisionOutcomeKind;
   risk?: string;
+  arm?: "control" | "agentforge";
+  releaseDecision?: "go" | "no-go" | "conditional" | "unclear";
   workflow?: string;
   evidenceCategory?: string;
   evidenceStatus?: "present" | "missing" | "partial";
@@ -851,6 +902,7 @@ export function loadRunDetailView(
     artifacts: run.artifactViews,
     summaryMarkdown: run.summaryMarkdown,
     rawBundleJson: run.rawBundleJson,
+    usage: run.bundle?.usage,
     decisionImpact,
     riskSummary,
     evidenceCompleteness,
@@ -1743,6 +1795,114 @@ function aggregateFriction(
   };
 }
 
+function deriveReleaseCycleTimeSeconds(entry: BenchmarkLedgerEntry): number | undefined {
+  if (typeof entry.cycleTimeSeconds === "number") {
+    return entry.cycleTimeSeconds;
+  }
+
+  if (!entry.startedAt || !entry.finishedAt) {
+    return undefined;
+  }
+
+  const startedMs = Date.parse(entry.startedAt);
+  const finishedMs = Date.parse(entry.finishedAt);
+  if (Number.isNaN(startedMs) || Number.isNaN(finishedMs) || finishedMs < startedMs) {
+    return undefined;
+  }
+
+  return Math.round((finishedMs - startedMs) / 1000);
+}
+
+function median(values: readonly number[]): number | undefined {
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[middle];
+  }
+
+  const left = sorted[middle - 1];
+  const right = sorted[middle];
+  if (left === undefined || right === undefined) {
+    return undefined;
+  }
+
+  return Math.round((left + right) / 2);
+}
+
+function toReleaseBenchmarkSummary(
+  arm: "control" | "agentforge",
+  entries: readonly BenchmarkLedgerEntry[]
+): ReleaseBenchmarkArmSummaryView {
+  const cycleTimes = entries
+    .map((entry) => deriveReleaseCycleTimeSeconds(entry))
+    .filter((value): value is number => typeof value === "number");
+  const measuredTokenEntries = entries.filter(
+    (entry) =>
+      typeof entry.tokenUsage?.inputTokens === "number" ||
+      typeof entry.tokenUsage?.outputTokens === "number" ||
+      typeof entry.tokenUsage?.totalTokens === "number"
+  );
+  const totalInputTokens = entries.reduce((total, entry) => total + (entry.tokenUsage?.inputTokens ?? 0), 0);
+  const totalOutputTokens = entries.reduce((total, entry) => total + (entry.tokenUsage?.outputTokens ?? 0), 0);
+  const totalTokens = entries.reduce((total, entry) => total + (entry.tokenUsage?.totalTokens ?? 0), 0);
+  const totalRequests = entries.reduce((total, entry) => total + (entry.tokenUsage?.requestCount ?? 0), 0);
+  const knownCostEntries = entries.filter((entry) => typeof entry.tokenUsage?.estimatedCostUsd === "number");
+  const totalEstimatedCostUsd = knownCostEntries.length > 0
+    ? knownCostEntries.reduce((total, entry) => total + (entry.tokenUsage?.estimatedCostUsd ?? 0), 0)
+    : undefined;
+  const confirmedRiskCount = entries.reduce(
+    (total, entry) => total + entry.confirmedRisks.high + entry.confirmedRisks.medium + entry.confirmedRisks.low,
+    0
+  );
+  const blockedReleaseCount = entries.filter(
+    (entry) => entry.decisionOutcome === "blocked_approval" || entry.releaseDecision === "no-go"
+  ).length;
+
+  return {
+    arm,
+    entryCount: entries.length,
+    medianCycleTimeSeconds: median(cycleTimes),
+    clearDecisionCount: entries.filter((entry) => entry.decisionClarity === "clear").length,
+    ambiguousDecisionCount: entries.filter((entry) => entry.decisionClarity === "ambiguous").length,
+    blockedReleaseCount,
+    confirmedRiskCount,
+    totalInputTokens,
+    totalOutputTokens,
+    totalTokens,
+    totalRequests,
+    measuredTokenEntryCount: measuredTokenEntries.length,
+    totalEstimatedCostUsd,
+    knownCostEntryCount: knownCostEntries.length,
+    costPerConfirmedRiskCaught:
+      typeof totalEstimatedCostUsd === "number" && confirmedRiskCount > 0 ? totalEstimatedCostUsd / confirmedRiskCount : undefined,
+    costPerBlockedPrematureRelease:
+      typeof totalEstimatedCostUsd === "number" && blockedReleaseCount > 0 ? totalEstimatedCostUsd / blockedReleaseCount : undefined
+  };
+}
+
+function aggregateReleaseBenchmark(ledger: BenchmarkLedgerView): ReleaseBenchmarkDashboardView {
+  const entries = ledger.entries.filter((entry) => entry.benchmarkCategory === "release");
+  const arms: Array<"control" | "agentforge"> = ["control", "agentforge"];
+  const summaries = arms.map((arm) => toReleaseBenchmarkSummary(arm, entries.filter((entry) => entry.arm === arm)));
+  const comparablePairs = new Set(
+    entries
+      .filter((entry) => entry.arm === "agentforge")
+      .map((entry) => entry.taskId)
+      .filter((taskId) => entries.some((entry) => entry.arm === "control" && entry.taskId === taskId))
+  ).size;
+
+  return {
+    available: entries.length > 0,
+    comparablePairs,
+    totalEntries: entries.length,
+    arms: summaries
+  };
+}
+
 function matchesOutcomeFilters(
   row: OutcomeDetailRowView,
   filters: OutcomesFilters
@@ -1760,6 +1920,14 @@ function matchesOutcomeFilters(
   }
   if (filters.panel === "risk" && filters.risk && !row.id.includes(filters.risk)) {
     return false;
+  }
+  if (filters.panel === "release-benchmark") {
+    if (filters.arm && !row.id.includes(`:${filters.arm}:`)) {
+      return false;
+    }
+    if (filters.releaseDecision && !row.id.includes(`:${filters.releaseDecision}:`)) {
+      return false;
+    }
   }
   if (filters.panel === "evidence") {
     if (filters.evidenceCategory && !row.id.includes(filters.evidenceCategory)) {
@@ -1819,6 +1987,45 @@ function createOutcomeDetailRows(runs: readonly RunDetailView[], ledger: Benchma
             traceRefs: run.riskSummary.traceRefs
           }]
     )
+    .filter((row) => matchesOutcomeFilters(row, filters));
+
+  const releaseBenchmark = ledger.entries
+    .filter((entry) => entry.benchmarkCategory === "release")
+    .map((entry) => ({
+      id: `release:${entry.arm}:${entry.releaseDecision ?? "unclear"}:${entry.taskId}`,
+      workflow: entry.workflow ?? "unknown",
+      runId: entry.runId ?? "n/a",
+      status: entry.workflowStatuses[0]?.status ?? "unknown",
+      title: `${entry.arm} ${entry.releaseDecision ?? "unclear"} decision`,
+      summary:
+        [
+          entry.finalRecommendationSummary ?? entry.summary ?? entry.decisionImpactReason ?? "Release benchmark adjudication entry.",
+          typeof entry.tokenUsage?.totalTokens === "number"
+            ? `Tokens measured from run metadata: ${entry.tokenUsage.totalTokens}.`
+            : "Token usage not recorded.",
+          typeof entry.tokenUsage?.estimatedCostUsd === "number"
+            ? `Cost estimated from local pricing: $${entry.tokenUsage.estimatedCostUsd.toFixed(6)}.`
+            : "Cost unavailable because pricing metadata was missing."
+        ].join(" "),
+      source: entry.runId ? "ledger+run" : "ledger",
+      detailHref: entry.runId ? toRunDetailHref(entry.runId, "decision-impact") : "/outcomes?panel=release-benchmark#release-benchmark",
+      runsHref:
+        entry.runId
+          ? toRunsFilterHref({
+              workflow: entry.workflow,
+              decisionImpact: entry.decisionOutcome
+            })
+          : "/runs",
+      traceRefs: [
+        ...entry.triggerRefs,
+        ...entry.evidenceGapRefs,
+        ...entry.confirmedRiskRefs.map((riskRef) => ({
+          runId: riskRef.runId,
+          artifactKind: riskRef.artifactKind,
+          note: `${riskRef.severity} risk: ${riskRef.title}${riskRef.note ? ` (${riskRef.note})` : ""}`
+        }))
+      ]
+    }))
     .filter((row) => matchesOutcomeFilters(row, filters));
 
   const evidence = runs
@@ -1886,18 +2093,20 @@ function createOutcomeDetailRows(runs: readonly RunDetailView[], ledger: Benchma
     )
     .filter((row) => matchesOutcomeFilters(row, filters));
 
-  return { decision, risk, evidence, friction, workflowChain };
+  return { decision, risk, releaseBenchmark, evidence, friction, workflowChain };
 }
 
 export function parseOutcomesFilters(searchParams: URLSearchParams): OutcomesFilters {
   const panel = searchParams.get("panel");
   return {
     panel:
-      panel === "decision-impact" || panel === "risk" || panel === "evidence" || panel === "friction" || panel === "flow"
+      panel === "decision-impact" || panel === "risk" || panel === "release-benchmark" || panel === "evidence" || panel === "friction" || panel === "flow"
         ? panel
         : undefined,
     decision: (searchParams.get("decision") as OutcomesFilters["decision"] | null) ?? undefined,
     risk: searchParams.get("risk") ?? undefined,
+    arm: (searchParams.get("arm") as OutcomesFilters["arm"] | null) ?? undefined,
+    releaseDecision: (searchParams.get("releaseDecision") as OutcomesFilters["releaseDecision"] | null) ?? undefined,
     workflow: searchParams.get("workflow") ?? undefined,
     evidenceCategory: searchParams.get("evidenceCategory") ?? undefined,
     evidenceStatus: (searchParams.get("evidenceStatus") as OutcomesFilters["evidenceStatus"] | null) ?? undefined,
@@ -1948,11 +2157,14 @@ export function loadOutcomesDashboardView(
 
   const friction = aggregateFriction(runs, ledger);
   const workflowChains = aggregateWorkflowChainSummary(runs);
+  const releaseBenchmark = aggregateReleaseBenchmark(ledger);
   const leadershipRuns = buildLeadershipRuns(runs);
   const topEvidenceGap = evidence[0]?.frequentMissing[0];
   const topFrictionWorkflow = friction.workflowHotspots[0];
   const topWorkflowChain = [...workflowChains].sort((left, right) => right.missingUpstreamEvidenceCount - left.missingUpstreamEvidenceCount)[0];
   const details = createOutcomeDetailRows(runs, ledger, filters);
+  const controlReleaseSummary = releaseBenchmark.arms.find((summary) => summary.arm === "control");
+  const agentforgeReleaseSummary = releaseBenchmark.arms.find((summary) => summary.arm === "agentforge");
 
   return {
     ledger,
@@ -1973,6 +2185,7 @@ export function loadOutcomesDashboardView(
       blockedApprovalPreventedCount: leadershipRuns.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
       unresolvedRiskCount: leadershipRuns.reduce((total, run) => total + run.riskSummary.unresolved, 0)
     },
+    releaseBenchmark,
     evidence,
     friction,
     workflowChains,
@@ -1985,19 +2198,22 @@ export function loadOutcomesDashboardView(
           label: "Changed decisions",
           value: leadershipRuns.filter((run) => run.decisionImpact.changedDecision).length,
           detail: `${leadershipRuns.length} leadership-scoped run or chain outcome(s) in view`,
-          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "changed" }, "decision-impact")
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "changed" }, "decision-impact"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         },
         {
           label: "Blocked approval chains",
           value: countOutcome(leadershipRuns, "blocked_approval"),
           detail: "Release chains are counted once at their most downstream blocked gate",
-          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "blocked_approval" }, "decision-impact")
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "blocked_approval" }, "decision-impact"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         },
         {
           label: "Added validation",
           value: countOutcome(leadershipRuns, "added_validation"),
           detail: "Runs where evidence gaps changed the next step",
-          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "added_validation" }, "decision-impact")
+          href: toOutcomesFilterHref({ panel: "decision-impact", decision: "added_validation" }, "decision-impact"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
         }
       ],
       risk: [
@@ -2005,19 +2221,54 @@ export function loadOutcomesDashboardView(
           label: "Blocked approval chains prevented",
           value: leadershipRuns.filter((run) => run.riskSummary.blockedApprovalPrevented).length,
           detail: "Release chains are counted once at their most downstream blocked gate",
-          href: toOutcomesFilterHref({ panel: "risk", risk: "blocked-approval" }, "risk")
+          href: toOutcomesFilterHref({ panel: "risk", risk: "blocked-approval" }, "risk"),
+          provenance: "mixed"
         },
         {
           label: "Confirmed medium/high",
           value: ledger.entries.reduce((total, entry) => total + entry.confirmedRisks.high + entry.confirmedRisks.medium, 0),
           detail: "Ledger-backed adjudicated risks",
-          href: toOutcomesFilterHref({ panel: "risk", risk: "confirmed-medium" }, "risk")
+          href: toOutcomesFilterHref({ panel: "risk", risk: "confirmed-medium" }, "risk"),
+          provenance: "ledger"
         },
         {
           label: "Unresolved risks",
           value: leadershipRuns.reduce((total, run) => total + run.riskSummary.unresolved, 0),
           detail: "Outstanding risk and blocker signals across runs",
-          href: toOutcomesFilterHref({ panel: "risk", risk: "unresolved" }, "risk")
+          href: toOutcomesFilterHref({ panel: "risk", risk: "unresolved" }, "risk"),
+          provenance: ledger.entries.length > 0 ? "mixed" : "inferred"
+        }
+      ],
+      releaseBenchmark: [
+        {
+          label: "AgentForge median cycle",
+          value: agentforgeReleaseSummary?.medianCycleTimeSeconds ?? 0,
+          detail: agentforgeReleaseSummary?.medianCycleTimeSeconds !== undefined ? "Seconds to final release recommendation" : "No AgentForge release benchmark entries yet",
+          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "agentforge" }, "release-benchmark"),
+          provenance: "ledger"
+        },
+        {
+          label: "Control median cycle",
+          value: controlReleaseSummary?.medianCycleTimeSeconds ?? 0,
+          detail: controlReleaseSummary?.medianCycleTimeSeconds !== undefined ? "Seconds to final release recommendation" : "No control release benchmark entries yet",
+          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "control" }, "release-benchmark"),
+          provenance: "ledger"
+        },
+        {
+          label: "AgentForge total tokens",
+          value: agentforgeReleaseSummary?.totalTokens ?? 0,
+          detail: agentforgeReleaseSummary?.entryCount
+            ? `${agentforgeReleaseSummary.measuredTokenEntryCount}/${agentforgeReleaseSummary.entryCount} release entries with measured run usage`
+            : "No AgentForge release benchmark entries yet",
+          href: toOutcomesFilterHref({ panel: "release-benchmark", arm: "agentforge" }, "release-benchmark"),
+          provenance: "run-measured"
+        },
+        {
+          label: "Blocked release decisions",
+          value: (agentforgeReleaseSummary?.blockedReleaseCount ?? 0) + (controlReleaseSummary?.blockedReleaseCount ?? 0),
+          detail: "Across both benchmark arms",
+          href: toOutcomesFilterHref({ panel: "release-benchmark", releaseDecision: "no-go" }, "release-benchmark"),
+          provenance: "ledger"
         }
       ],
       evidence: [
@@ -2032,7 +2283,8 @@ export function loadOutcomesDashboardView(
               evidenceStatus: "missing"
             },
             "evidence"
-          )
+          ),
+          provenance: "inferred"
         }
       ],
       friction: [
@@ -2044,7 +2296,8 @@ export function loadOutcomesDashboardView(
             (topFrictionWorkflow?.manualStepCount ?? 0) +
             (topFrictionWorkflow?.requestFrictionCount ?? 0),
           detail: topFrictionWorkflow?.workflow ?? "No ledger-backed friction data",
-          href: toOutcomesFilterHref({ panel: "friction", workflow: topFrictionWorkflow?.workflow }, "friction")
+          href: toOutcomesFilterHref({ panel: "friction", workflow: topFrictionWorkflow?.workflow }, "friction"),
+          provenance: "ledger"
         }
       ],
       workflowChain: [
@@ -2052,7 +2305,8 @@ export function loadOutcomesDashboardView(
           label: "Release chain breaks",
           value: topWorkflowChain?.missingUpstreamEvidenceCount ?? 0,
           detail: topWorkflowChain ? `${topWorkflowChain.label} has the most missing upstream evidence` : "No chain breakpoints detected",
-          href: toOutcomesFilterHref({ panel: "flow", stage: topWorkflowChain?.stage }, "workflow-chain")
+          href: toOutcomesFilterHref({ panel: "flow", stage: topWorkflowChain?.stage }, "workflow-chain"),
+          provenance: "inferred"
         }
       ]
     },
@@ -2067,6 +2321,32 @@ export function loadValueDashboardView(
   filters: OutcomesFilters = {}
 ): OutcomesDashboardView {
   return loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, filters);
+}
+
+export function createOutcomesExportDocument(
+  workspaceRoot: string,
+  runsRoot = resolveRunsRoot(workspaceRoot),
+  benchmarkLedgerPath?: string,
+  filters: OutcomesFilters = {}
+): OutcomesExportDocument {
+  const view = loadOutcomesDashboardView(workspaceRoot, runsRoot, benchmarkLedgerPath, filters);
+
+  return {
+    schemaVersion: "1.0.0",
+    generatedAt: new Date().toISOString(),
+    workspaceRoot,
+    runsRoot: toRelativeDisplayPath(workspaceRoot, runsRoot),
+    benchmarkLedgerPath: view.ledger.entries.length > 0 ? toRelativeDisplayPath(workspaceRoot, resolveBenchmarkLedgerPath(workspaceRoot, benchmarkLedgerPath)) : undefined,
+    runCount: view.runCount,
+    ledgerAvailable: view.ledger.entries.length > 0,
+    decisionImpact: view.decisionImpact,
+    risk: view.risk,
+    releaseBenchmark: view.releaseBenchmark,
+    evidence: view.evidence,
+    friction: view.friction,
+    workflowChains: view.workflowChains,
+    summaries: view.summaries
+  };
 }
 
 function toBenchmarkSummaryView(

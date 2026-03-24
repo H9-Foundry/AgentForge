@@ -25,6 +25,7 @@ Not yet supported as official self-hosted behavior:
 - any queue process represented as a shipped runtime workflow asset
 
 See [docs/SELF_HOSTING.md](SELF_HOSTING.md).
+See [docs/CLI_FIRST_DOGFOODING.md](CLI_FIRST_DOGFOODING.md) for the dogfooding rule for user-facing CLI surfaces.
 
 ## Queue Lanes
 
@@ -171,6 +172,9 @@ Add:
 
 - `agentforge release check --json`
 - `agentforge release verify --json`
+- `agentforge visualizer --help`
+- `agentforge visualizer export --format json`
+- `agentforge eval benchmark-wizard --help`
 - do not claim `available in the published CLI` in README, quickstart, or support docs until the latest npm release contains the capability and published verification has been re-run
 - if `pnpm test` is being run from a long-lived wrapper session, confirm the direct-shell exit code with `pnpm test; echo EXIT:$?` before treating a stalled session as a repo failure
 - [#120](https://github.com/H9-Foundry/AgentForge/issues/120) tracks the earlier validation ambiguity and its local-guidance resolution
@@ -183,6 +187,8 @@ While the queue is being executed, AgentForge should be used on itself for:
 - PR review and QA
 - release/readiness verification
 - benchmarked comparison against the same agent's default workflow using [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](AGENTFORGE_DOGFOOD_BENCHMARK.md)
+
+For user-facing release and benchmark slices, the CLI path is the default dogfooding path. Source-build entrypoints remain maintainer-only debugging aids and do not replace CLI-path acceptance.
 
 It should **not** be used as a general autonomous implementation engine until:
 

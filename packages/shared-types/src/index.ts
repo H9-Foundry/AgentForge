@@ -17,6 +17,11 @@ import {
   lifecycleArtifactSourceReferenceSchema,
   lifecycleArtifactWorkflowReferenceSchema,
   auditProvenanceSchema,
+  providerUsageAggregateSchema,
+  providerUsageAggregateSummarySchema,
+  providerUsageByModelSchema,
+  providerUsageNodeBreakdownSchema,
+  providerUsagePricingSchema,
   auditRedactionSchema,
   auditEntrySchema,
   blockedPluginSchema,
@@ -36,7 +41,9 @@ import {
   evalSpecSchema,
   benchmarkArtifactPayloadSchema,
   benchmarkArtifactSchema,
+  benchmarkCategorySchema,
   benchmarkComparedRunSchema,
+  benchmarkDecisionClaritySchema,
   benchmarkDeterministicDeltaSchema,
   benchmarkDecisionOutcomeSchema,
   benchmarkLedgerArmSchema,
@@ -46,7 +53,9 @@ import {
   benchmarkLedgerFrictionSchema,
   benchmarkLedgerSourceSchema,
   benchmarkLedgerTraceReferenceSchema,
+  benchmarkLedgerTokenUsageSchema,
   benchmarkLedgerWorkflowStatusSchema,
+  benchmarkReleaseDecisionSchema,
   buildkiteCiEvidenceExportSchema,
   jenkinsCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
@@ -141,6 +150,11 @@ export type AttestationVerificationEvidence = Infer<typeof attestationVerificati
 export type AuditEntry = Infer<typeof auditEntrySchema>;
 export type AuditComponent = Infer<typeof auditComponentSchema>;
 export type AuditProvenance = Infer<typeof auditProvenanceSchema>;
+export type ProviderUsagePricing = Infer<typeof providerUsagePricingSchema>;
+export type ProviderUsageByModel = Infer<typeof providerUsageByModelSchema>;
+export type ProviderUsageAggregateSummary = Infer<typeof providerUsageAggregateSummarySchema>;
+export type ProviderUsageNodeBreakdown = Infer<typeof providerUsageNodeBreakdownSchema>;
+export type ProviderUsageAggregate = Infer<typeof providerUsageAggregateSchema>;
 export type AuditRedaction = Infer<typeof auditRedactionSchema>;
 export type CiArtifactEvidence = Infer<typeof ciArtifactEvidenceSchema>;
 export type CiJobEvidence = Infer<typeof ciJobEvidenceSchema>;
@@ -195,8 +209,11 @@ export type EvalRedactionExpectation = Infer<typeof evalRedactionExpectationSche
 export type EvalSpec = Infer<typeof evalSpecSchema>;
 export type EvalFixtureCorpus = Infer<typeof evalFixtureCorpusSchema>;
 export type BenchmarkDecisionOutcome = Infer<typeof benchmarkDecisionOutcomeSchema>;
+export type BenchmarkCategory = Infer<typeof benchmarkCategorySchema>;
 export type BenchmarkLedgerSource = Infer<typeof benchmarkLedgerSourceSchema>;
 export type BenchmarkLedgerArm = Infer<typeof benchmarkLedgerArmSchema>;
+export type BenchmarkReleaseDecision = Infer<typeof benchmarkReleaseDecisionSchema>;
+export type BenchmarkDecisionClarity = Infer<typeof benchmarkDecisionClaritySchema>;
 export type BenchmarkDeterministicDelta = Infer<typeof benchmarkDeterministicDeltaSchema>;
 export type BenchmarkComparedRun = Infer<typeof benchmarkComparedRunSchema>;
 export type BenchmarkArtifactPayload = Infer<typeof benchmarkArtifactPayloadSchema>;
@@ -204,6 +221,7 @@ export type BenchmarkArtifact = Infer<typeof benchmarkArtifactSchema>;
 export type BenchmarkLedgerTraceReference = Infer<typeof benchmarkLedgerTraceReferenceSchema>;
 export type BenchmarkLedgerConfirmedRiskReference = Infer<typeof benchmarkLedgerConfirmedRiskReferenceSchema>;
 export type BenchmarkLedgerWorkflowStatus = Infer<typeof benchmarkLedgerWorkflowStatusSchema>;
+export type BenchmarkLedgerTokenUsage = Infer<typeof benchmarkLedgerTokenUsageSchema>;
 export type BenchmarkLedgerFriction = Infer<typeof benchmarkLedgerFrictionSchema>;
 export type BenchmarkLedgerEntry = Infer<typeof benchmarkLedgerEntrySchema>;
 export type BenchmarkLedgerDocument = Infer<typeof benchmarkLedgerDocumentSchema>;

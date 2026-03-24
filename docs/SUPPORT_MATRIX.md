@@ -16,6 +16,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 - **Published now**: available in the latest npm release of `@h9-foundry/agentforge-cli`
 - **Source-build only**: implemented on `main`, but not yet in the latest npm release
 - Product-facing docs must say `available in the published CLI` only after published parity is verified
+- The packaged visualizer and benchmark CLI surface are release-ready on `main`, but they must keep `source-build only` or equivalent wording until the next npm publish is verified
 
 ## Workflow Support
 
@@ -83,6 +84,7 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `@h9-foundry/agentforge-policy-engine` | Official | Public policy engine package. |
 | `@h9-foundry/agentforge-runtime` | Official | Public runtime package. |
 | `@h9-foundry/agentforge-audit` | Official | Public audit/reporting package. |
+| `@h9-foundry/agentforge-visualizer` | Official | Packaged local runs/outcomes/benchmark surface on `main`; keep published-CLI wording gated on the next verified npm release. |
 | `packages/registry-client` | Internal | Future-facing registry surface. |
 | `agents/*` | Internal | Official in-repo agents used by the workflow surface, not individually supported public packages. |
 | `adapters/*` | Internal | Internal starter adapters, not yet public packages. |

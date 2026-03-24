@@ -1,4 +1,4 @@
-import type { AuditEntry, BlockedPlugin, Finding } from "@h9-foundry/agentforge-shared-types";
+import type { AuditEntry, BlockedPlugin, Finding, ProviderUsageAggregate } from "@h9-foundry/agentforge-shared-types";
 
 import type {
   ArtifactPanelView,
@@ -7,6 +7,7 @@ import type {
   EvidenceCategoryView,
   InvalidRunView,
   OutcomeDetailRowView,
+  OutcomesExportDocument,
   OutcomeSummaryView,
   OutcomesDashboardView,
   RiskSummaryView,
@@ -61,6 +62,22 @@ function metricCard(label: string, value: string | number): string {
 
 function stackedMetricCard(label: string, value: string | number, detail: string): string {
   return `<div class="metric"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value">${escapeHtml(String(value))}</div><div class="metric-detail">${escapeHtml(detail)}</div></div>`;
+}
+
+function formatDurationSeconds(value: number | undefined): string {
+  if (value === undefined) {
+    return "n/a";
+  }
+
+  return `${value}s`;
+}
+
+function formatCurrencyUsd(value: number | undefined): string {
+  if (value === undefined) {
+    return "n/a";
+  }
+
+  return `$${value.toFixed(2)}`;
 }
 
 function listSection(title: string, items: string[]): string {
@@ -178,9 +195,64 @@ function renderAuditEntries(entries: readonly AuditEntry[]): string {
         <p class="muted">${escapeHtml(entry.kind)} node</p>
         <p>${escapeHtml(entry.summary)}</p>
         ${entry.blockedActions.length > 0 ? `<div><strong>Blocked actions:</strong> ${entry.blockedActions.map(escapeHtml).join(", ")}</div>` : ""}
+        ${
+          entry.usage
+            ? `<div><strong>Measured usage:</strong> ${escapeHtml(
+                `${entry.usage.totalTokens} tokens across ${entry.usage.totalRequests} request(s); ${typeof entry.usage.totalEstimatedCostUsd === "number" ? `$${entry.usage.totalEstimatedCostUsd.toFixed(6)} estimated` : "cost unavailable"}`
+              )}</div>`
+            : ""
+        }
       </article>`
     )
     .join("")}</div>`;
+}
+
+function renderUsageSummary(usage?: ProviderUsageAggregate): string {
+  if (!usage) {
+    return `<p class="muted">No provider-backed token usage was recorded for this run.</p>`;
+  }
+
+  return `
+    <div class="metrics">
+      ${metricCard("Measured input tokens", usage.totalInputTokens)}
+      ${metricCard("Measured output tokens", usage.totalOutputTokens)}
+      ${metricCard("Measured total tokens", usage.totalTokens)}
+      ${metricCard("Requests", usage.totalRequests)}
+    </div>
+    <p class="muted">
+      Tokens are measured from provider responses. Cost is ${
+        typeof usage.totalEstimatedCostUsd === "number"
+          ? escapeHtml(`estimated from the local pricing table (${usage.byModel[0]?.pricing?.version ?? "version unknown"})`)
+          : "unavailable because no local pricing entry matched this run"
+      }.
+    </p>
+    ${
+      usage.byNode.length > 0
+        ? `<div class="stack">
+            ${usage.byNode
+              .map(
+                (node) => `<section class="panel panel-subtle">
+                  <div class="row between">
+                    <strong>${escapeHtml(node.nodeName)}</strong>
+                    ${statusBadge(node.costStatus)}
+                  </div>
+                  <p class="muted">${escapeHtml(node.kind)} node · ${escapeHtml(node.totalTokens.toString())} tokens across ${escapeHtml(node.totalRequests.toString())} request(s)</p>
+                  ${
+                    node.byModel.length > 0
+                      ? `<ul>${node.byModel
+                          .map(
+                            (entry) => `<li>${escapeHtml(`${entry.provider}/${entry.model}: ${entry.totalTokens} tokens, ${entry.requestCount} request(s), ${typeof entry.estimatedCostUsd === "number" ? `$${entry.estimatedCostUsd.toFixed(6)} estimated` : "cost unavailable"}`)}</li>`
+                          )
+                          .join("")}</ul>`
+                      : `<p class="muted">No per-model breakdown recorded.</p>`
+                  }
+                </section>`
+              )
+              .join("")}
+          </div>`
+        : ""
+    }
+  `;
 }
 
 function renderFindings(findings: readonly Finding[]): string {
@@ -314,11 +386,72 @@ function renderOutcomeSummaryCards(cards: readonly OutcomeSummaryView[]): string
     .map(
       (card) => `<a class="metric metric-link" href="${escapeHtml(card.href)}">
         <div class="metric-label">${escapeHtml(card.label)}</div>
+        ${card.provenance ? `<div class="metric-provenance">${escapeHtml(card.provenance)}</div>` : ""}
         <div class="metric-value">${escapeHtml(String(card.value))}</div>
         <div class="metric-detail">${escapeHtml(card.detail)}</div>
       </a>`
     )
     .join("")}</div>`;
+}
+
+function renderReleaseArmMarkdownLines(view: OutcomesExportDocument["releaseBenchmark"]["arms"][number]): string[] {
+  return [
+    `- ${view.arm}: entries=${view.entryCount}, median_cycle_seconds=${view.medianCycleTimeSeconds ?? "n/a"}, clear_decisions=${view.clearDecisionCount}, blocked_releases=${view.blockedReleaseCount}, confirmed_risks=${view.confirmedRiskCount}, measured_tokens=${view.totalTokens}, estimated_cost_usd=${typeof view.totalEstimatedCostUsd === "number" ? view.totalEstimatedCostUsd.toFixed(6) : "unavailable"}`
+  ];
+}
+
+export function renderOutcomesExportMarkdown(document: OutcomesExportDocument): string {
+  return [
+    "# AgentForge Outcomes Export",
+    "",
+    `- Generated: ${document.generatedAt}`,
+    `- Runs root: ${document.runsRoot}`,
+    `- Ledger available: ${document.ledgerAvailable ? "yes" : "no"}`,
+    `- Runs in scope: ${document.runCount}`,
+    "",
+    "## Decision Impact",
+    "",
+    `- Changed decisions: ${document.decisionImpact.changedDecisionCount}`,
+    `- Scope reduction: ${document.decisionImpact.scopeReductionCount}`,
+    `- Added validation: ${document.decisionImpact.addedValidationCount}`,
+    `- Blocked approval chains: ${document.decisionImpact.blockedApprovalCount}`,
+    "",
+    "## Risk",
+    "",
+    `- Confirmed high: ${document.risk.confirmedHighCount}`,
+    `- Confirmed medium: ${document.risk.confirmedMediumCount}`,
+    `- Noisy findings: ${document.risk.noisyFindingCount}`,
+    `- Blocked approval chains prevented: ${document.risk.blockedApprovalPreventedCount}`,
+    `- Unresolved risks: ${document.risk.unresolvedRiskCount}`,
+    "",
+    "## Release Benchmark",
+    "",
+    ...document.releaseBenchmark.arms.flatMap(renderReleaseArmMarkdownLines),
+    "",
+    "## Evidence",
+    "",
+    ...(document.evidence.length > 0
+      ? document.evidence.map(
+          (row) => `- ${row.workflow}: runs=${row.runs}, missing=${row.missingCount}, partial=${row.partialCount}, frequent_gaps=${row.frequentMissing.join(", ") || "none"}`
+        )
+      : ["- No evidence summary rows available."]),
+    "",
+    "## Friction",
+    "",
+    `- Overrides: ${document.friction.overrideCount}`,
+    `- False positives: ${document.friction.falsePositiveCount}`,
+    `- Manual steps: ${document.friction.manualStepCount}`,
+    `- Request friction: ${document.friction.requestFrictionCount}`,
+    "",
+    "## Workflow Chains",
+    "",
+    ...(document.workflowChains.length > 0
+      ? document.workflowChains.map(
+          (stage) => `- ${stage.label}: runs=${stage.runCount}, blocked=${stage.blockedCount}, missing_upstream_evidence=${stage.missingUpstreamEvidenceCount}`
+        )
+      : ["- No workflow chain summary rows available."]),
+    ""
+  ].join("\n");
 }
 
 function renderOutcomeDetailTable(rows: readonly OutcomeDetailRowView[], emptyMessage: string): string {
@@ -353,6 +486,47 @@ function renderOutcomeDetailTable(rows: readonly OutcomeDetailRowView[], emptyMe
               <a href="${escapeHtml(row.detailHref)}">Run detail</a><br/>
               <a href="${escapeHtml(row.runsHref)}">Filtered runs</a>
             </td>
+          </tr>`
+        )
+        .join("")}
+    </tbody>
+  </table>`;
+}
+
+function renderReleaseBenchmarkArmTable(view: OutcomesDashboardView): string {
+  if (!view.releaseBenchmark.available) {
+    return `<p class="muted">No release-category benchmark ledger entries were loaded. Add release benchmark adjudication entries to compare speed, quality, and token spend with and without AgentForge.</p>`;
+  }
+
+  return `<table class="data-table">
+    <thead>
+      <tr>
+        <th>Arm</th>
+        <th>Entries</th>
+        <th>Median cycle</th>
+        <th>Clear decisions</th>
+        <th>Blocked releases</th>
+        <th>Confirmed risks</th>
+        <th>Measured tokens</th>
+        <th>Estimated cost</th>
+        <th>Cost / risk</th>
+        <th>Cost / blocked release</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${view.releaseBenchmark.arms
+        .map(
+          (arm) => `<tr>
+            <td>${escapeHtml(arm.arm)}</td>
+            <td>${escapeHtml(String(arm.entryCount))}</td>
+            <td>${escapeHtml(formatDurationSeconds(arm.medianCycleTimeSeconds))}</td>
+            <td>${escapeHtml(String(arm.clearDecisionCount))}</td>
+            <td>${escapeHtml(String(arm.blockedReleaseCount))}</td>
+            <td>${escapeHtml(String(arm.confirmedRiskCount))}</td>
+            <td>${escapeHtml(`${arm.totalTokens} (${arm.measuredTokenEntryCount}/${arm.entryCount} entries)` )}</td>
+            <td>${escapeHtml(formatCurrencyUsd(arm.totalEstimatedCostUsd))}</td>
+            <td>${escapeHtml(formatCurrencyUsd(arm.costPerConfirmedRiskCaught))}</td>
+            <td>${escapeHtml(formatCurrencyUsd(arm.costPerBlockedPrematureRelease))}</td>
           </tr>`
         )
         .join("")}
@@ -411,6 +585,10 @@ export function renderRunDetailPage(run: RunDetailView): string {
     <section class="grid">
       <section class="panel"><h2>Findings</h2>${renderFindings(run.findingsList)}</section>
       <section class="panel"><h2>Blocked Plugins</h2>${renderBlockedPlugins(run.blockedPluginsList)}</section>
+    </section>
+    <section class="panel" id="usage-summary">
+      <h2>Usage Summary</h2>
+      ${renderUsageSummary(run.usage)}
     </section>
     <section class="grid">
       <section class="panel" id="decision-impact">
@@ -558,6 +736,7 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
     <section class="panel">
       <h2>Outcomes</h2>
       <p class="muted">Leadership summary first, practitioner drill-down second. Every metric below links to filtered details and then down to the exact runs that produced it.</p>
+      <p class="backlinks"><a href="/api/outcomes/export.json">Export JSON</a> · <a href="/outcomes/export.md">Export Markdown</a> · <a href="/api/outcomes">Raw outcomes JSON</a></p>
       <div class="metrics">
         ${stackedMetricCard("Runs in scope", view.runCount, view.filteredPanel ? `Filtered to ${view.filteredPanel}` : "Full local run corpus")}
         ${stackedMetricCard("Comparable pairs", view.decisionImpact.comparableBenchmarkPairs, "Control + AgentForge ledger pairs")}
@@ -589,6 +768,20 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
         ${metricCard("Unresolved risks", view.risk.unresolvedRiskCount)}
       </div>
       ${renderOutcomeDetailTable(view.details.risk, "No risk rows match the current filters.")}
+    </section>
+    <section class="panel" id="release-benchmark">
+      <h2>Release Benchmark</h2>
+      <p class="muted">Release benchmarking stays same-agent and same-model across both arms. This section compares release review speed, decision quality, and LLM/API spend without counting external approval wait time or actual deploy side effects.</p>
+      <p class="muted">Token totals are measured from local run bundles. Cost is estimated from the local pricing table only when a matching provider/model entry exists.</p>
+      ${renderOutcomeSummaryCards(view.summaries.releaseBenchmark)}
+      <div class="metrics">
+        ${metricCard("Release entries", view.releaseBenchmark.totalEntries)}
+        ${metricCard("Comparable pairs", view.releaseBenchmark.comparablePairs)}
+        ${metricCard("AgentForge blocked releases", view.releaseBenchmark.arms.find((arm) => arm.arm === "agentforge")?.blockedReleaseCount ?? 0)}
+        ${metricCard("Control blocked releases", view.releaseBenchmark.arms.find((arm) => arm.arm === "control")?.blockedReleaseCount ?? 0)}
+      </div>
+      ${renderReleaseBenchmarkArmTable(view)}
+      ${renderOutcomeDetailTable(view.details.releaseBenchmark, "No release benchmark rows match the current filters.")}
     </section>
     <section class="panel" id="evidence">
       <h2>Evidence Hygiene</h2>
@@ -812,6 +1005,7 @@ button {
 .metric-label { color: var(--muted); font-size: 0.85rem; }
 .metric-value { font-size: 1.2rem; font-weight: 700; margin-top: 0.2rem; }
 .metric-detail { color: var(--muted); font-size: 0.82rem; margin-top: 0.3rem; }
+.metric-provenance { display: inline-block; margin-top: 0.25rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #35505b; background: #e8f1f4; border: 1px solid #c7dbe2; border-radius: 999px; padding: 0.12rem 0.45rem; }
 .badge {
   display: inline-flex;
   border-radius: 999px;

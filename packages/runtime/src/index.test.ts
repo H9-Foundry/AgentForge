@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { agentOutputSchema, lifecycleArtifactSchema, schemaFixtures } from "@h9-foundry/agentforge-schemas";
-import type { RuntimeAgent } from "@h9-foundry/agentforge-sdk";
+import type { ReasoningProvider, RuntimeAgent } from "@h9-foundry/agentforge-sdk";
 import type { Finding, ProposedAction, WorkflowStateEnvelope } from "@h9-foundry/agentforge-shared-types";
 
 import { runWorkflow } from "./index.js";
@@ -316,5 +316,100 @@ describe("runtime", () => {
     }
     expect(emittedArtifact.payload.assumptions[0]).toContain("[REDACTED_API_KEY]");
     expect(result.bundle.entries[0]?.summary).toContain("[REDACTED_GITHUB_TOKEN]");
+  });
+
+  it("captures provider usage per node and aggregates it into the run bundle", async () => {
+    const usageAgent: RuntimeAgent = {
+      ...noopAgent,
+      manifest: {
+        ...noopAgent.manifest,
+        name: "usage-agent",
+        runtime: {
+          ...noopAgent.manifest.runtime,
+          kind: "reasoning"
+        },
+        permissions: {
+          ...noopAgent.manifest.permissions,
+          model: true
+        }
+      },
+      async execute({ provider }) {
+        const response = await provider?.runStructured<{ summary: string }>(
+          {
+            agent: "usage-agent",
+            prompt: "Summarize the release candidate.",
+            input: { release: "v1.2.3" }
+          },
+          { parse: (value: unknown) => value } as never
+        );
+
+        return {
+          summary: response?.output.summary ?? "No provider result.",
+          findings: [],
+          proposedActions: [],
+          lifecycleArtifacts: [],
+          requestedTools: [],
+          blockedActionFlags: [],
+          metadata: {}
+        };
+      }
+    };
+
+    const provider: ReasoningProvider = {
+      name: "openai",
+      async runStructured<T>() {
+        return {
+          output: {
+            summary: "Release candidate looks healthy."
+          } as T,
+          usage: {
+            provider: "openai",
+            model: "gpt-5.4",
+            inputTokens: 1200,
+            outputTokens: 400,
+            totalTokens: 1600,
+            requestCount: 2,
+            raw: {
+              prompt_tokens: 1200,
+              completion_tokens: 400
+            }
+          }
+        };
+      }
+    };
+
+    const result = await runWorkflow({
+      workflow: {
+        version: 1,
+        name: "release-readiness",
+        trigger: "manual",
+        nodes: [{ id: "release", kind: "reasoning", agent: "usage-agent", outputsTo: "agentResults.release", contextSections: [], tools: [] }]
+      },
+      initialState: {
+        ...state,
+        workflow: "release-readiness"
+      },
+      agents: new Map([["usage-agent", usageAgent]]),
+      adapters: new Map(),
+      policyEngine: {
+        snapshot: state.policy,
+        canReadPath: () => ({ allowed: true, effect: "allow", requiresApproval: false }),
+        canWritePath: () => ({ allowed: false, effect: "approval_required", requiresApproval: true, reason: "Write requires approval." }),
+        evaluateToolRequest: () => ({ allowed: false, effect: "deny", requiresApproval: false }),
+        redactSecrets: (value) => value,
+        sanitizeLifecycleArtifact: (artifact) => artifact
+      },
+      provider,
+      artifactJsonPath: ".agentops/runs/run-1/bundle.json",
+      artifactMarkdownPath: ".agentops/runs/run-1/summary.md"
+    });
+
+    expect(result.state.agentResults.release?.usage?.totalTokens).toBe(1600);
+    expect(result.state.agentResults.release?.usage?.byModel[0]?.model).toBe("gpt-5.4");
+    expect(result.bundle.entries[0]?.usage?.totalRequests).toBe(2);
+    expect(result.bundle.usage?.totalTokens).toBe(1600);
+    expect(result.bundle.usage?.totalEstimatedCostUsd).toBeGreaterThan(0);
+    expect(result.bundle.usage?.costStatus).toBe("estimated");
+    expect(result.bundle.usage?.byNode[0]?.nodeId).toBe("release");
   });
 });

@@ -6,10 +6,21 @@ It is an operational playbook, not a shipped workflow or product guarantee.
 
 Use [#268](https://github.com/H9-Foundry/AgentForge/issues/268) as the benchmark feedback sink and scorecard log.
 
+Use [docs/CLI_FIRST_DOGFOODING.md](CLI_FIRST_DOGFOODING.md) as the default dogfooding policy for user-facing surfaces. Benchmarking and release-signoff evidence should come from the CLI path by default, with source-build paths reserved for maintainer debugging and pre-release development.
+
 Use the local benchmark-ledger file at `.agentops/benchmark-ledger.json` as the adjudicated machine-readable overlay for the visualizer. The current internal CLI helpers are:
 
 - `agentforge eval benchmark-ledger --json`
 - `agentforge eval benchmark-record <task-id> <control|agentforge> --source <replay|live> --task-type <type> ...`
+
+Measured token usage now comes from provider-backed run bundles when available. `agentforge eval benchmark-record --prefill-run <run-id>` will auto-copy workflow, evidence, cycle time, and measured token/cost metadata from the referenced local run. Human adjudication is still required for changed-decision, confirmed-risk, false-positive, override, and final recommendation fields.
+
+For user-facing benchmark validation, prefer:
+
+- `agentforge eval benchmark-record ... --prefill-run <run-id>`
+- `agentforge eval benchmark-wizard ...`
+- `agentforge visualizer`
+- `agentforge visualizer export`
 
 ## Goal
 
@@ -19,6 +30,7 @@ The benchmark optimizes first for:
 
 - confirmed risk caught before merge or release decisions
 - evidence completeness and decision clarity
+- release review quality versus token/cost spend on the same agent/model path
 
 It treats the following as secondary:
 
@@ -91,6 +103,8 @@ Treatment tasks should use this fixed routing.
 - `deployment-gate-review`
 - `promotion-approval`
 
+Release benchmark entries should use `benchmarkCategory: release` and compare one release candidate review cycle from agent start to final go/no-go recommendation. Do not include publish/deploy side effects or waiting time for external human approvals.
+
 ### Incident Or Regression Handling
 
 - `incident-handoff`
@@ -117,17 +131,20 @@ Use direct-shell exit checks for long-running test wrappers when needed:
 Create one scorecard entry per task with these fields:
 
 - task id or link
+- benchmark category: `general` or `release`
 - source: `replay` or `live`
 - task type
 - arm: `control` or `agentforge`
 - agent and model
 - start and end timestamps
+- cycle time seconds
 - validations run
 - workflow statuses for treatment runs
 - confirmed risks or issues caught before merge
 - reviewer judgment on validity and severity
 - whether AgentForge changed the plan or decision
-- cycle time
+- release decision and decision clarity for release-category entries
+- token usage and optional estimated API cost for release-category entries
 - evidence completeness notes
 - friction notes
 - override note if treatment proceeded past a blocked or partial result
@@ -148,6 +165,8 @@ Severity weighting:
 
 - cycle time
 - evidence completeness
+- release decision clarity
+- token/API spend
 - reviewer confidence
 - override rate
 - friction score
@@ -169,6 +188,16 @@ Each benchmarked task should add one comment to [#268](https://github.com/H9-Fou
 
 The GitHub comment remains the human source of truth for the benchmark narrative. The ledger exists to make those adjudications visible in the local `/outcomes` visualizer without scraping issue comments.
 - keep / tighten / simplify / deprioritize recommendation
+
+The current internal ledger command also supports release-benchmark fields such as:
+
+- `--benchmark-category release`
+- `--cycle-time-seconds <seconds>`
+- `--release-decision <go|no-go|conditional|unclear>`
+- `--decision-clarity <clear|mixed|ambiguous>`
+- `--rerun-count <count>`
+- `--blocked-state-count <count>`
+- `--token-usage <json>`
 
 After every three benchmarked tasks, summarize:
 

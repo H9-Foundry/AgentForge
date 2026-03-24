@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { parseArgs } from "node:util";
 
 import {
+  createOutcomesExportDocument,
   listAvailableArtifactKinds,
   listAvailableStatuses,
   listAvailableWorkflows,
@@ -15,7 +16,14 @@ import {
   toRelativeDisplayPath,
   type RunFilters
 } from "./data.js";
-import { renderBenchmarksPage, renderOutcomesDashboardPage, renderRunDetailPage, renderRunsIndexPage, visualizerStyles } from "./html.js";
+import {
+  renderBenchmarksPage,
+  renderOutcomesDashboardPage,
+  renderOutcomesExportMarkdown,
+  renderRunDetailPage,
+  renderRunsIndexPage,
+  visualizerStyles
+} from "./html.js";
 
 export interface VisualizerServerOptions {
   workspaceRoot: string;
@@ -135,6 +143,21 @@ export function createVisualizerServer(options: VisualizerServerOptions) {
       return;
     }
 
+    if (pathname === "/api/outcomes/export.json") {
+      json(response, 200, createOutcomesExportDocument(workspaceRoot, runsRoot, benchmarkLedgerPath, parseOutcomesFilters(url.searchParams)));
+      return;
+    }
+
+    if (pathname === "/outcomes/export.md") {
+      text(
+        response,
+        200,
+        renderOutcomesExportMarkdown(createOutcomesExportDocument(workspaceRoot, runsRoot, benchmarkLedgerPath, parseOutcomesFilters(url.searchParams))),
+        "text/markdown; charset=utf-8"
+      );
+      return;
+    }
+
     const runDetailMatch = pathname.match(/^\/runs\/([^/]+)$/);
     if (runDetailMatch) {
       const run = loadRunDetailView(workspaceRoot, decodeURIComponent(runDetailMatch[1] ?? ""), runsRoot, benchmarkLedgerPath);
@@ -197,8 +220,11 @@ export async function startVisualizerServer(options: VisualizerServerOptions): P
     server.listen(port, host, () => resolvePromise());
   });
 
+  const address = server.address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+
   return {
-    serverUrl: `http://${host}:${port}`,
+    serverUrl: `http://${host}:${boundPort}`,
     runsRoot,
     close: async () =>
       await new Promise<void>((resolvePromise, reject) => {
@@ -245,3 +271,20 @@ export function parseVisualizerServerArgs(argv: readonly string[]): { host?: str
     benchmarkLedgerPath: parsed.values["benchmark-ledger"]
   };
 }
+
+export {
+  createOutcomesExportDocument,
+  listAvailableArtifactKinds,
+  listAvailableStatuses,
+  listAvailableWorkflows,
+  loadBenchmarkIndexView,
+  loadOutcomesDashboardView,
+  loadRunDetailView,
+  loadRunsIndexView,
+  parseOutcomesFilters,
+  resolveBenchmarkLedgerPath,
+  resolveRunsRoot,
+  toRelativeDisplayPath
+} from "./data.js";
+export type { OutcomesExportDocument, RunFilters } from "./data.js";
+export { renderOutcomesExportMarkdown } from "./html.js";

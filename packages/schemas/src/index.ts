@@ -231,7 +231,52 @@ export const auditEntrySchema = z.object({
   toolsRequested: z.array(toolRequestSchema).default([]),
   toolsExecuted: z.array(toolResultSchema).default([]),
   blockedActions: z.array(z.string()).default([]),
-  validationPassed: z.boolean()
+  validationPassed: z.boolean(),
+  usage: z.lazy(() => providerUsageAggregateSummarySchema).optional()
+});
+
+export const providerUsagePricingSchema = z.object({
+  source: z.literal("local_registry"),
+  version: z.string().min(1),
+  effectiveDate: z.string().min(1),
+  currency: z.literal("USD"),
+  inputCostPerMillionTokensUsd: z.number().min(0),
+  outputCostPerMillionTokensUsd: z.number().min(0)
+});
+
+export const providerUsageStatusSchema = z.enum(["estimated", "partial", "unavailable"]);
+
+export const providerUsageByModelSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  totalTokens: z.number().int().min(0),
+  requestCount: z.number().int().min(0).default(1),
+  estimatedCostUsd: z.number().min(0).optional(),
+  costStatus: providerUsageStatusSchema.default("unavailable"),
+  pricing: providerUsagePricingSchema.optional(),
+  raw: z.unknown().optional()
+});
+
+export const providerUsageAggregateSummarySchema = z.object({
+  totalInputTokens: z.number().int().min(0),
+  totalOutputTokens: z.number().int().min(0),
+  totalTokens: z.number().int().min(0),
+  totalRequests: z.number().int().min(0),
+  totalEstimatedCostUsd: z.number().min(0).optional(),
+  costStatus: providerUsageStatusSchema.default("unavailable"),
+  byModel: z.array(providerUsageByModelSchema).default([])
+});
+
+export const providerUsageNodeBreakdownSchema = providerUsageAggregateSummarySchema.extend({
+  nodeId: z.string().min(1),
+  nodeName: z.string().min(1),
+  kind: nodeKindSchema
+});
+
+export const providerUsageAggregateSchema = providerUsageAggregateSummarySchema.extend({
+  byNode: z.array(providerUsageNodeBreakdownSchema).default([])
 });
 
 export const agentOutputSchema = z.object({
@@ -242,6 +287,7 @@ export const agentOutputSchema = z.object({
   requestedTools: z.array(toolRequestSchema).default([]),
   blockedActionFlags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).optional(),
+  usage: providerUsageAggregateSummarySchema.optional(),
   metadata: z.record(z.string(), z.unknown()).default({})
 });
 
@@ -781,7 +827,8 @@ export const workflowStateEnvelopeSchema = z.object({
   blockedPlugins: z.array(blockedPluginSchema).default([]),
   workflowInputs: z.record(z.string(), z.unknown()).default({}),
   agentResults: z.record(z.string(), agentOutputSchema).default({}),
-  auditTrail: z.array(auditEntrySchema).default([])
+  auditTrail: z.array(auditEntrySchema).default([]),
+  usage: providerUsageAggregateSchema.optional()
 });
 
 export const auditComponentSchema = z.object({
@@ -1356,8 +1403,11 @@ export const benchmarkDecisionOutcomeSchema = z.enum([
   "added_confidence",
   "no_meaningful_change"
 ]);
+export const benchmarkCategorySchema = z.enum(["general", "release"]);
 export const benchmarkLedgerSourceSchema = z.enum(["replay", "live"]);
 export const benchmarkLedgerArmSchema = z.enum(["control", "agentforge"]);
+export const benchmarkReleaseDecisionSchema = z.enum(["go", "no-go", "conditional", "unclear"]);
+export const benchmarkDecisionClaritySchema = z.enum(["clear", "mixed", "ambiguous"]);
 
 export const benchmarkDeterministicDeltaSchema = z.object({
   name: z.string().min(1),
@@ -1416,6 +1466,19 @@ export const benchmarkLedgerWorkflowStatusSchema = z.object({
   status: z.string().min(1)
 });
 
+export const benchmarkLedgerTokenUsageSchema = z.object({
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  inputTokens: z.number().int().nonnegative().nullable().optional(),
+  outputTokens: z.number().int().nonnegative().nullable().optional(),
+  totalTokens: z.number().int().nonnegative().nullable().optional(),
+  estimatedCostUsd: z.number().nonnegative().nullable().optional(),
+  requestCount: z.number().int().nonnegative().nullable().optional(),
+  costStatus: providerUsageStatusSchema.optional(),
+  pricingVersion: z.string().min(1).optional(),
+  pricingEffectiveDate: z.string().min(1).optional()
+});
+
 export const benchmarkLedgerFrictionSchema = z.object({
   override: z.boolean().default(false),
   overrideReason: z.string().min(1).optional(),
@@ -1428,6 +1491,7 @@ export const benchmarkLedgerFrictionSchema = z.object({
 export const benchmarkLedgerEntrySchema = z.object({
   taskId: z.string().min(1),
   taskLink: z.string().min(1).optional(),
+  benchmarkCategory: benchmarkCategorySchema.default("general"),
   source: benchmarkLedgerSourceSchema,
   taskType: z.string().min(1),
   arm: benchmarkLedgerArmSchema,
@@ -1436,10 +1500,16 @@ export const benchmarkLedgerEntrySchema = z.object({
   agent: z.string().min(1).optional(),
   startedAt: z.string().datetime().optional(),
   finishedAt: z.string().datetime().optional(),
+  cycleTimeSeconds: z.number().int().nonnegative().optional(),
   summary: z.string().min(1).optional(),
   decisionOutcome: benchmarkDecisionOutcomeSchema.optional(),
   decisionImpactReason: z.string().min(1).optional(),
   agentforgeChangedDecision: z.boolean().optional(),
+  releaseDecision: benchmarkReleaseDecisionSchema.optional(),
+  decisionClarity: benchmarkDecisionClaritySchema.optional(),
+  finalRecommendationSummary: z.string().min(1).optional(),
+  rerunCount: z.number().int().nonnegative().default(0),
+  blockedStateCount: z.number().int().nonnegative().default(0),
   triggerRefs: z.array(benchmarkLedgerTraceReferenceSchema).default([]),
   confirmedRisks: z.object({
     high: z.number().int().nonnegative().default(0),
@@ -1449,6 +1519,7 @@ export const benchmarkLedgerEntrySchema = z.object({
     unresolved: z.number().int().nonnegative().default(0)
   }),
   confirmedRiskRefs: z.array(benchmarkLedgerConfirmedRiskReferenceSchema).default([]),
+  tokenUsage: benchmarkLedgerTokenUsageSchema.optional(),
   evidence: z.object({
     present: z.array(z.string().min(1)).default([]),
     missing: z.array(z.string().min(1)).default([]),
@@ -1589,6 +1660,7 @@ export const auditBundleSchema = z.object({
     json: z.string().min(1),
     markdown: z.string().min(1)
   }),
+  usage: providerUsageAggregateSchema.optional(),
   provenance: auditProvenanceSchema,
   redaction: auditRedactionSchema,
   components: z.array(auditComponentSchema).default([])
@@ -1602,6 +1674,11 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   toolResult: toolResultSchema,
   approvalCheckpoint: approvalCheckpointSchema,
   auditEntry: auditEntrySchema,
+  providerUsagePricing: providerUsagePricingSchema,
+  providerUsageByModel: providerUsageByModelSchema,
+  providerUsageAggregateSummary: providerUsageAggregateSummarySchema,
+  providerUsageNodeBreakdown: providerUsageNodeBreakdownSchema,
+  providerUsageAggregate: providerUsageAggregateSchema,
   auditComponent: auditComponentSchema,
   auditProvenance: auditProvenanceSchema,
   auditRedaction: auditRedactionSchema,
@@ -1648,14 +1725,18 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   evalSetupRun: evalSetupRunSchema,
   evalArtifactPayload: evalArtifactPayloadSchema,
   benchmarkDecisionOutcome: benchmarkDecisionOutcomeSchema,
+  benchmarkCategory: benchmarkCategorySchema,
   benchmarkLedgerSource: benchmarkLedgerSourceSchema,
   benchmarkLedgerArm: benchmarkLedgerArmSchema,
+  benchmarkReleaseDecision: benchmarkReleaseDecisionSchema,
+  benchmarkDecisionClarity: benchmarkDecisionClaritySchema,
   benchmarkDeterministicDelta: benchmarkDeterministicDeltaSchema,
   benchmarkComparedRun: benchmarkComparedRunSchema,
   benchmarkArtifactPayload: benchmarkArtifactPayloadSchema,
   benchmarkLedgerTraceReference: benchmarkLedgerTraceReferenceSchema,
   benchmarkLedgerConfirmedRiskReference: benchmarkLedgerConfirmedRiskReferenceSchema,
   benchmarkLedgerWorkflowStatus: benchmarkLedgerWorkflowStatusSchema,
+  benchmarkLedgerTokenUsage: benchmarkLedgerTokenUsageSchema,
   benchmarkLedgerFriction: benchmarkLedgerFrictionSchema,
   benchmarkLedgerEntry: benchmarkLedgerEntrySchema,
   benchmarkLedgerDocument: benchmarkLedgerDocumentSchema,
@@ -2365,6 +2446,7 @@ const benchmarkLedgerDocumentFixture = {
     {
       taskId: "task-1",
       taskLink: "https://github.com/H9-Foundry/AgentForge/issues/268#issuecomment-example",
+      benchmarkCategory: "release",
       source: "live",
       taskType: "release/deployment",
       arm: "agentforge",
@@ -2373,10 +2455,16 @@ const benchmarkLedgerDocumentFixture = {
       agent: "codex",
       startedAt: "2026-03-23T10:00:00.000Z",
       finishedAt: "2026-03-23T10:05:00.000Z",
+      cycleTimeSeconds: 300,
       summary: "AgentForge forced a release-evidence follow-up before merge.",
       decisionOutcome: "added_validation",
       decisionImpactReason: "Derived from missing release evidence and required verification checks.",
       agentforgeChangedDecision: true,
+      releaseDecision: "conditional",
+      decisionClarity: "clear",
+      finalRecommendationSummary: "Do not approve release until CI-backed evidence is complete.",
+      rerunCount: 1,
+      blockedStateCount: 1,
       triggerRefs: [
         {
           runId: "1774182026977-5f74df",
@@ -2400,6 +2488,15 @@ const benchmarkLedgerDocumentFixture = {
           artifactKind: "release-report"
         }
       ],
+      tokenUsage: {
+        provider: "openai",
+        model: "gpt-5.4",
+        inputTokens: 1200,
+        outputTokens: 400,
+        totalTokens: 1600,
+        estimatedCostUsd: 0.24,
+        requestCount: 4
+      },
       evidence: {
         present: ["qa-report"],
         missing: ["release-report"],

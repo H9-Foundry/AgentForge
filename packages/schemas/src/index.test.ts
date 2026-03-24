@@ -46,6 +46,9 @@ import {
   pipelineEvidenceNormalizationSchema,
   pipelineRequestSchema,
   policyDocumentSchema,
+  providerUsageAggregateSchema,
+  providerUsageByModelSchema,
+  providerUsagePricingSchema,
   qaArtifactSchema,
   qaEvidenceNormalizationSchema,
   qaRequestSchema,
@@ -119,6 +122,69 @@ describe("schema fixtures", () => {
     expect(() => evalArtifactSchema.parse(schemaFixtures.evalArtifact)).not.toThrow();
     expect(() => benchmarkArtifactSchema.parse(schemaFixtures.benchmarkArtifact)).not.toThrow();
     expect(() => benchmarkLedgerDocumentSchema.parse(schemaFixtures.benchmarkLedgerDocument)).not.toThrow();
+    expect(() => providerUsagePricingSchema.parse({
+      source: "local_registry",
+      version: "openai-api-pricing-2026-03-24",
+      effectiveDate: "2026-03-24",
+      currency: "USD",
+      inputCostPerMillionTokensUsd: 2.5,
+      outputCostPerMillionTokensUsd: 15
+    })).not.toThrow();
+    expect(() => providerUsageByModelSchema.parse({
+      provider: "openai",
+      model: "gpt-5.4",
+      inputTokens: 1200,
+      outputTokens: 400,
+      totalTokens: 1600,
+      requestCount: 2,
+      estimatedCostUsd: 0.009,
+      costStatus: "estimated"
+    })).not.toThrow();
+    expect(() => providerUsageAggregateSchema.parse({
+      totalInputTokens: 1200,
+      totalOutputTokens: 400,
+      totalTokens: 1600,
+      totalRequests: 2,
+      totalEstimatedCostUsd: 0.009,
+      costStatus: "estimated",
+      byModel: [
+        {
+          provider: "openai",
+          model: "gpt-5.4",
+          inputTokens: 1200,
+          outputTokens: 400,
+          totalTokens: 1600,
+          requestCount: 2,
+          estimatedCostUsd: 0.009,
+          costStatus: "estimated"
+        }
+      ],
+      byNode: [
+        {
+          nodeId: "release",
+          nodeName: "release-analyst",
+          kind: "reasoning",
+          totalInputTokens: 1200,
+          totalOutputTokens: 400,
+          totalTokens: 1600,
+          totalRequests: 2,
+          totalEstimatedCostUsd: 0.009,
+          costStatus: "estimated",
+          byModel: [
+            {
+              provider: "openai",
+              model: "gpt-5.4",
+              inputTokens: 1200,
+              outputTokens: 400,
+              totalTokens: 1600,
+              requestCount: 2,
+              estimatedCostUsd: 0.009,
+              costStatus: "estimated"
+            }
+          ]
+        }
+      ]
+    })).not.toThrow();
     expect(() => qaEvidenceNormalizationSchema.parse(schemaFixtures.qaEvidenceNormalization)).not.toThrow();
     expect(() => securityEvidenceNormalizationSchema.parse(schemaFixtures.securityEvidenceNormalization)).not.toThrow();
     expect(() => pipelineEvidenceNormalizationSchema.parse(schemaFixtures.pipelineEvidenceNormalization)).not.toThrow();
@@ -195,6 +261,9 @@ describe("schema fixtures", () => {
     expect(jsonSchemas.evalArtifact).toBeDefined();
     expect(jsonSchemas.benchmarkArtifact).toBeDefined();
     expect(jsonSchemas.benchmarkLedgerDocument).toBeDefined();
+    expect(jsonSchemas.providerUsagePricing).toBeDefined();
+    expect(jsonSchemas.providerUsageByModel).toBeDefined();
+    expect(jsonSchemas.providerUsageAggregate).toBeDefined();
     expect(jsonSchemas.reviewArtifact).toBeDefined();
     expect(jsonSchemas.releaseArtifact).toBeDefined();
     expect(jsonSchemas.deploymentGateArtifact).toBeDefined();

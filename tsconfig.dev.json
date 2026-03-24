@@ -10,6 +10,7 @@
       "@h9-foundry/agentforge-policy-engine": ["packages/policy-engine/src/index.ts"],
       "@h9-foundry/agentforge-audit": ["packages/audit/src/index.ts"],
       "@h9-foundry/agentforge-runtime": ["packages/runtime/src/index.ts"],
+      "@h9-foundry/agentforge-visualizer": ["packages/visualizer/src/index.ts"],
       "@h9-foundry/agentforge-registry-client": ["packages/registry-client/src/index.ts"],
       "@h9-foundry/agentforge-cli": ["packages/cli/src/index.ts"],
       "@h9-foundry/agentforge-agent-context-collector": ["agents/context-collector/src/index.ts"],

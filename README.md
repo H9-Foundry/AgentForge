@@ -48,12 +48,14 @@ The preset writes an explicit starter request to `.agentops/requests/planning.ya
 
 If you want to develop AgentForge itself, use the contributor/source-build path in [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/quickstart.md](docs/quickstart.md).
 
-Source-build only:
+CLI surface on `main`:
 
-- `pnpm visualizer:dev` starts a local read-only visualizer for `.agentops/runs`, including outcomes, risk, and benchmark views
-- `agentforge eval benchmark-ledger --json` and `agentforge eval benchmark-record ...` support the local dogfood benchmark ledger that powers adjudicated `/outcomes` overlays
+- `agentforge visualizer --open` now launches the official local read-only visualizer for `.agentops/runs`, including runs, `/outcomes`, run detail, and benchmark views
+- `agentforge visualizer export --format json|markdown` now exports a normalized outcomes snapshot for CI artifacts or team review without introducing a hosted dependency
+- provider-backed runs now persist measured token usage in `.agentops/runs/.../bundle.json`, with local cost estimation when a provider/model entry exists in the runtime pricing registry
+- `agentforge eval benchmark-ledger --json`, `agentforge eval benchmark-record ... --prefill-run <run-id>`, and `agentforge eval benchmark-wizard ...` support the local benchmark ledger that powers adjudicated `/outcomes` overlays, including release speed/quality/token-spend comparisons
 - the next benchmark expansion after the AgentForge-first dogfood phase is the bounded CreateCVs portability phase in [docs/CREATECVS_PORTABILITY_PHASE.md](docs/CREATECVS_PORTABILITY_PHASE.md)
-- see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current boundary and launch path
+- see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current launch path and [docs/VISUALIZER_DATA_CONTRACT.md](docs/VISUALIZER_DATA_CONTRACT.md) for the visualizer-facing run/ledger contract
 
 ## What Success Looks Like
 
@@ -212,6 +214,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/runtime-model.md](docs/r
 - `@h9-foundry/agentforge-policy-engine`
 - `@h9-foundry/agentforge-runtime`
 - `@h9-foundry/agentforge-audit`
+- `@h9-foundry/agentforge-visualizer`
 
 ### Internal Workspace Surfaces
 
@@ -242,6 +245,17 @@ The last command should point you to:
 
 - `.agentops/runs/<run-id>/bundle.json`
 - `.agentops/runs/<run-id>/summary.md`
+
+### Visualizer Quickstart
+
+Once local runs exist, the CLI surface on `main` also supports the local visualizer directly:
+
+```bash
+agentforge visualizer --open
+agentforge visualizer export --format markdown
+```
+
+Use the first command for local inspection and the second command when you want a shareable outcomes snapshot without standing up a hosted dashboard. Until the next npm publish lands, use the source-build/local-build path documented in [docs/VISUALIZER.md](docs/VISUALIZER.md).
 
 ### Planning To Design Evaluator Path
 

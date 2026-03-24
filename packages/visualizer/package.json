@@ -1,13 +1,42 @@
 {
   "name": "@h9-foundry/agentforge-visualizer",
-  "private": true,
-  "version": "0.0.0",
-  "description": "Source-build-only local web app for inspecting AgentForge run bundles.",
+  "version": "0.11.0",
+  "description": "Local web app runtime for the AgentForge visualizer CLI surface.",
   "license": "MIT",
   "author": "H9 Foundry",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/H9-Foundry/AgentForge.git",
+    "directory": "packages/visualizer"
+  },
+  "homepage": "https://github.com/H9-Foundry/AgentForge/tree/main/packages/visualizer#readme",
+  "bugs": {
+    "url": "https://github.com/H9-Foundry/AgentForge/issues"
+  },
+  "keywords": [
+    "agentforge",
+    "visualizer",
+    "benchmarking",
+    "outcomes",
+    "developer-tools"
+  ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"

@@ -8,6 +8,8 @@ Published CLI wording rule:
 - `source-build only` means the capability exists on `main` but has not reached npm yet
 - this document should use those terms explicitly whenever repo `main` is ahead of the latest published package set
 
+For internal evaluation and release signoff of user-facing surfaces, use the CLI-first rule in [docs/CLI_FIRST_DOGFOODING.md](CLI_FIRST_DOGFOODING.md).
+
 ## Fastest Evaluator Path
 
 Use the published CLI if you want to try the current published wedges without cloning the monorepo. The latest published CLI now includes the full official local workflow surface plus `eval run` and `eval compare`.
