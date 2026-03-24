@@ -1882,38 +1882,104 @@ export interface VisualizerExportResult {
   document: OutcomesExportDocument;
 }
 
+export type ValidationCommandKind = "lint" | "typecheck" | "build" | "test" | "e2e";
+export type BenchmarkMode = "live" | "eval";
+export type OnboardingWorkflowFamily =
+  | "review/planning"
+  | "qa/security"
+  | "release/pipeline/deployment"
+  | "maintenance/incident";
+
+export interface DetectedValidationCommand {
+  kind: ValidationCommandKind;
+  scriptName: string;
+  command: string;
+}
+
+export interface OnboardingReleaseProfile {
+  relevant: boolean;
+  ciConfigPaths: string[];
+  ciArtifactPaths: string[];
+  releaseDocPaths: string[];
+  deploymentDocPaths: string[];
+  promotionSignals: string[];
+  recommendedEvidenceSources: string[];
+}
+
+export interface OnboardingProfile {
+  root: string;
+  repoName: string;
+  packageManager: string;
+  languages: string[];
+  validationCommands: DetectedValidationCommand[];
+  workflowFamilies: OnboardingWorkflowFamily[];
+  recommendedStarterPresets: StartupPresetName[];
+  recommendedValidationExpectations: string[];
+  recommendedEvidenceExpectations: string[];
+  recommendedFirstWorkflow: string;
+  recommendedBenchmarkMode: BenchmarkMode;
+  recommendedBenchmarkCategory: BenchmarkCategory;
+  recommendedBenchmarkTaskType: string;
+  recommendedBenchmarkTaskId: string;
+  releaseProfile: OnboardingReleaseProfile;
+}
+
+export interface OnboardingResult {
+  root: string;
+  created: string[];
+  preset?: { preset: StartupPresetName; workflow: string; requestPath: string; created: boolean };
+  profile: OnboardingProfile;
+  nextSteps: {
+    firstWorkflowCommand: string;
+    firstBenchmarkCommand: string;
+    outcomesCommand: string;
+    benchmarksCommand: string;
+  };
+}
+
+export interface LocalRunCandidate {
+  runId: string;
+  workflow: string;
+  status: string;
+  startedAt?: string;
+  finishedAt?: string;
+  bundlePath: string;
+  artifactKinds: string[];
+  category: "workflow" | "eval" | "benchmark";
+}
+
 function resolveBenchmarkLedgerPath(root: string): string {
   return join(root, ".agentops", "benchmark-ledger.json");
+}
+
+function parseRunTimestampMs(value: unknown): number | undefined {
+  if (typeof value !== "string" || value.length === 0) {
+    return undefined;
+  }
+
+  const compactDateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})$/);
+  if (compactDateTimeMatch) {
+    const [, year, month, day, hour, minute, second] = compactDateTimeMatch;
+    const isoCandidate = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
+    const parsedCompactDateTime = Date.parse(isoCandidate);
+    if (!Number.isNaN(parsedCompactDateTime)) {
+      return parsedCompactDateTime;
+    }
+  }
+
+  const parsedDate = Date.parse(value);
+  if (!Number.isNaN(parsedDate)) {
+    return parsedDate;
+  }
+
+  const timestampPrefix = Number.parseInt(value.split("-")[0] ?? "", 10);
+  return Number.isNaN(timestampPrefix) ? undefined : timestampPrefix;
 }
 
 function readLatestCompleteRunBundle(runsRoot: string): { runDir: string; bundle: Record<string, unknown> } | undefined {
   if (!existsSync(runsRoot)) {
     return undefined;
   }
-
-  const parseRunTimestampMs = (value: unknown): number | undefined => {
-    if (typeof value !== "string" || value.length === 0) {
-      return undefined;
-    }
-
-    const compactDateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(\d{2})$/);
-    if (compactDateTimeMatch) {
-      const [, year, month, day, hour, minute, second] = compactDateTimeMatch;
-      const isoCandidate = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`;
-      const parsedCompactDateTime = Date.parse(isoCandidate);
-      if (!Number.isNaN(parsedCompactDateTime)) {
-        return parsedCompactDateTime;
-      }
-    }
-
-    const parsedDate = Date.parse(value);
-    if (!Number.isNaN(parsedDate)) {
-      return parsedDate;
-    }
-
-    const timestampPrefix = Number.parseInt(value.split("-")[0] ?? "", 10);
-    return Number.isNaN(timestampPrefix) ? undefined : timestampPrefix;
-  };
 
   const candidates = readdirSync(runsRoot)
     .map((entry) => {
@@ -2013,7 +2079,7 @@ function buildBenchmarkLedgerPrefill(root: string, runRef: string): BenchmarkLed
   const { runId, bundle } = readRunBundleByRef(root, runRef);
   const artifactKinds = bundle.lifecycleArtifacts
     .map((artifact) => artifact.artifactKind)
-    .filter((artifactKind): artifactKind is NonNullable<typeof artifactKind> => typeof artifactKind === "string" && artifactKind.length > 0);
+    .filter((artifactKind) => typeof artifactKind === "string" && artifactKind.length > 0) as string[];
   const tokenUsage = summarizeBundleTokenUsage(bundle.usage);
   const cycleTimeSeconds = deriveCycleTimeSeconds(bundle.startedAt, bundle.finishedAt);
 
@@ -2896,6 +2962,216 @@ export function scanProject(cwd = process.cwd()): {
   };
 }
 
+function loadPackageScripts(root: string): Record<string, string> {
+  const packageJsonPath = join(root, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return {};
+  }
+
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { scripts?: Record<string, string> };
+  return packageJson.scripts ?? {};
+}
+
+function formatPackageScriptCommand(packageManager: string, scriptName: string): string {
+  switch (packageManager) {
+    case "pnpm":
+      return `pnpm ${scriptName}`;
+    case "yarn":
+      return `yarn ${scriptName}`;
+    case "bun":
+      return `bun run ${scriptName}`;
+    case "npm":
+      return scriptName === "test" ? "npm test" : `npm run ${scriptName}`;
+    default:
+      return `npm run ${scriptName}`;
+  }
+}
+
+function detectValidationCommands(root: string, packageManager: string): DetectedValidationCommand[] {
+  const scripts = loadPackageScripts(root);
+  const candidates: Array<{ kind: ValidationCommandKind; names: string[] }> = [
+    { kind: "lint", names: ["lint"] },
+    { kind: "typecheck", names: ["typecheck", "check-types"] },
+    { kind: "build", names: ["build"] },
+    { kind: "test", names: ["test"] },
+    { kind: "e2e", names: ["test:e2e", "e2e", "journeys:check"] }
+  ];
+
+  return candidates
+    .map((candidate) => {
+      const matchedScript = candidate.names.find((name) => typeof scripts[name] === "string");
+      if (!matchedScript) {
+        return undefined;
+      }
+
+      return {
+        kind: candidate.kind,
+        scriptName: matchedScript,
+        command: formatPackageScriptCommand(packageManager, matchedScript)
+      };
+    })
+    .filter((command): command is DetectedValidationCommand => Boolean(command));
+}
+
+function detectExistingPaths(root: string, candidates: string[]): string[] {
+  return candidates.filter((relativePath) => existsSync(join(root, relativePath)));
+}
+
+function detectReleaseProfile(root: string, validationCommands: DetectedValidationCommand[]): OnboardingReleaseProfile {
+  const ciConfigPaths = detectExistingPaths(root, [
+    ".github/workflows",
+    ".gitlab-ci.yml",
+    ".circleci/config.yml",
+    "azure-pipelines.yml"
+  ]);
+  const ciArtifactPaths = detectExistingPaths(root, [
+    "coverage",
+    "playwright-report",
+    "test-results",
+    "reports",
+    "artifacts"
+  ]);
+  const releaseDocPaths = detectExistingPaths(root, [
+    "RELEASE.md",
+    "docs/release.md",
+    "docs/release-runbook.md",
+    "docs/release-process.md"
+  ]);
+  const deploymentDocPaths = detectExistingPaths(root, [
+    "DEPLOYMENT.md",
+    "docs/deploy.md",
+    "docs/deployment.md",
+    "docs/deployment-runbook.md",
+    "docs/promotion.md"
+  ]);
+  const promotionSignals = detectExistingPaths(root, [
+    "docs/promotion.md",
+    "docs/change-management.md",
+    "docs/rollback.md"
+  ]);
+  const recommendedEvidenceSources = [
+    ...validationCommands.map((command) => command.command),
+    ...ciArtifactPaths,
+    ...releaseDocPaths,
+    ...deploymentDocPaths
+  ];
+
+  return {
+    relevant:
+      ciConfigPaths.length > 0 ||
+      releaseDocPaths.length > 0 ||
+      deploymentDocPaths.length > 0 ||
+      validationCommands.some((command) => command.kind === "build"),
+    ciConfigPaths,
+    ciArtifactPaths,
+    releaseDocPaths,
+    deploymentDocPaths,
+    promotionSignals,
+    recommendedEvidenceSources
+  };
+}
+
+function inferWorkflowFamilies(
+  root: string,
+  validationCommands: DetectedValidationCommand[],
+  releaseProfile: OnboardingReleaseProfile
+): OnboardingWorkflowFamily[] {
+  const families: OnboardingWorkflowFamily[] = ["review/planning"];
+  const docsOrOpsSignals = detectExistingPaths(root, ["docs", ".github", ".gitlab-ci.yml", ".circleci"]);
+
+  if (validationCommands.length > 0) {
+    families.push("qa/security");
+  }
+
+  if (releaseProfile.relevant) {
+    families.push("release/pipeline/deployment");
+  }
+
+  if (docsOrOpsSignals.length > 0 || releaseProfile.relevant) {
+    families.push("maintenance/incident");
+  }
+
+  return families;
+}
+
+function inferFirstWorkflow(
+  workflowFamilies: OnboardingWorkflowFamily[],
+  releaseProfile: OnboardingReleaseProfile
+): string {
+  if (workflowFamilies.includes("release/pipeline/deployment") && releaseProfile.relevant) {
+    return "release-readiness";
+  }
+
+  if (workflowFamilies.includes("review/planning")) {
+    return "planning-discovery";
+  }
+
+  return "pr-review";
+}
+
+function inferRecommendedPreset(workflow: string): StartupPresetName[] {
+  return workflow === "planning-discovery" ? ["planning-discovery"] : [];
+}
+
+function buildRepoFitProfile(root: string): OnboardingProfile {
+  const scan = scanProject(root);
+  const repoName = root.split("/").at(-1) ?? "repo";
+  const validationCommands = detectValidationCommands(root, scan.packageManager);
+  const releaseProfile = detectReleaseProfile(root, validationCommands);
+  const workflowFamilies = inferWorkflowFamilies(root, validationCommands, releaseProfile);
+  const recommendedFirstWorkflow = inferFirstWorkflow(workflowFamilies, releaseProfile);
+  const recommendedStarterPresets = inferRecommendedPreset(recommendedFirstWorkflow);
+  const recommendedBenchmarkCategory = releaseProfile.relevant ? "release" : "general";
+  const recommendedBenchmarkTaskType = releaseProfile.relevant ? "release/deployment" : "feature/refactor";
+
+  return {
+    root,
+    repoName,
+    packageManager: scan.packageManager,
+    languages: scan.languages,
+    validationCommands,
+    workflowFamilies,
+    recommendedStarterPresets,
+    recommendedValidationExpectations: validationCommands.map((command) => command.command),
+    recommendedEvidenceExpectations: releaseProfile.recommendedEvidenceSources,
+    recommendedFirstWorkflow,
+    recommendedBenchmarkMode: "live",
+    recommendedBenchmarkCategory,
+    recommendedBenchmarkTaskType,
+    recommendedBenchmarkTaskId: `${repoName}-pilot-1`,
+    releaseProfile
+  };
+}
+
+export function analyzeOnboardingProfile(cwd = process.cwd()): OnboardingProfile {
+  const root = findWorkspaceRoot(cwd);
+  ensureInitFiles(root);
+  return buildRepoFitProfile(root);
+}
+
+export function onboardProject(
+  cwd = process.cwd(),
+  options?: { applyRecommendedPreset?: boolean }
+): OnboardingResult {
+  const root = findWorkspaceRoot(cwd);
+  const profile = buildRepoFitProfile(root);
+  const presetToApply = options?.applyRecommendedPreset === false ? undefined : profile.recommendedStarterPresets[0];
+  const initResult = initProject(root, presetToApply ? { preset: presetToApply } : undefined);
+
+  return {
+    root: initResult.root,
+    created: initResult.created,
+    preset: initResult.preset,
+    profile,
+    nextSteps: {
+      firstWorkflowCommand: `agentforge run ${profile.recommendedFirstWorkflow} --json`,
+      firstBenchmarkCommand: `agentforge benchmark --mode ${profile.recommendedBenchmarkMode}`,
+      outcomesCommand: "agentforge visualizer --open",
+      benchmarksCommand: "agentforge visualizer --open"
+    }
+  };
+}
+
 export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()): Promise<WorkflowRunResult> {
   const root = findWorkspaceRoot(cwd);
   ensureInitFiles(root);
@@ -3342,6 +3618,73 @@ export function compareLocalEvalRuns(baselineRunRef: string, candidateRunRefs: s
     nonComparableCount: comparedRuns.reduce((total, candidate) => total + candidate.nonComparableFindings.length, 0),
     artifactKinds: bundle.lifecycleArtifacts.map((artifact) => artifact.artifactKind)
   };
+}
+
+export function discoverLocalRunCandidates(
+  cwd = process.cwd(),
+  options?: { category?: LocalRunCandidate["category"]; limit?: number }
+): LocalRunCandidate[] {
+  const root = findWorkspaceRoot(cwd);
+  const config = loadAgentForgeConfig(root);
+  const runsRoot = join(root, config.runtime.runsPath);
+  if (!existsSync(runsRoot)) {
+    return [];
+  }
+
+  const candidates: Array<LocalRunCandidate & { sortKey: number }> = [];
+  for (const entry of readdirSync(runsRoot)) {
+    const bundlePath = join(runsRoot, entry, "bundle.json");
+    if (!existsSync(bundlePath)) {
+      continue;
+    }
+
+    const bundle = auditBundleSchema.parse(JSON.parse(readFileSync(bundlePath, "utf8")) as unknown);
+    const artifactKinds = bundle.lifecycleArtifacts
+      .map((artifact) => artifact.artifactKind)
+      .filter((artifactKind) => typeof artifactKind === "string" && artifactKind.length > 0) as string[];
+    const category: LocalRunCandidate["category"] = artifactKinds.includes("benchmark-summary")
+      ? "benchmark"
+      : artifactKinds.includes("eval-result")
+        ? "eval"
+        : "workflow";
+
+    candidates.push({
+      runId: bundle.runId,
+      workflow: bundle.workflow,
+      status: bundle.status,
+      startedAt: bundle.startedAt,
+      finishedAt: bundle.finishedAt,
+      bundlePath,
+      artifactKinds,
+      category,
+      sortKey:
+        parseRunTimestampMs(bundle.finishedAt) ??
+        parseRunTimestampMs(bundle.startedAt) ??
+        parseRunTimestampMs(bundle.runId) ??
+        0
+    });
+  }
+
+  const filteredCandidates = candidates
+    .filter((candidate) => !options?.category || candidate.category === options.category)
+    .sort((left, right) => {
+      if (left.sortKey !== right.sortKey) {
+        return right.sortKey - left.sortKey;
+      }
+
+      return right.runId.localeCompare(left.runId);
+    });
+
+  return filteredCandidates.slice(0, options?.limit ?? 10).map((candidate) => ({
+    runId: candidate.runId,
+    workflow: candidate.workflow,
+    status: candidate.status,
+    startedAt: candidate.startedAt,
+    finishedAt: candidate.finishedAt,
+    bundlePath: candidate.bundlePath,
+    artifactKinds: candidate.artifactKinds,
+    category: candidate.category
+  }));
 }
 
 export function explainLastRun(cwd = process.cwd()): LastRunExplanation {

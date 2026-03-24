@@ -1,11 +1,16 @@
 #!/usr/bin/env node
+import { createInterface } from "node:readline/promises";
+
 import { Command } from "commander";
 
 import {
+  analyzeOnboardingProfile,
   checkReleaseReadiness,
   compareLocalEvalRuns,
+  discoverLocalRunCandidates,
   exportVisualizerOutcomes,
   launchVisualizer,
+  onboardProject,
   readBenchmarkLedger,
   recordBenchmarkLedgerEntry,
   runBenchmarkLedgerWizard,
@@ -53,6 +58,172 @@ function parseNonNegativeIntegerOption(value: string | undefined, label: string)
   }
 
   return parsed;
+}
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+async function promptWithDefault(question: string, defaultValue?: string): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    const answer = await rl.question(defaultValue ? `${question} [${defaultValue}]: ` : `${question}: `);
+    const trimmed = answer.trim();
+    return trimmed.length > 0 ? trimmed : (defaultValue ?? "");
+  } finally {
+    rl.close();
+  }
+}
+
+function printRunCandidates(label: string, candidates: ReturnType<typeof discoverLocalRunCandidates>): void {
+  if (candidates.length === 0) {
+    console.log(`${label}: none found`);
+    return;
+  }
+
+  console.log(`${label}:`);
+  for (const candidate of candidates) {
+    console.log(
+      `- ${candidate.runId} | ${candidate.workflow} | ${candidate.status} | ${candidate.artifactKinds.join(", ") || "no-artifacts"}`
+    );
+  }
+}
+
+async function runGuidedLiveBenchmark(
+  options: {
+    taskId?: string;
+    arm?: string;
+    source?: string;
+    taskType?: string;
+    benchmarkCategory?: string;
+    prefillRun?: string;
+    runId?: string;
+    workflow?: string;
+    agent?: string;
+    json?: boolean;
+  },
+  defaults?: {
+    taskId?: string;
+    taskType?: string;
+    benchmarkCategory?: string;
+    taskIntro?: string;
+  }
+): Promise<void> {
+  if (defaults?.taskIntro) {
+    console.log(defaults.taskIntro);
+  }
+
+  const recentRuns = discoverLocalRunCandidates(process.cwd(), { category: "workflow", limit: 8 });
+  if (!options.prefillRun && process.stdin.isTTY) {
+    printRunCandidates("Recent workflow runs", recentRuns);
+  }
+
+  const taskId = options.taskId
+    ?? defaults?.taskId
+    ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Benchmark task id", "repo-pilot-1")) : undefined);
+  const arm = options.arm
+    ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Benchmark arm (control/agentforge)", "control")) : undefined);
+  const source = options.source
+    ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Benchmark source (live/replay)", "live")) : undefined);
+  const taskType = options.taskType
+    ?? defaults?.taskType
+    ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Task type", "feature/refactor")) : undefined);
+  const benchmarkCategory = options.benchmarkCategory
+    ?? defaults?.benchmarkCategory
+    ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Benchmark category (general/release)", "general")) : undefined);
+  const prefillRun = options.prefillRun
+    ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Prefill from run id or bundle path (blank skips)")) : undefined);
+
+  if (!taskId || !arm || !source || !taskType) {
+    throw new Error("Live benchmark recording needs task id, arm, source, and task type. Provide flags or run interactively.");
+  }
+
+  if (options.json) {
+    const result = recordBenchmarkLedgerEntry({
+      taskId,
+      arm: arm as "control" | "agentforge",
+      source: source as "live" | "replay",
+      taskType,
+      benchmarkCategory: benchmarkCategory as "general" | "release" | undefined,
+      prefillRunRef: prefillRun,
+      runId: options.runId,
+      workflow: options.workflow,
+      agent: options.agent
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  const result = await runBenchmarkLedgerWizard({
+    taskId,
+    arm: arm as "control" | "agentforge",
+    source: source as "live" | "replay",
+    taskType,
+    benchmarkCategory: benchmarkCategory as "general" | "release" | undefined,
+    prefillRunRef: prefillRun,
+    runId: options.runId,
+    workflow: options.workflow,
+    agent: options.agent
+  });
+
+  console.log(`${result.created ? "Created" : "Updated"} benchmark ledger entry for ${result.entry.taskId} [${result.entry.arm}]`);
+  console.log(`Ledger: ${result.path}`);
+  if (result.prefill) {
+    console.log(`Prefilled from run ${result.prefill.runId} (${result.prefill.workflow}/${result.prefill.status})`);
+  }
+  console.log(`Workflow: ${result.entry.workflow ?? "unresolved"}`);
+  console.log(`Decision outcome: ${result.entry.decisionOutcome ?? "unrecorded"}`);
+  console.log("Next: open `agentforge visualizer --open` and inspect `/outcomes` for the paired task comparison.");
+}
+
+async function runGuidedEvalBenchmark(options: {
+  baselineRun?: string;
+  candidateRun?: string[];
+  json?: boolean;
+}): Promise<void> {
+  let baselineRun = options.baselineRun;
+  let candidateRuns = options.candidateRun ?? [];
+
+  if ((!baselineRun || candidateRuns.length === 0) && process.stdin.isTTY) {
+    const evalRuns = discoverLocalRunCandidates(process.cwd(), { category: "eval", limit: 8 });
+    printRunCandidates("Recent eval runs", evalRuns);
+    baselineRun = baselineRun ?? normalizeOptionalString(await promptWithDefault("Baseline eval run id or bundle path"));
+    if (candidateRuns.length === 0) {
+      const candidateAnswer = await promptWithDefault("Candidate eval run ids or bundle paths (comma-separated)");
+      candidateRuns = candidateAnswer
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+    }
+  }
+
+  if (!baselineRun || candidateRuns.length === 0) {
+    throw new Error("Eval benchmark compare needs one baseline run and at least one candidate run. Provide flags or run interactively.");
+  }
+
+  const result = compareLocalEvalRuns(baselineRun, candidateRuns);
+  if (options.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log(`Completed benchmark compare ${result.runId}`);
+  console.log(`Baseline eval run: ${result.baselineRunId}`);
+  console.log(`Compared runs: ${result.comparedRunIds.join(", ")}`);
+  console.log(`Artifacts: ${result.outputDir}`);
+  console.log(`Summary: ${result.markdownPath}`);
+  console.log(`Regressions: ${result.regressionCount}`);
+  console.log(`Improvements: ${result.improvementCount}`);
+  console.log("Next: open `agentforge visualizer --open` and inspect `/benchmarks` for deterministic compare output.");
 }
 
 async function waitForVisualizerShutdown(close: () => Promise<void>): Promise<void> {
@@ -104,6 +275,92 @@ program
   });
 
 program
+  .command("onboard")
+  .alias("setup")
+  .description("Guided first-run setup that fits AgentForge to the current repository and suggests the next workflow or benchmark.")
+  .option("--json", "Print machine-readable JSON output.")
+  .option("--benchmark", "Immediately hand off into the benchmark flow after the onboarding summary.")
+  .option("--no-preset", "Initialize .agentops without applying the recommended starter preset.")
+  .action(async (options: { json?: boolean; benchmark?: boolean; preset?: boolean }) => {
+    const result = onboardProject(process.cwd(), {
+      applyRecommendedPreset: options.preset
+    });
+
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    console.log(`Initialized AgentForge in ${result.root}`);
+    console.log(result.created.length > 0 ? `Created ${result.created.length} file(s).` : "Configuration already present.");
+    console.log(`Repository fit: ${result.profile.packageManager} | ${result.profile.languages.join(", ") || "unknown language set"}`);
+    console.log(`Workflow families: ${result.profile.workflowFamilies.join(", ")}`);
+    console.log(
+      `Validation surface: ${result.profile.recommendedValidationExpectations.length > 0 ? result.profile.recommendedValidationExpectations.join(", ") : "no package-script validations detected"}`
+    );
+    console.log(
+      `Release evidence: ${result.profile.recommendedEvidenceExpectations.length > 0 ? result.profile.recommendedEvidenceExpectations.join(", ") : "no release/deployment evidence surfaced"}`
+    );
+    if (result.preset) {
+      console.log(result.preset.created ? `Created starter request: ${result.preset.requestPath}` : `Starter request already present: ${result.preset.requestPath}`);
+    } else if (result.profile.recommendedStarterPresets.length > 0) {
+      console.log(`Recommended starter preset: ${result.profile.recommendedStarterPresets.join(", ")}`);
+    }
+    console.log(`Recommended first workflow: ${result.profile.recommendedFirstWorkflow}`);
+    console.log(`Recommended first benchmark: ${result.profile.recommendedBenchmarkMode} ${result.profile.recommendedBenchmarkCategory}`);
+    console.log(`Next workflow: ${result.nextSteps.firstWorkflowCommand}`);
+    console.log(`Next benchmark: ${result.nextSteps.firstBenchmarkCommand}`);
+    console.log("Use `/outcomes` to judge live task value and `/benchmarks` only for deterministic eval comparisons.");
+
+    if (options.benchmark) {
+      await runGuidedLiveBenchmark(
+        {
+          taskId: result.profile.recommendedBenchmarkTaskId,
+          taskType: result.profile.recommendedBenchmarkTaskType,
+          benchmarkCategory: result.profile.recommendedBenchmarkCategory
+        },
+        {
+          taskId: result.profile.recommendedBenchmarkTaskId,
+          taskType: result.profile.recommendedBenchmarkTaskType,
+          benchmarkCategory: result.profile.recommendedBenchmarkCategory,
+          taskIntro:
+            "Benchmarking is optional. The default first proof path is a live control-vs-AgentForge comparison on a real repo task, then `/outcomes` for the value review."
+        }
+      );
+      return;
+    }
+
+    if (!process.stdin.isTTY) {
+      return;
+    }
+
+    const nextStep = normalizeOptionalString(
+      await promptWithDefault("Next step (workflow/benchmark/none)", result.profile.recommendedBenchmarkMode === "live" ? "workflow" : "none")
+    );
+    if (nextStep === "benchmark") {
+      await runGuidedLiveBenchmark(
+        {
+          taskId: result.profile.recommendedBenchmarkTaskId,
+          taskType: result.profile.recommendedBenchmarkTaskType,
+          benchmarkCategory: result.profile.recommendedBenchmarkCategory
+        },
+        {
+          taskId: result.profile.recommendedBenchmarkTaskId,
+          taskType: result.profile.recommendedBenchmarkTaskType,
+          benchmarkCategory: result.profile.recommendedBenchmarkCategory,
+          taskIntro:
+            "Benchmarking is optional. The default first proof path is a live control-vs-AgentForge comparison on a real repo task, then `/outcomes` for the value review."
+        }
+      );
+      return;
+    }
+
+    if (nextStep === "workflow") {
+      console.log(`Run this next: ${result.nextSteps.firstWorkflowCommand}`);
+    }
+  });
+
+program
   .command("scan")
   .description("Inspect the repository and recommend starter agents.")
   .option("--json", "Print machine-readable JSON output.")
@@ -119,6 +376,73 @@ program
     console.log(`Changed files: ${scan.changedFiles.length}`);
     console.log(`Recommended agents: ${scan.recommendations.join(", ")}`);
     console.log(`Risks: ${scan.risks.length > 0 ? scan.risks.join(", ") : "none detected"}`);
+  });
+
+program
+  .command("benchmark")
+  .description("Unified benchmark entrypoint for live task benchmarking and deterministic eval comparisons.")
+  .option("--mode <mode>", "Benchmark mode: live or eval.")
+  .option("--task-id <taskId>", "Live benchmark task id.")
+  .option("--arm <arm>", "Live benchmark arm: control or agentforge.")
+  .option("--source <source>", "Live benchmark source: replay or live.")
+  .option("--task-type <taskType>", "Live benchmark task type.")
+  .option("--benchmark-category <category>", "Live benchmark category: general or release.")
+  .option("--prefill-run <runRef>", "Prefill live benchmark fields from a local run id or bundle path.")
+  .option("--run-id <runId>", "Explicit run id for live benchmark recording.")
+  .option("--workflow <workflow>", "Explicit workflow name for live benchmark recording.")
+  .option("--agent <agent>", "Agent or model label for live benchmark recording.")
+  .option("--baseline-run <runRef>", "Eval benchmark baseline run id or bundle path.")
+  .option("--candidate-run <runRef...>", "Eval benchmark candidate run ids or bundle paths.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action(async (options: {
+    mode?: string;
+    taskId?: string;
+    arm?: string;
+    source?: string;
+    taskType?: string;
+    benchmarkCategory?: string;
+    prefillRun?: string;
+    runId?: string;
+    workflow?: string;
+    agent?: string;
+    baselineRun?: string;
+    candidateRun?: string[];
+    json?: boolean;
+  }) => {
+    const profile = analyzeOnboardingProfile(process.cwd());
+    const mode = options.mode
+      ?? (process.stdin.isTTY ? normalizeOptionalString(await promptWithDefault("Benchmark mode (live/eval)", profile.recommendedBenchmarkMode)) : profile.recommendedBenchmarkMode);
+
+    if (mode === "eval") {
+      await runGuidedEvalBenchmark({
+        baselineRun: options.baselineRun,
+        candidateRun: options.candidateRun,
+        json: options.json
+      });
+      return;
+    }
+
+    await runGuidedLiveBenchmark(
+      {
+        taskId: options.taskId,
+        arm: options.arm,
+        source: options.source,
+        taskType: options.taskType,
+        benchmarkCategory: options.benchmarkCategory,
+        prefillRun: options.prefillRun,
+        runId: options.runId,
+        workflow: options.workflow,
+        agent: options.agent,
+        json: options.json
+      },
+      {
+        taskId: profile.recommendedBenchmarkTaskId,
+        taskType: profile.recommendedBenchmarkTaskType,
+        benchmarkCategory: profile.recommendedBenchmarkCategory,
+        taskIntro:
+          "Live benchmark mode compares a normal repo task against the AgentForge-gated path. Record both arms, then review `/outcomes` for decision impact, risk, and friction."
+      }
+    );
   });
 
 program
