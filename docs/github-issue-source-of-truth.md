@@ -2,10 +2,14 @@
 
 AgentForge uses GitHub Issues as the primary planning and delivery source of truth.
 
+This does not make GitHub Issues the canonical usage reference. Usage and onboarding guidance should stay versioned with the codebase in repo docs, while the GitHub wiki can provide curated how-to views that mirror those repo docs.
+
 ## Operating Model
 
 - roadmap intent is documented in `docs/`
 - active execution state lives in GitHub Issues and milestones
+- canonical usage and reference guidance lives in repo docs such as `README.md` and `docs/quickstart.md`
+- the GitHub wiki is a curated user-facing mirror and how-to layer derived from repo docs
 - epics track multi-slice work
 - feature, docs, bug, and tech-debt issues track implementation slices
 
@@ -15,6 +19,8 @@ AgentForge uses GitHub Issues as the primary planning and delivery source of tru
 - keep milestone, status, and dependency information current
 - update the relevant epic or tracker when scope, order, or risk changes
 - open follow-up issues for deferred work instead of burying it in code comments
+- update canonical repo docs when user-facing behavior or usage guidance changes
+- update the relevant wiki pages when repo-doc-backed onboarding guidance changes
 
 ## Milestone Model
 

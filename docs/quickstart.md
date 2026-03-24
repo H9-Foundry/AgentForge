@@ -28,6 +28,20 @@ That flow creates `.agentops/` locally and writes run artifacts under `.agentops
 
 All examples in this document use `npx @h9-foundry/agentforge-cli ...` as the default invocation method. If you plan to run AgentForge repeatedly, a persistent install is optional, but it is not required for the first-run path.
 
+## Optional Installed CLI Path
+
+If you want a shorter repeated command inside one repository, install the published CLI locally and use `npx agentforge ...` instead of the full package name.
+
+```bash
+npm install -D @h9-foundry/agentforge-cli
+npx agentforge --help
+npx agentforge init --preset planning-discovery
+npx agentforge run planning-discovery --json
+npx agentforge explain last-run --json
+```
+
+Use the full `npx @h9-foundry/agentforge-cli ...` form for the least-setup first run. Use the installed `npx agentforge ...` form when you want the same published CLI pinned in one repository with shorter commands.
+
 ## Canonical Quick Path
 
 The canonical quick path for the first request-driven workflow is now available in the published CLI.
@@ -240,7 +254,7 @@ The maintenance bundle should include one `maintenance-report` lifecycle artifac
 
 ## Contributor And Source-Build Path
 
-This section is for contributors working on AgentForge itself. If you are only evaluating the product in another repository, stop at the published-CLI sections above.
+This section is for contributors working on AgentForge itself. If you are only evaluating the product in another repository, stop at the published-CLI sections above and use the wiki as a curated how-to layer only; repo docs remain canonical.
 
 If you want to work on AgentForge itself, build the monorepo locally:
 

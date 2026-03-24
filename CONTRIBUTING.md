@@ -50,6 +50,14 @@ You do not need to absorb the full queue tracker or maintainer release workflow 
 - Record deferred work as follow-up issues instead of hiding it in TODO comments.
 - Treat newcomer usability as a standing quality concern for public docs, CLI ergonomics, and the first-run experience, not as a final polish pass.
 
+## Documentation Source Of Truth
+
+- GitHub Issues remain the planning and delivery source of truth.
+- Repo docs, especially [README.md](README.md) and [docs/quickstart.md](docs/quickstart.md), are the canonical usage and reference source of truth.
+- The GitHub wiki is a curated onboarding and how-to layer derived from repo docs, not an independent authority.
+- When user-facing CLI, workflow, install, or onboarding guidance changes, update the canonical repo docs first and then update the relevant wiki pages so they stay aligned.
+- If the wiki and repo docs ever disagree, fix the wiki to match the repo docs or update both in the same slice.
+
 ## Development Workflow
 
 1. Install dependencies with `pnpm install`.
@@ -58,6 +66,7 @@ You do not need to absorb the full queue tracker or maintainer release workflow 
 4. Follow the active queue order in [docs/QUEUE_EXECUTION_FLOW.md](docs/QUEUE_EXECUTION_FLOW.md) and the live tracker [#83](https://github.com/H9-Foundry/AgentForge/issues/83).
 5. Produce a design-first slice when a feature is not yet decision-complete.
 6. Update tests and documentation when behavior or public contracts change.
+   If you change user-facing CLI, workflow, install, or onboarding guidance, update [README.md](README.md), [docs/quickstart.md](docs/quickstart.md), and the relevant wiki pages in the same slice when applicable.
 7. Run `pnpm lint`, `pnpm test`, `pnpm typecheck`, and `pnpm build` before proposing changes.
    If `pnpm test` is being run from a wrapper session that appears to stall after printing the full pass summary, confirm the direct-shell exit code with `pnpm test; echo EXIT:$?`.
 8. If you touch public packages or release automation, also run `pnpm build:packages`, `pnpm pack:public`, and `pnpm release:verify`.
@@ -124,6 +133,7 @@ If you are operating the queue, release process, or roadmap, use this path.
 6. merge the slice and update or close the issue
 
 For public or user-visible changes, also record whether the slice improves, preserves, or worsens first-time usability and whether the CLI-first docs/examples need an update.
+Also record whether the canonical repo docs and the wiki were updated together when user-facing usage guidance changed.
 
 ## Before Opening A Pull Request
 

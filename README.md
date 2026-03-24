@@ -30,6 +30,20 @@ After the first run, inspect:
 
 These docs use `npx` throughout because it is the lowest-friction evaluator path. If you plan to run AgentForge repeatedly, a persistent install is optional, but it is not the default path here.
 
+## Optional Installed CLI Path
+
+If you plan to run AgentForge repeatedly in the same repository, install the published CLI locally and use the shorter `npx agentforge ...` form.
+
+```bash
+npm install -D @h9-foundry/agentforge-cli
+npx agentforge --help
+npx agentforge init --preset planning-discovery
+npx agentforge run planning-discovery --json
+npx agentforge explain last-run --json
+```
+
+Use the full `npx @h9-foundry/agentforge-cli ...` form when you want the lowest-friction first run or do not want to add the CLI to the repository. Use the installed `npx agentforge ...` form when you want a shorter repeated command inside one repository.
+
 ## What You Can Do Today
 
 - try the current official workflow surface with the published CLI, without cloning this monorepo
@@ -43,7 +57,7 @@ These docs use `npx` throughout because it is the lowest-friction evaluator path
 
 AgentForge is ready now for technical early adopters who want local-first, read-only workflow tooling before PR creation. Plug-and-play external adoption for less technical users is an active product target, not a completed claim: the goal is to make the published CLI installable, understandable, and usable in other repositories without monorepo knowledge or hand-authoring request YAML for common paths.
 
-If you are trying the product, stay on the published CLI path in this README and in [docs/quickstart.md](docs/quickstart.md). If you want to work on AgentForge itself, use [CONTRIBUTING.md](CONTRIBUTING.md) and the contributor/source-build section lower in this README.
+If you are trying the product, stay on the published CLI path in this README, in [docs/quickstart.md](docs/quickstart.md), and in the [GitHub wiki](https://github.com/H9-Foundry/AgentForge/wiki) how-to pages. Repo docs remain the canonical usage reference. If you want to work on AgentForge itself, use [CONTRIBUTING.md](CONTRIBUTING.md) and the contributor/source-build section lower in this README.
 
 See [docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md](docs/EXTERNAL_LOCAL_ADOPTION_READINESS.md) for the current local-only readiness rubric and the exact constraints on external use today.
 
