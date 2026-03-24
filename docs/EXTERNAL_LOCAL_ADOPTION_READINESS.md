@@ -11,6 +11,8 @@ Can AgentForge be used in another repository today as a local-only pre-PR qualit
 
 Today, a technical evaluator can install the published CLI, run the official local workflow surface, and inspect bounded run artifacts without GitHub wiring. That is enough for pilot-style local usage in another repository.
 
+The new visualizer plus benchmark-authoring CLI surface is release-ready on `main`, but it is not yet part of the published-CLI claim until the next npm release is cut and verified.
+
 It is not yet fully plug-and-play for less technical adopters. The published CLI now includes preset-based startup and the canonical four-step quick path, and the external support boundary is explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. The remaining gap is broader ease-of-use beyond the first bounded local-first path.
 
 ## Readiness Levels
@@ -34,13 +36,14 @@ The local-only adoption bar is met only when all of these are true:
 
 | Criterion | Status | Current Reality |
 | --- | --- | --- |
-| Published CLI parity | Pass | The latest published `0.9.0` CLI includes the official local workflow surface plus the bounded planning preset startup path, `eval run`, and `eval compare`. |
+| Published CLI parity | Pass | The currently published CLI includes the official local workflow surface plus the bounded planning preset startup path, `eval run`, and `eval compare`. |
 | Official workflow discoverability | Pass | README, support docs, and quickstart now describe the published CLI surface explicitly. |
 | Safe local-first defaults | Pass | Default posture remains local-first and read-only, with approval-gated side effects. |
 | Deterministic artifact inspection | Pass | Official workflows and evals emit inspectable run bundles with structured artifact output. |
 | Quick path without maintainer docs | Pass | The published CLI now provides one canonical four-step quick path for the first request-driven workflow. |
 | No-YAML startup for a common path | Pass | `init --preset planning-discovery` is now available in the published CLI. |
 | External starter-agent packaging clarity | Pass | The support boundary is now explicit: external users consume workflows and presets through the CLI, while `agents/*` and `packages/registry-client` remain repo-internal. |
+| Visualizer and benchmark CLI surface | Source-build only | `agentforge visualizer`, `visualizer export`, and `eval benchmark-wizard` are release-ready on `main`, but they should not be described as published-CLI capability until the next npm release is verified. |
 
 ## Decision Guidance
 
