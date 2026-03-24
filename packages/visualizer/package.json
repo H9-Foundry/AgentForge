@@ -1,6 +1,7 @@
 {
   "name": "@h9-foundry/agentforge-visualizer",
   "version": "0.12.0",
+  "private": true,
   "description": "Local web app runtime for the AgentForge visualizer CLI surface.",
   "license": "MIT",
   "author": "H9 Foundry",
@@ -21,9 +22,6 @@
     "developer-tools"
   ],
   "type": "module",
-  "publishConfig": {
-    "access": "public"
-  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -84,10 +84,11 @@ Manifest-level catalog metadata now exists for official workflow and agent asset
 | `@h9-foundry/agentforge-policy-engine` | Official | Public policy engine package. |
 | `@h9-foundry/agentforge-runtime` | Official | Public runtime package. |
 | `@h9-foundry/agentforge-audit` | Official | Public audit/reporting package. |
-| `@h9-foundry/agentforge-visualizer` | Official | Packaged local runs/outcomes/benchmark surface on `main`; keep published-CLI wording gated on the next verified npm release. |
 | `packages/registry-client` | Internal | Future-facing registry surface. |
 | `agents/*` | Internal | Official in-repo agents used by the workflow surface, not individually supported public packages. |
 | `adapters/*` | Internal | Internal starter adapters, not yet public packages. |
+
+The visualizer is an official CLI surface, but it is not a separately installed public package.
 
 ## Environment Support
 

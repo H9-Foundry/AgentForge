@@ -2,6 +2,8 @@
 
 AgentForge now includes an officially supported local visualizer surface in the CLI on `main` for inspecting workflow runs, outcomes, and benchmark summaries.
 
+The visualizer is shipped through `@h9-foundry/agentforge-cli`, not as a separately installed public npm package.
+
 Use [docs/CLI_FIRST_DOGFOODING.md](./CLI_FIRST_DOGFOODING.md) as the dogfooding policy for this surface. Internal acceptance and release-signoff should prefer the CLI path over maintainer-only source-build shortcuts.
 
 This visualizer is intentionally narrow and local-first:

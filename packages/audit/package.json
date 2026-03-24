@@ -39,6 +39,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "node ../../scripts/release/stage-package-manifest.mjs",
+    "postpack": "node ../../scripts/release/restore-package-manifest.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

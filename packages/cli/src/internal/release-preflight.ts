@@ -15,8 +15,7 @@ export const EXPECTED_PUBLIC_PACKAGES = [
   "@h9-foundry/agentforge-context-engine",
   "@h9-foundry/agentforge-policy-engine",
   "@h9-foundry/agentforge-runtime",
-  "@h9-foundry/agentforge-audit",
-  "@h9-foundry/agentforge-visualizer"
+  "@h9-foundry/agentforge-audit"
 ] as const;
 
 export interface ReleaseCheckEntry {

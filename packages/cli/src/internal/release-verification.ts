@@ -95,7 +95,7 @@ function packPublicPackage(
 ): { tarball?: ReleaseVerifyTarball; checks: ReleaseVerifyEntry[] } {
   const checks: ReleaseVerifyEntry[] = [];
   const execute = runCommand ?? defaultRunCommand;
-  const result = execute("pnpm", ["pack", "--json", "--pack-destination", tarballDir], packageDir, env);
+  const result = execute("npm", ["pack", "--json", "--pack-destination", tarballDir], packageDir, env);
 
   if (result.status !== 0) {
     pushCheck(
@@ -103,7 +103,7 @@ function packPublicPackage(
       `pack-${packageName}`,
       `pack ${packageName}`,
       "fail",
-      `pnpm pack failed for ${packageName}: ${summarizeCommandOutput(result)}`
+      `npm pack failed for ${packageName}: ${summarizeCommandOutput(result)}`
     );
     return { checks };
   }
@@ -117,7 +117,7 @@ function packPublicPackage(
       `pack-json-${packageName}`,
       `parse pack metadata for ${packageName}`,
       "fail",
-      `pnpm pack did not return valid JSON for ${packageName}: ${summarizeCommandOutput(result)}`
+      `npm pack did not return valid JSON for ${packageName}: ${summarizeCommandOutput(result)}`
     );
     return { checks };
   }
@@ -129,7 +129,7 @@ function packPublicPackage(
       `pack-metadata-${packageName}`,
       `pack metadata for ${packageName}`,
       "fail",
-      `pnpm pack did not include filename/name/version for ${packageName}.`
+      `npm pack did not include filename/name/version for ${packageName}.`
     );
     return { checks };
   }
@@ -152,7 +152,7 @@ function packPublicPackage(
     tarball: {
       packageName,
       version: packed.version,
-      tarballPath: packed.filename,
+      tarballPath: join(tarballDir, packed.filename),
       packageDir
     },
     checks
@@ -321,6 +321,33 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
         "installed CLI help",
         cliHelp.status === 0 ? "pass" : "fail",
         cliHelp.status === 0 ? "Installed CLI binary rendered --help successfully." : summarizeCommandOutput(cliHelp)
+      );
+
+      const cliVisualizerHelp = runCommand(cliBinary, ["visualizer", "--help"], consumerProjectDir, env);
+      pushCheck(
+        checks,
+        "cli-visualizer-help",
+        "installed CLI visualizer help",
+        cliVisualizerHelp.status === 0 ? "pass" : "fail",
+        cliVisualizerHelp.status === 0
+          ? "Installed CLI rendered visualizer --help successfully."
+          : summarizeCommandOutput(cliVisualizerHelp)
+      );
+
+      const cliVisualizerExport = runCommand(
+        cliBinary,
+        ["visualizer", "export", "--format", "json", "--runs-root", join(workspaceRoot, ".agentops", "runs")],
+        consumerProjectDir,
+        env
+      );
+      pushCheck(
+        checks,
+        "cli-visualizer-export",
+        "installed CLI visualizer export",
+        cliVisualizerExport.status === 0 ? "pass" : "fail",
+        cliVisualizerExport.status === 0
+          ? "Installed CLI exported outcomes JSON successfully."
+          : summarizeCommandOutput(cliVisualizerExport)
       );
 
       const cliGuide = runCommand(cliBinary, ["release", "guide"], consumerProjectDir, env);
