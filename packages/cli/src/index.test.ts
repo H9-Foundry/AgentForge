@@ -3077,10 +3077,27 @@ describe("cli smoke flows", () => {
         arm: "agentforge",
         source: "live",
         taskType: "feature/refactor",
+        benchmarkCategory: "release",
         summary: "AgentForge added explicit benchmark-ledger schema validation before merge.",
         decisionOutcome: "added_validation",
         agentforgeChangedDecision: true,
         decisionImpactReason: "Workflow review exposed the need for a validated local benchmark-ledger contract.",
+        startedAt: "2026-03-23T10:00:00.000Z",
+        finishedAt: "2026-03-23T10:03:30.000Z",
+        releaseDecision: "conditional",
+        decisionClarity: "clear",
+        finalRecommendationSummary: "Do not approve until the benchmark ledger is present and validated.",
+        rerunCount: 1,
+        blockedStateCount: 1,
+        tokenUsage: {
+          provider: "openai",
+          model: "gpt-5.4",
+          inputTokens: 1200,
+          outputTokens: 400,
+          totalTokens: 1600,
+          estimatedCostUsd: 0.24,
+          requestCount: 4
+        },
         prefillRunRef: planningRun.runId,
         confirmedRisks: {
           high: 0,
@@ -3096,7 +3113,14 @@ describe("cli smoke flows", () => {
 
     expect(created.created).toBe(true);
     expect(created.prefill?.runId).toBe(planningRun.runId);
+    expect(created.entry.benchmarkCategory).toBe("release");
     expect(created.entry.workflow).toBe("planning-discovery");
+    expect(created.entry.cycleTimeSeconds).toBe(210);
+    expect(created.entry.releaseDecision).toBe("conditional");
+    expect(created.entry.decisionClarity).toBe("clear");
+    expect(created.entry.rerunCount).toBe(1);
+    expect(created.entry.blockedStateCount).toBe(1);
+    expect(created.entry.tokenUsage?.totalTokens).toBe(1600);
     expect(created.entry.workflowStatuses[0]).toEqual({
       workflow: "planning-discovery",
       status: "success"
@@ -3109,12 +3133,27 @@ describe("cli smoke flows", () => {
         arm: "agentforge",
         source: "live",
         taskType: "feature/refactor",
+        benchmarkCategory: "release",
         runId: planningRun.runId,
         workflow: "planning-discovery",
         summary: "Updated adjudication after local review.",
         decisionOutcome: "added_validation",
         agentforgeChangedDecision: true,
         decisionImpactReason: "The benchmark ledger tooling should stay human-adjudicated but schema-validated.",
+        cycleTimeSeconds: 240,
+        releaseDecision: "go",
+        decisionClarity: "mixed",
+        finalRecommendationSummary: "Proceed once the validated ledger contract is committed.",
+        rerunCount: 2,
+        blockedStateCount: 0,
+        tokenUsage: {
+          provider: "openai",
+          model: "gpt-5.4",
+          inputTokens: 1500,
+          outputTokens: 450,
+          totalTokens: 1950,
+          requestCount: 5
+        },
         confirmedRisks: {
           high: 0,
           medium: 1,
@@ -3140,7 +3179,12 @@ describe("cli smoke flows", () => {
 
     expect(updated.created).toBe(false);
     expect(updated.document.entries).toHaveLength(1);
+    expect(updated.entry.cycleTimeSeconds).toBe(240);
+    expect(updated.entry.releaseDecision).toBe("go");
+    expect(updated.entry.decisionClarity).toBe("mixed");
+    expect(updated.entry.rerunCount).toBe(2);
     expect(updated.entry.evidence.missing).toContain("benchmark-ledger.json");
+    expect(updated.entry.tokenUsage?.estimatedCostUsd).toBeUndefined();
 
     const ledger = readBenchmarkLedger(root);
     expect(ledger.document.entries).toHaveLength(1);

@@ -179,10 +179,26 @@ describe("visualizer data loading", () => {
     writeBenchmarkLedgerFixture(root, [
       {
         taskId: "task-1",
+        benchmarkCategory: "release",
         source: "live",
         taskType: "release/deployment",
         arm: "control",
         workflow: "release-readiness",
+        startedAt: "2026-03-23T07:55:00.000Z",
+        finishedAt: "2026-03-23T08:00:00.000Z",
+        cycleTimeSeconds: 300,
+        releaseDecision: "go",
+        decisionClarity: "mixed",
+        finalRecommendationSummary: "Proceed with the release candidate under the default review path.",
+        tokenUsage: {
+          provider: "openai",
+          model: "gpt-5.4",
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          requestCount: 0,
+          estimatedCostUsd: null
+        },
         confirmedRisks: { high: 0, medium: 0, low: 0, noisy: 0, unresolved: 0 },
         evidence: { present: ["release-report"], missing: [], partial: [] },
         friction: { override: false, falsePositivePatterns: [], manualSteps: [], requestFriction: [] },
@@ -190,6 +206,7 @@ describe("visualizer data loading", () => {
       },
       {
         taskId: "task-1",
+        benchmarkCategory: "release",
         source: "live",
         taskType: "release/deployment",
         arm: "agentforge",
@@ -197,6 +214,23 @@ describe("visualizer data loading", () => {
         workflow: "promotion-approval",
         decisionOutcome: "blocked_approval",
         agentforgeChangedDecision: true,
+        startedAt: "2026-03-23T08:00:00.000Z",
+        finishedAt: "2026-03-23T08:04:00.000Z",
+        cycleTimeSeconds: 240,
+        releaseDecision: "no-go",
+        decisionClarity: "clear",
+        finalRecommendationSummary: "Do not promote until the downstream deployment gate is unblocked.",
+        rerunCount: 1,
+        blockedStateCount: 2,
+        tokenUsage: {
+          provider: "openai",
+          model: "gpt-5.4",
+          inputTokens: 1500,
+          outputTokens: 500,
+          totalTokens: 2000,
+          requestCount: 4,
+          estimatedCostUsd: 0.3
+        },
         confirmedRisks: { high: 1, medium: 1, low: 0, noisy: 1, unresolved: 2 },
         evidence: { present: ["release-report"], missing: ["deployment-gate-report"], partial: ["ci-evidence"] },
         friction: {
@@ -221,9 +255,15 @@ describe("visualizer data loading", () => {
     expect(detail?.evidenceCompleteness[0]?.categories.some((category) => category.key === "deployment-gate-report")).toBe(true);
     expect(outcomes.decisionImpact.changedDecisionCount).toBeGreaterThan(0);
     expect(outcomes.risk.confirmedHighCount).toBe(1);
+    expect(outcomes.releaseBenchmark.available).toBe(true);
+    expect(outcomes.releaseBenchmark.comparablePairs).toBe(1);
+    expect(outcomes.releaseBenchmark.arms.find((arm) => arm.arm === "agentforge")?.totalTokens).toBe(2000);
+    expect(outcomes.releaseBenchmark.arms.find((arm) => arm.arm === "control")?.totalTokens).toBe(0);
+    expect(outcomes.summaries.releaseBenchmark).toHaveLength(4);
     expect(outcomes.friction.overrideCount).toBe(1);
     expect(outcomes.workflowChains.some((stage) => stage.stage === "promotion")).toBe(true);
     expect(outcomes.details.friction[0]?.source).toBe("ledger");
+    expect(outcomes.details.releaseBenchmark[0]?.source).toContain("ledger");
   });
 
   it("dedupes blocked approval leadership metrics across one release chain and preserves practitioner rows", () => {
@@ -428,6 +468,7 @@ describe("visualizer html rendering", () => {
     expect(benchmarkHtml).toContain("Benchmark Dashboard");
     expect(benchmarkHtml).toContain("Detected 1 deterministic regression");
     expect(outcomesHtml).toContain("Decision Outcomes");
+    expect(outcomesHtml).toContain("Release Benchmark");
     expect(outcomesHtml).toContain("Evidence Hygiene");
     expect(outcomesHtml).toContain("Workflow Chain Coverage");
     expect(outcomesHtml).toContain("/runs?decisionImpact=");

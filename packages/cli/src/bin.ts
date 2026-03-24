@@ -39,6 +39,19 @@ function parseBooleanOption(value: string | undefined): boolean | undefined {
   throw new Error(`Boolean options must be 'true' or 'false', received: ${value}`);
 }
 
+function parseNonNegativeIntegerOption(value: string | undefined, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative integer, received: ${value}`);
+  }
+
+  return parsed;
+}
+
 const program = new Command();
 
 program
@@ -186,16 +199,24 @@ evalCommand
   .argument("<arm>", "Benchmark arm: control or agentforge.")
   .requiredOption("--source <source>", "Benchmark source: replay or live.")
   .requiredOption("--task-type <taskType>", "Benchmark task type, for example feature/refactor or release/deployment.")
+  .option("--benchmark-category <category>", "Benchmark category: general or release.")
   .option("--task-link <taskLink>", "Optional issue, PR, or comment link for this benchmarked task.")
   .option("--run-id <runId>", "Explicit run id to record.")
   .option("--workflow <workflow>", "Explicit workflow name to record.")
   .option("--agent <agent>", "Agent or model label for the benchmark entry.")
   .option("--started-at <iso>", "Optional ISO timestamp for task start.")
   .option("--finished-at <iso>", "Optional ISO timestamp for task end.")
+  .option("--cycle-time-seconds <seconds>", "Optional explicit cycle time in seconds.")
   .option("--summary <summary>", "Short human summary for the benchmarked outcome.")
   .option("--decision-outcome <outcome>", "Decision outcome classification.")
   .option("--changed-decision <boolean>", "Whether AgentForge changed the decision: true or false.")
   .option("--decision-impact-reason <reason>", "Reason why the decision outcome was recorded.")
+  .option("--release-decision <decision>", "Release decision: go, no-go, conditional, or unclear.")
+  .option("--decision-clarity <clarity>", "Decision clarity: clear, mixed, or ambiguous.")
+  .option("--final-recommendation-summary <summary>", "Final go/no-go recommendation summary.")
+  .option("--rerun-count <count>", "Number of reruns in the benchmarked cycle.")
+  .option("--blocked-state-count <count>", "Number of blocked or partial states before the final recommendation.")
+  .option("--token-usage <json>", "JSON object with provider, model, token counts, requestCount, and optional estimatedCostUsd.")
   .option("--prefill-run <runRef>", "Prefill obvious fields from an existing local run id or bundle path.")
   .option("--trigger-ref <json...>", "Repeatable JSON objects for trigger refs.")
   .option("--confirmed-risks <json>", "JSON object with high, medium, low, noisy, and unresolved counts.")
@@ -216,16 +237,24 @@ evalCommand
   .action((taskId, arm, options: {
     source: string;
     taskType: string;
+    benchmarkCategory?: string;
     taskLink?: string;
     runId?: string;
     workflow?: string;
     agent?: string;
     startedAt?: string;
     finishedAt?: string;
+    cycleTimeSeconds?: string;
     summary?: string;
     decisionOutcome?: string;
     changedDecision?: string;
     decisionImpactReason?: string;
+    releaseDecision?: string;
+    decisionClarity?: string;
+    finalRecommendationSummary?: string;
+    rerunCount?: string;
+    blockedStateCount?: string;
+    tokenUsage?: string;
     prefillRun?: string;
     triggerRef?: string[];
     confirmedRisks?: string;
@@ -249,16 +278,24 @@ evalCommand
       arm: arm as "control" | "agentforge",
       source: options.source as "replay" | "live",
       taskType: options.taskType,
+      benchmarkCategory: options.benchmarkCategory as "general" | "release" | undefined,
       taskLink: options.taskLink,
       runId: options.runId,
       workflow: options.workflow,
       agent: options.agent,
       startedAt: options.startedAt,
       finishedAt: options.finishedAt,
+      cycleTimeSeconds: parseNonNegativeIntegerOption(options.cycleTimeSeconds, "cycle-time-seconds"),
       summary: options.summary,
       decisionOutcome: options.decisionOutcome as undefined,
       agentforgeChangedDecision: parseBooleanOption(options.changedDecision),
       decisionImpactReason: options.decisionImpactReason,
+      releaseDecision: options.releaseDecision as "go" | "no-go" | "conditional" | "unclear" | undefined,
+      decisionClarity: options.decisionClarity as "clear" | "mixed" | "ambiguous" | undefined,
+      finalRecommendationSummary: options.finalRecommendationSummary,
+      rerunCount: parseNonNegativeIntegerOption(options.rerunCount, "rerun-count"),
+      blockedStateCount: parseNonNegativeIntegerOption(options.blockedStateCount, "blocked-state-count"),
+      tokenUsage: options.tokenUsage ? parseJsonOption(options.tokenUsage, "token-usage") : undefined,
       prefillRunRef: options.prefillRun,
       triggerRefs: options.triggerRef?.map((value) => parseJsonOption(value, "trigger-ref")),
       confirmedRisks: options.confirmedRisks ? parseJsonOption(options.confirmedRisks, "confirmed-risks") : undefined,

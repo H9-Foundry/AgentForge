@@ -36,14 +36,18 @@ import {
 import type {
   AgentForgeConfig,
   AgentPluginRegistration,
+  BenchmarkCategory,
   BenchmarkComparedRun,
+  BenchmarkDecisionClarity,
   BenchmarkDeterministicDelta,
   BenchmarkDecisionOutcome,
   BenchmarkLedgerArm,
   BenchmarkLedgerDocument,
   BenchmarkLedgerEntry,
+  BenchmarkLedgerTokenUsage,
   BenchmarkLedgerTraceReference,
   BenchmarkLedgerWorkflowStatus,
+  BenchmarkReleaseDecision,
   BlockedPlugin,
   DesignArtifact,
   DesignRequest,
@@ -1783,19 +1787,27 @@ export interface BenchmarkLedgerRecordInput {
   arm: BenchmarkLedgerArm;
   source: BenchmarkLedgerDocument["entries"][number]["source"];
   taskType: string;
+  benchmarkCategory?: BenchmarkCategory;
   taskLink?: string;
   runId?: string;
   workflow?: string;
   agent?: string;
   startedAt?: string;
   finishedAt?: string;
+  cycleTimeSeconds?: number;
   summary?: string;
   decisionOutcome?: BenchmarkDecisionOutcome;
   agentforgeChangedDecision?: boolean;
   decisionImpactReason?: string;
+  releaseDecision?: BenchmarkReleaseDecision;
+  decisionClarity?: BenchmarkDecisionClarity;
+  finalRecommendationSummary?: string;
+  rerunCount?: number;
+  blockedStateCount?: number;
   triggerRefs?: BenchmarkLedgerTraceReference[];
   confirmedRisks?: BenchmarkLedgerEntry["confirmedRisks"];
   confirmedRiskRefs?: BenchmarkLedgerEntry["confirmedRiskRefs"];
+  tokenUsage?: BenchmarkLedgerTokenUsage;
   evidence?: BenchmarkLedgerEntry["evidence"];
   evidenceGapRefs?: BenchmarkLedgerTraceReference[];
   workflowStatuses?: BenchmarkLedgerWorkflowStatus[];
@@ -1970,6 +1982,20 @@ function buildBenchmarkLedgerPrefill(root: string, runRef: string): BenchmarkLed
       ]
     }
   };
+}
+
+function deriveCycleTimeSeconds(startedAt?: string, finishedAt?: string): number | undefined {
+  if (!startedAt || !finishedAt) {
+    return undefined;
+  }
+
+  const startedMs = Date.parse(startedAt);
+  const finishedMs = Date.parse(finishedAt);
+  if (Number.isNaN(startedMs) || Number.isNaN(finishedMs) || finishedMs < startedMs) {
+    return undefined;
+  }
+
+  return Math.round((finishedMs - startedMs) / 1000);
 }
 
 function extractEvalArtifact(bundle: ReturnType<typeof auditBundleSchema.parse>, runRef: string): ReturnType<typeof evalArtifactSchema.parse> | never {
@@ -3275,6 +3301,7 @@ export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cw
   const mergedEntry = benchmarkLedgerEntrySchema.parse({
     taskId: input.taskId,
     taskLink: input.taskLink,
+    benchmarkCategory: input.benchmarkCategory,
     source: input.source,
     taskType: input.taskType,
     arm: input.arm,
@@ -3283,10 +3310,16 @@ export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cw
     agent: input.agent,
     startedAt: input.startedAt,
     finishedAt: input.finishedAt,
+    cycleTimeSeconds: input.cycleTimeSeconds ?? deriveCycleTimeSeconds(input.startedAt, input.finishedAt),
     summary: input.summary,
     decisionOutcome: input.decisionOutcome,
     decisionImpactReason: input.decisionImpactReason,
     agentforgeChangedDecision: input.agentforgeChangedDecision,
+    releaseDecision: input.releaseDecision,
+    decisionClarity: input.decisionClarity,
+    finalRecommendationSummary: input.finalRecommendationSummary,
+    rerunCount: input.rerunCount,
+    blockedStateCount: input.blockedStateCount,
     triggerRefs: input.triggerRefs ?? prefill?.entry.triggerRefs ?? [],
     confirmedRisks: input.confirmedRisks ?? {
       high: 0,
@@ -3296,6 +3329,7 @@ export function recordBenchmarkLedgerEntry(input: BenchmarkLedgerRecordInput, cw
       unresolved: 0
     },
     confirmedRiskRefs: input.confirmedRiskRefs ?? [],
+    tokenUsage: input.tokenUsage,
     evidence: input.evidence ?? prefill?.entry.evidence ?? { present: [], missing: [], partial: [] },
     evidenceGapRefs: input.evidenceGapRefs ?? [],
     workflowStatuses: input.workflowStatuses ?? prefill?.entry.workflowStatuses ?? [],

@@ -36,7 +36,9 @@ import {
   evalSpecSchema,
   benchmarkArtifactPayloadSchema,
   benchmarkArtifactSchema,
+  benchmarkCategorySchema,
   benchmarkComparedRunSchema,
+  benchmarkDecisionClaritySchema,
   benchmarkDeterministicDeltaSchema,
   benchmarkDecisionOutcomeSchema,
   benchmarkLedgerArmSchema,
@@ -46,7 +48,9 @@ import {
   benchmarkLedgerFrictionSchema,
   benchmarkLedgerSourceSchema,
   benchmarkLedgerTraceReferenceSchema,
+  benchmarkLedgerTokenUsageSchema,
   benchmarkLedgerWorkflowStatusSchema,
+  benchmarkReleaseDecisionSchema,
   buildkiteCiEvidenceExportSchema,
   jenkinsCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
@@ -195,8 +199,11 @@ export type EvalRedactionExpectation = Infer<typeof evalRedactionExpectationSche
 export type EvalSpec = Infer<typeof evalSpecSchema>;
 export type EvalFixtureCorpus = Infer<typeof evalFixtureCorpusSchema>;
 export type BenchmarkDecisionOutcome = Infer<typeof benchmarkDecisionOutcomeSchema>;
+export type BenchmarkCategory = Infer<typeof benchmarkCategorySchema>;
 export type BenchmarkLedgerSource = Infer<typeof benchmarkLedgerSourceSchema>;
 export type BenchmarkLedgerArm = Infer<typeof benchmarkLedgerArmSchema>;
+export type BenchmarkReleaseDecision = Infer<typeof benchmarkReleaseDecisionSchema>;
+export type BenchmarkDecisionClarity = Infer<typeof benchmarkDecisionClaritySchema>;
 export type BenchmarkDeterministicDelta = Infer<typeof benchmarkDeterministicDeltaSchema>;
 export type BenchmarkComparedRun = Infer<typeof benchmarkComparedRunSchema>;
 export type BenchmarkArtifactPayload = Infer<typeof benchmarkArtifactPayloadSchema>;
@@ -204,6 +211,7 @@ export type BenchmarkArtifact = Infer<typeof benchmarkArtifactSchema>;
 export type BenchmarkLedgerTraceReference = Infer<typeof benchmarkLedgerTraceReferenceSchema>;
 export type BenchmarkLedgerConfirmedRiskReference = Infer<typeof benchmarkLedgerConfirmedRiskReferenceSchema>;
 export type BenchmarkLedgerWorkflowStatus = Infer<typeof benchmarkLedgerWorkflowStatusSchema>;
+export type BenchmarkLedgerTokenUsage = Infer<typeof benchmarkLedgerTokenUsageSchema>;
 export type BenchmarkLedgerFriction = Infer<typeof benchmarkLedgerFrictionSchema>;
 export type BenchmarkLedgerEntry = Infer<typeof benchmarkLedgerEntrySchema>;
 export type BenchmarkLedgerDocument = Infer<typeof benchmarkLedgerDocumentSchema>;

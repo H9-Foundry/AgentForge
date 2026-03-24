@@ -19,6 +19,7 @@ The benchmark optimizes first for:
 
 - confirmed risk caught before merge or release decisions
 - evidence completeness and decision clarity
+- release review quality versus token/cost spend on the same agent/model path
 
 It treats the following as secondary:
 
@@ -91,6 +92,8 @@ Treatment tasks should use this fixed routing.
 - `deployment-gate-review`
 - `promotion-approval`
 
+Release benchmark entries should use `benchmarkCategory: release` and compare one release candidate review cycle from agent start to final go/no-go recommendation. Do not include publish/deploy side effects or waiting time for external human approvals.
+
 ### Incident Or Regression Handling
 
 - `incident-handoff`
@@ -117,17 +120,20 @@ Use direct-shell exit checks for long-running test wrappers when needed:
 Create one scorecard entry per task with these fields:
 
 - task id or link
+- benchmark category: `general` or `release`
 - source: `replay` or `live`
 - task type
 - arm: `control` or `agentforge`
 - agent and model
 - start and end timestamps
+- cycle time seconds
 - validations run
 - workflow statuses for treatment runs
 - confirmed risks or issues caught before merge
 - reviewer judgment on validity and severity
 - whether AgentForge changed the plan or decision
-- cycle time
+- release decision and decision clarity for release-category entries
+- token usage and optional estimated API cost for release-category entries
 - evidence completeness notes
 - friction notes
 - override note if treatment proceeded past a blocked or partial result
@@ -148,6 +154,8 @@ Severity weighting:
 
 - cycle time
 - evidence completeness
+- release decision clarity
+- token/API spend
 - reviewer confidence
 - override rate
 - friction score
@@ -169,6 +177,16 @@ Each benchmarked task should add one comment to [#268](https://github.com/H9-Fou
 
 The GitHub comment remains the human source of truth for the benchmark narrative. The ledger exists to make those adjudications visible in the local `/outcomes` visualizer without scraping issue comments.
 - keep / tighten / simplify / deprioritize recommendation
+
+The current internal ledger command also supports release-benchmark fields such as:
+
+- `--benchmark-category release`
+- `--cycle-time-seconds <seconds>`
+- `--release-decision <go|no-go|conditional|unclear>`
+- `--decision-clarity <clear|mixed|ambiguous>`
+- `--rerun-count <count>`
+- `--blocked-state-count <count>`
+- `--token-usage <json>`
 
 After every three benchmarked tasks, summarize:
 

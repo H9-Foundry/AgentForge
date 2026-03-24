@@ -21,7 +21,7 @@ It does **not** currently provide:
 The current visualization layer includes:
 
 - a runs index
-- an outcomes dashboard for decision impact, risk, evidence completeness, friction, and workflow-chain coverage
+- an outcomes dashboard for decision impact, risk, release benchmark speed/quality/spend, evidence completeness, friction, and workflow-chain coverage
 - a single run detail view
 - a benchmark dashboard for local `benchmark-summary` artifacts
 
@@ -51,7 +51,7 @@ pnpm visualizer:dev -- --runs-root /absolute/path/to/.agentops/runs --benchmark-
 
 ## Optional Benchmark Ledger Overlay
 
-To surface adjudicated decision-impact, override, false-positive, evidence-gap, and friction summaries directly in the outcomes dashboard, add an optional local JSON file at:
+To surface adjudicated decision-impact, release benchmark speed/quality/spend, override, false-positive, evidence-gap, and friction summaries directly in the outcomes dashboard, add an optional local JSON file at:
 
 - `.agentops/benchmark-ledger.json`
 
@@ -72,15 +72,22 @@ The visualizer treats this file as an internal overlay, not a product contract. 
   "entries": [
     {
       "taskId": "task-1",
+      "benchmarkCategory": "release",
       "source": "live",
       "taskType": "release/deployment",
       "arm": "agentforge",
       "runId": "1774182026977-5f74df",
       "workflow": "planning-discovery",
+      "cycleTimeSeconds": 300,
       "decisionOutcome": "added_validation",
+      "releaseDecision": "conditional",
+      "decisionClarity": "clear",
       "agentforgeChangedDecision": true,
       "summary": "AgentForge forced a release-evidence follow-up before merge.",
       "decisionImpactReason": "Derived from missing release evidence and required verification checks.",
+      "finalRecommendationSummary": "Do not approve release until CI-backed evidence is complete.",
+      "rerunCount": 1,
+      "blockedStateCount": 1,
       "triggerRefs": [
         {
           "runId": "1774182026977-5f74df",
@@ -103,6 +110,15 @@ The visualizer treats this file as an internal overlay, not a product contract. 
         "low": 0,
         "noisy": 0,
         "unresolved": 1
+      },
+      "tokenUsage": {
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "inputTokens": 1200,
+        "outputTokens": 400,
+        "totalTokens": 1600,
+        "estimatedCostUsd": 0.24,
+        "requestCount": 4
       },
       "evidence": {
         "present": ["qa-report"],
@@ -135,6 +151,15 @@ The visualizer treats this file as an internal overlay, not a product contract. 
   ]
 }
 ```
+
+For release-category ledger entries, `/outcomes` now shows:
+
+- median cycle time by arm
+- release decision clarity by arm
+- blocked release decisions by arm
+- total token/API spend by arm
+- cost per confirmed risk caught
+- cost per blocked premature release when cost data is available
 
 ## Trust Boundary
 

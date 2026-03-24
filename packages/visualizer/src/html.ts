@@ -63,6 +63,22 @@ function stackedMetricCard(label: string, value: string | number, detail: string
   return `<div class="metric"><div class="metric-label">${escapeHtml(label)}</div><div class="metric-value">${escapeHtml(String(value))}</div><div class="metric-detail">${escapeHtml(detail)}</div></div>`;
 }
 
+function formatDurationSeconds(value: number | undefined): string {
+  if (value === undefined) {
+    return "n/a";
+  }
+
+  return `${value}s`;
+}
+
+function formatCurrencyUsd(value: number | undefined): string {
+  if (value === undefined) {
+    return "n/a";
+  }
+
+  return `$${value.toFixed(2)}`;
+}
+
 function listSection(title: string, items: string[]): string {
   if (items.length === 0) {
     return "";
@@ -360,6 +376,47 @@ function renderOutcomeDetailTable(rows: readonly OutcomeDetailRowView[], emptyMe
   </table>`;
 }
 
+function renderReleaseBenchmarkArmTable(view: OutcomesDashboardView): string {
+  if (!view.releaseBenchmark.available) {
+    return `<p class="muted">No release-category benchmark ledger entries were loaded. Add release benchmark adjudication entries to compare speed, quality, and token spend with and without AgentForge.</p>`;
+  }
+
+  return `<table class="data-table">
+    <thead>
+      <tr>
+        <th>Arm</th>
+        <th>Entries</th>
+        <th>Median cycle</th>
+        <th>Clear decisions</th>
+        <th>Blocked releases</th>
+        <th>Confirmed risks</th>
+        <th>Total tokens</th>
+        <th>Total cost</th>
+        <th>Cost / risk</th>
+        <th>Cost / blocked release</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${view.releaseBenchmark.arms
+        .map(
+          (arm) => `<tr>
+            <td>${escapeHtml(arm.arm)}</td>
+            <td>${escapeHtml(String(arm.entryCount))}</td>
+            <td>${escapeHtml(formatDurationSeconds(arm.medianCycleTimeSeconds))}</td>
+            <td>${escapeHtml(String(arm.clearDecisionCount))}</td>
+            <td>${escapeHtml(String(arm.blockedReleaseCount))}</td>
+            <td>${escapeHtml(String(arm.confirmedRiskCount))}</td>
+            <td>${escapeHtml(String(arm.totalTokens))}</td>
+            <td>${escapeHtml(formatCurrencyUsd(arm.totalEstimatedCostUsd))}</td>
+            <td>${escapeHtml(formatCurrencyUsd(arm.costPerConfirmedRiskCaught))}</td>
+            <td>${escapeHtml(formatCurrencyUsd(arm.costPerBlockedPrematureRelease))}</td>
+          </tr>`
+        )
+        .join("")}
+    </tbody>
+  </table>`;
+}
+
 function renderDerivedReason(reason: { source: string; rule: string; fields: readonly string[]; summary: string }): string {
   return `<dl class="meta-grid">
     <div><dt>Source</dt><dd>${escapeHtml(reason.source)}</dd></div>
@@ -589,6 +646,19 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
         ${metricCard("Unresolved risks", view.risk.unresolvedRiskCount)}
       </div>
       ${renderOutcomeDetailTable(view.details.risk, "No risk rows match the current filters.")}
+    </section>
+    <section class="panel" id="release-benchmark">
+      <h2>Release Benchmark</h2>
+      <p class="muted">Release benchmarking stays same-agent and same-model across both arms. This section compares release review speed, decision quality, and LLM/API spend without counting external approval wait time or actual deploy side effects.</p>
+      ${renderOutcomeSummaryCards(view.summaries.releaseBenchmark)}
+      <div class="metrics">
+        ${metricCard("Release entries", view.releaseBenchmark.totalEntries)}
+        ${metricCard("Comparable pairs", view.releaseBenchmark.comparablePairs)}
+        ${metricCard("AgentForge blocked releases", view.releaseBenchmark.arms.find((arm) => arm.arm === "agentforge")?.blockedReleaseCount ?? 0)}
+        ${metricCard("Control blocked releases", view.releaseBenchmark.arms.find((arm) => arm.arm === "control")?.blockedReleaseCount ?? 0)}
+      </div>
+      ${renderReleaseBenchmarkArmTable(view)}
+      ${renderOutcomeDetailTable(view.details.releaseBenchmark, "No release benchmark rows match the current filters.")}
     </section>
     <section class="panel" id="evidence">
       <h2>Evidence Hygiene</h2>

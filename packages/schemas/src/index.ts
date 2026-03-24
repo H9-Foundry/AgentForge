@@ -1356,8 +1356,11 @@ export const benchmarkDecisionOutcomeSchema = z.enum([
   "added_confidence",
   "no_meaningful_change"
 ]);
+export const benchmarkCategorySchema = z.enum(["general", "release"]);
 export const benchmarkLedgerSourceSchema = z.enum(["replay", "live"]);
 export const benchmarkLedgerArmSchema = z.enum(["control", "agentforge"]);
+export const benchmarkReleaseDecisionSchema = z.enum(["go", "no-go", "conditional", "unclear"]);
+export const benchmarkDecisionClaritySchema = z.enum(["clear", "mixed", "ambiguous"]);
 
 export const benchmarkDeterministicDeltaSchema = z.object({
   name: z.string().min(1),
@@ -1416,6 +1419,16 @@ export const benchmarkLedgerWorkflowStatusSchema = z.object({
   status: z.string().min(1)
 });
 
+export const benchmarkLedgerTokenUsageSchema = z.object({
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  inputTokens: z.number().int().nonnegative().nullable().optional(),
+  outputTokens: z.number().int().nonnegative().nullable().optional(),
+  totalTokens: z.number().int().nonnegative().nullable().optional(),
+  estimatedCostUsd: z.number().nonnegative().nullable().optional(),
+  requestCount: z.number().int().nonnegative().nullable().optional()
+});
+
 export const benchmarkLedgerFrictionSchema = z.object({
   override: z.boolean().default(false),
   overrideReason: z.string().min(1).optional(),
@@ -1428,6 +1441,7 @@ export const benchmarkLedgerFrictionSchema = z.object({
 export const benchmarkLedgerEntrySchema = z.object({
   taskId: z.string().min(1),
   taskLink: z.string().min(1).optional(),
+  benchmarkCategory: benchmarkCategorySchema.default("general"),
   source: benchmarkLedgerSourceSchema,
   taskType: z.string().min(1),
   arm: benchmarkLedgerArmSchema,
@@ -1436,10 +1450,16 @@ export const benchmarkLedgerEntrySchema = z.object({
   agent: z.string().min(1).optional(),
   startedAt: z.string().datetime().optional(),
   finishedAt: z.string().datetime().optional(),
+  cycleTimeSeconds: z.number().int().nonnegative().optional(),
   summary: z.string().min(1).optional(),
   decisionOutcome: benchmarkDecisionOutcomeSchema.optional(),
   decisionImpactReason: z.string().min(1).optional(),
   agentforgeChangedDecision: z.boolean().optional(),
+  releaseDecision: benchmarkReleaseDecisionSchema.optional(),
+  decisionClarity: benchmarkDecisionClaritySchema.optional(),
+  finalRecommendationSummary: z.string().min(1).optional(),
+  rerunCount: z.number().int().nonnegative().default(0),
+  blockedStateCount: z.number().int().nonnegative().default(0),
   triggerRefs: z.array(benchmarkLedgerTraceReferenceSchema).default([]),
   confirmedRisks: z.object({
     high: z.number().int().nonnegative().default(0),
@@ -1449,6 +1469,7 @@ export const benchmarkLedgerEntrySchema = z.object({
     unresolved: z.number().int().nonnegative().default(0)
   }),
   confirmedRiskRefs: z.array(benchmarkLedgerConfirmedRiskReferenceSchema).default([]),
+  tokenUsage: benchmarkLedgerTokenUsageSchema.optional(),
   evidence: z.object({
     present: z.array(z.string().min(1)).default([]),
     missing: z.array(z.string().min(1)).default([]),
@@ -1648,14 +1669,18 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   evalSetupRun: evalSetupRunSchema,
   evalArtifactPayload: evalArtifactPayloadSchema,
   benchmarkDecisionOutcome: benchmarkDecisionOutcomeSchema,
+  benchmarkCategory: benchmarkCategorySchema,
   benchmarkLedgerSource: benchmarkLedgerSourceSchema,
   benchmarkLedgerArm: benchmarkLedgerArmSchema,
+  benchmarkReleaseDecision: benchmarkReleaseDecisionSchema,
+  benchmarkDecisionClarity: benchmarkDecisionClaritySchema,
   benchmarkDeterministicDelta: benchmarkDeterministicDeltaSchema,
   benchmarkComparedRun: benchmarkComparedRunSchema,
   benchmarkArtifactPayload: benchmarkArtifactPayloadSchema,
   benchmarkLedgerTraceReference: benchmarkLedgerTraceReferenceSchema,
   benchmarkLedgerConfirmedRiskReference: benchmarkLedgerConfirmedRiskReferenceSchema,
   benchmarkLedgerWorkflowStatus: benchmarkLedgerWorkflowStatusSchema,
+  benchmarkLedgerTokenUsage: benchmarkLedgerTokenUsageSchema,
   benchmarkLedgerFriction: benchmarkLedgerFrictionSchema,
   benchmarkLedgerEntry: benchmarkLedgerEntrySchema,
   benchmarkLedgerDocument: benchmarkLedgerDocumentSchema,
@@ -2365,6 +2390,7 @@ const benchmarkLedgerDocumentFixture = {
     {
       taskId: "task-1",
       taskLink: "https://github.com/H9-Foundry/AgentForge/issues/268#issuecomment-example",
+      benchmarkCategory: "release",
       source: "live",
       taskType: "release/deployment",
       arm: "agentforge",
@@ -2373,10 +2399,16 @@ const benchmarkLedgerDocumentFixture = {
       agent: "codex",
       startedAt: "2026-03-23T10:00:00.000Z",
       finishedAt: "2026-03-23T10:05:00.000Z",
+      cycleTimeSeconds: 300,
       summary: "AgentForge forced a release-evidence follow-up before merge.",
       decisionOutcome: "added_validation",
       decisionImpactReason: "Derived from missing release evidence and required verification checks.",
       agentforgeChangedDecision: true,
+      releaseDecision: "conditional",
+      decisionClarity: "clear",
+      finalRecommendationSummary: "Do not approve release until CI-backed evidence is complete.",
+      rerunCount: 1,
+      blockedStateCount: 1,
       triggerRefs: [
         {
           runId: "1774182026977-5f74df",
@@ -2400,6 +2432,15 @@ const benchmarkLedgerDocumentFixture = {
           artifactKind: "release-report"
         }
       ],
+      tokenUsage: {
+        provider: "openai",
+        model: "gpt-5.4",
+        inputTokens: 1200,
+        outputTokens: 400,
+        totalTokens: 1600,
+        estimatedCostUsd: 0.24,
+        requestCount: 4
+      },
       evidence: {
         present: ["qa-report"],
         missing: ["release-report"],
