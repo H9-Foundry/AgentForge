@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -10,12 +10,15 @@ import { schemaFixtures } from "@h9-foundry/agentforge-schemas";
 import type { ReleaseArtifact } from "@h9-foundry/agentforge-shared-types";
 
 import {
+  analyzeOnboardingProfile,
   compareLocalEvalRuns,
+  discoverLocalRunCandidates,
   explainLastRun,
   exportVisualizerOutcomes,
   initProject,
   launchVisualizer,
   mapWorkflowRunStatusToGitHubStatus,
+  onboardProject,
   readBenchmarkLedger,
   recordBenchmarkLedgerEntry,
   runLocalEval,
@@ -186,7 +189,18 @@ function ensureBuiltCli(): void {
 
   const cliEntry = join(process.cwd(), "packages", "cli", "dist", "bin.js");
   const visualizerEntry = join(process.cwd(), "packages", "visualizer", "dist", "index.js");
-  if (existsSync(cliEntry) && existsSync(visualizerEntry)) {
+  const trackedSources = [
+    join(process.cwd(), "packages", "cli", "src", "bin.ts"),
+    join(process.cwd(), "packages", "cli", "src", "index.ts"),
+    join(process.cwd(), "packages", "visualizer", "src", "index.ts")
+  ];
+  const outputsPresent = existsSync(cliEntry) && existsSync(visualizerEntry);
+  const distFresh =
+    outputsPresent &&
+    trackedSources.every((sourcePath) => statSync(cliEntry).mtimeMs >= statSync(sourcePath).mtimeMs)
+    && trackedSources.every((sourcePath) => statSync(visualizerEntry).mtimeMs >= statSync(sourcePath).mtimeMs);
+
+  if (distFresh) {
     builtCli = true;
     return;
   }
@@ -320,6 +334,45 @@ describe("cli smoke flows", () => {
 
     const secondRequest = yaml.load(readFileSync(requestPath, "utf8")) as Record<string, unknown>;
     expect(secondRequest.problemStatement).toBe("Keep my custom request");
+  });
+
+  it("builds a repo-fit onboarding profile and applies the recommended starter preset", () => {
+    const root = createGitFixture("agentops-cli-onboard-");
+
+    const result = onboardProject(root);
+
+    expect(result.profile.packageManager).toBe("pnpm");
+    expect(result.profile.workflowFamilies).toContain("review/planning");
+    expect(result.profile.workflowFamilies).toContain("qa/security");
+    expect(result.profile.recommendedFirstWorkflow).toBe("planning-discovery");
+    expect(result.profile.recommendedBenchmarkMode).toBe("live");
+    expect(result.profile.recommendedBenchmarkCategory).toBe("general");
+    expect(result.profile.validationCommands.map((command) => command.command)).toEqual(
+      expect.arrayContaining(["pnpm lint", "pnpm typecheck", "pnpm test"])
+    );
+    expect(result.preset?.workflow).toBe("planning-discovery");
+    expect(existsSync(join(root, ".agentops", "requests", "planning.yaml"))).toBe(true);
+  });
+
+  it("detects release/pipeline relevance during onboarding without forcing the planning preset", () => {
+    const root = createGitFixture("agentops-cli-release-onboard-");
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: ci\n");
+    writeFileSync(join(root, "docs", "release.md"), "# Release\n");
+    writeFileSync(join(root, "docs", "deployment.md"), "# Deployment\n");
+
+    const profile = analyzeOnboardingProfile(root);
+
+    expect(profile.releaseProfile.relevant).toBe(true);
+    expect(profile.workflowFamilies).toContain("release/pipeline/deployment");
+    expect(profile.recommendedFirstWorkflow).toBe("release-readiness");
+    expect(profile.recommendedBenchmarkCategory).toBe("release");
+    expect(profile.recommendedBenchmarkTaskType).toBe("release/deployment");
+    expect(profile.recommendedStarterPresets).toEqual([]);
+    expect(profile.recommendedEvidenceExpectations).toEqual(
+      expect.arrayContaining(["docs/release.md", "docs/deployment.md"])
+    );
   });
 
   it("loads an allowed local plugin and executes it through a workflow", async () => {
@@ -637,6 +690,42 @@ describe("cli smoke flows", () => {
     expect(run.stdout).toContain("Then run: `agentforge run planning-discovery --json`");
     expect(run.stdout).toContain(".agentops/runs/<run-id>/bundle.json");
     expect(run.stdout).toContain("agentforge explain last-run --json");
+  }, 90_000);
+
+  it("prints machine-readable onboarding guidance for repo-fit setup", () => {
+    const root = createGitFixture("agentops-cli-onboard-json-");
+    ensureBuiltCli();
+
+    const run = runBuiltCli(["onboard", "--json"], root);
+
+    expect(run.status, getSpawnErrorText(run)).toBe(0);
+    const parsed = JSON.parse(String(run.stdout)) as {
+      profile: { recommendedFirstWorkflow: string; recommendedBenchmarkMode: string; workflowFamilies: string[] };
+      nextSteps: { firstBenchmarkCommand: string };
+    };
+    expect(parsed.profile.recommendedFirstWorkflow).toBe("planning-discovery");
+    expect(parsed.profile.recommendedBenchmarkMode).toBe("live");
+    expect(parsed.profile.workflowFamilies).toContain("review/planning");
+    expect(parsed.nextSteps.firstBenchmarkCommand).toContain("agentforge benchmark --mode live");
+  }, 90_000);
+
+  it("routes eval benchmarking through the top-level benchmark command", () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureBuiltCli();
+
+    writeBundleFixture(root, "baseline-eval", [cloneFixture(schemaFixtures.evalArtifact)]);
+    writeBundleFixture(root, "candidate-eval", [cloneFixture(schemaFixtures.evalArtifact)]);
+
+    const run = runBuiltCli(
+      ["benchmark", "--mode", "eval", "--baseline-run", "baseline-eval", "--candidate-run", "candidate-eval", "--json"],
+      root
+    );
+
+    expect(run.status, getSpawnErrorText(run)).toBe(0);
+    const parsed = JSON.parse(String(run.stdout)) as { comparedRunIds: string[]; artifactKinds: string[] };
+    expect(parsed.comparedRunIds).toContain("candidate-eval");
+    expect(parsed.artifactKinds).toContain("benchmark-summary");
   }, 90_000);
 
   it("fails planning-discovery before reasoning when the request is missing", async () => {
@@ -3297,6 +3386,23 @@ describe("cli smoke flows", () => {
     const ledger = readBenchmarkLedger(root);
     expect(ledger.document.entries).toHaveLength(1);
     expect(ledger.document.entries[0]?.summary).toBe("Updated adjudication after local review.");
+  });
+
+  it("discovers workflow and eval runs for onboarding and benchmark routing", () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+
+    writeBundleFixture(root, "run-workflow", [cloneFixture(schemaFixtures.planningArtifact)]);
+    writeBundleFixture(root, "run-eval", [cloneFixture(schemaFixtures.evalArtifact)]);
+    writeBundleFixture(root, "run-benchmark", [cloneFixture(schemaFixtures.benchmarkArtifact)]);
+
+    const workflowRuns = discoverLocalRunCandidates(root, { category: "workflow", limit: 5 });
+    const evalRuns = discoverLocalRunCandidates(root, { category: "eval", limit: 5 });
+    const benchmarkRuns = discoverLocalRunCandidates(root, { category: "benchmark", limit: 5 });
+
+    expect(workflowRuns.map((candidate) => candidate.runId)).toContain("run-workflow");
+    expect(evalRuns.map((candidate) => candidate.runId)).toContain("run-eval");
+    expect(benchmarkRuns.map((candidate) => candidate.runId)).toContain("run-benchmark");
   });
 
   it("exports outcomes snapshots and launches the packaged visualizer surface", async () => {

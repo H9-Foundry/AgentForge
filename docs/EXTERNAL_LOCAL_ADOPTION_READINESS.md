@@ -13,6 +13,8 @@ Today, a technical evaluator can install the published CLI, run the official loc
 
 The visualizer plus benchmark-authoring CLI surface is now part of the published-CLI claim. That surface is shipped through the CLI, not as a separately installed public package.
 
+The next guided-adoption step is already implemented on `main` but not yet part of the published-CLI claim: `agentforge onboard` plus the top-level `agentforge benchmark` wrapper are intended to make repo-fit setup and first value proof easier without forcing deterministic eval benchmarking as the default first proof path.
+
 It is not yet fully plug-and-play for less technical adopters. The published CLI now includes preset-based startup and the canonical four-step quick path, and the external support boundary is explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. The remaining gap is broader ease-of-use beyond the first bounded local-first path.
 
 ## Readiness Levels

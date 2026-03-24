@@ -8,7 +8,16 @@ Use [#268](https://github.com/H9-Foundry/AgentForge/issues/268) as the benchmark
 
 Use [docs/CLI_FIRST_DOGFOODING.md](CLI_FIRST_DOGFOODING.md) as the default dogfooding policy for user-facing surfaces. Benchmarking and release-signoff evidence should come from the CLI path by default, with source-build paths reserved for maintainer debugging and pre-release development.
 
-Use the local benchmark-ledger file at `.agentops/benchmark-ledger.json` as the adjudicated machine-readable overlay for the visualizer. The current internal CLI helpers are:
+Use the local benchmark-ledger file at `.agentops/benchmark-ledger.json` as the adjudicated machine-readable overlay for the visualizer. On `main`, the preferred high-level entrypoint is:
+
+- `agentforge benchmark`
+
+That wrapper should guide users toward:
+
+- `/outcomes` for live task benchmarking
+- `/benchmarks` for deterministic eval comparisons
+
+The current lower-level CLI helpers remain available:
 
 - `agentforge eval benchmark-ledger --json`
 - `agentforge eval benchmark-record <task-id> <control|agentforge> --source <replay|live> --task-type <type> ...`
@@ -17,6 +26,7 @@ Measured token usage now comes from provider-backed run bundles when available. 
 
 For user-facing benchmark validation, prefer:
 
+- `agentforge benchmark`
 - `agentforge eval benchmark-record ... --prefill-run <run-id>`
 - `agentforge eval benchmark-wizard ...`
 - `agentforge visualizer`

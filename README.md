@@ -44,6 +44,28 @@ npx agentforge explain last-run --json
 
 Use the full `npx @h9-foundry/agentforge-cli ...` form when you want the lowest-friction first run or do not want to add the CLI to the repository. Use the installed `npx agentforge ...` form when you want a shorter repeated command inside one repository.
 
+## Preferred Guided Setup On `main`
+
+On `main`, the preferred guided first-run path is now:
+
+```bash
+agentforge onboard
+```
+
+`agentforge onboard` is the repo-fit setup path. It initializes `.agentops`, detects likely validation and release surfaces, recommends the workflow families that fit the repository, and then offers two next steps:
+
+- run a first normal workflow
+- run a first benchmark
+
+Benchmarking stays optional. The intended value path is now:
+
+1. onboard the repo with `agentforge onboard`
+2. run a first real workflow or benchmark
+3. inspect `/outcomes` for live task value
+4. use `/benchmarks` only for deterministic eval comparisons
+
+Until this onboarding slice reaches the next npm release, keep using `init` as the published-CLI setup command.
+
 ## What You Can Do Today
 
 - try the current official workflow surface with the published CLI, without cloning this monorepo
@@ -98,6 +120,12 @@ Available in the published CLI:
 - `agentforge eval benchmark-ledger --json`, `agentforge eval benchmark-record ... --prefill-run <run-id>`, and `agentforge eval benchmark-wizard ...` support the local benchmark ledger that powers adjudicated `/outcomes` overlays, including release speed/quality/token-spend comparisons
 - the next benchmark expansion after the AgentForge-first dogfood phase is the bounded CreateCVs portability phase in [docs/CREATECVS_PORTABILITY_PHASE.md](docs/CREATECVS_PORTABILITY_PHASE.md)
 - see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current launch path and [docs/VISUALIZER_DATA_CONTRACT.md](docs/VISUALIZER_DATA_CONTRACT.md) for the visualizer-facing run/ledger contract
+
+Available on `main` before the next npm release:
+
+- `agentforge onboard` and `agentforge setup` provide the guided repo-fit onboarding path
+- `agentforge benchmark` provides one high-level entrypoint for live task benchmarking and deterministic eval comparisons
+- onboarding now positions `/outcomes` as the primary value dashboard and `/benchmarks` as the deterministic eval comparison dashboard
 
 ## What Success Looks Like
 

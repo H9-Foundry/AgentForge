@@ -10,6 +10,24 @@ Published CLI wording rule:
 
 For internal evaluation and release signoff of user-facing surfaces, use the CLI-first rule in [docs/CLI_FIRST_DOGFOODING.md](CLI_FIRST_DOGFOODING.md).
 
+## Preferred Guided Setup On `main`
+
+On `main`, the preferred first-run path is `agentforge onboard`. It is the guided repo-fit setup path that:
+
+- initializes `.agentops`
+- detects likely validation commands and release evidence
+- recommends the workflow families that fit the repository
+- offers an optional handoff into benchmarking
+
+The intended product journey is:
+
+1. onboarding configures repo fit
+2. benchmarking optionally proves process value
+3. `/outcomes` is the primary live-task value dashboard
+4. `/benchmarks` remains the deterministic eval comparison dashboard
+
+Until the next npm release includes `onboard`, use the published `init` path below for zero-install evaluation.
+
 ## Fastest Evaluator Path
 
 Use the published CLI if you want to try the current published wedges without cloning the monorepo. The latest published CLI now includes the full official local workflow surface plus `eval run` and `eval compare`.
@@ -41,6 +59,21 @@ npx agentforge explain last-run --json
 ```
 
 Use the full `npx @h9-foundry/agentforge-cli ...` form for the least-setup first run. Use the installed `npx agentforge ...` form when you want the same published CLI pinned in one repository with shorter commands.
+
+## Benchmarking After Setup
+
+After a repository is initialized, use the top-level benchmark entrypoint on `main` when you want a guided proof path:
+
+```bash
+agentforge benchmark
+```
+
+That wrapper now routes to the right benchmark model:
+
+- use `/outcomes` for real control-vs-AgentForge task comparisons
+- use `/benchmarks` for deterministic `eval compare` output
+
+Live benchmarking is the default first proof path for a newly onboarded repository. Deterministic eval benchmarking remains available, but it is the secondary path for workflow regression checks rather than the default “is this helping my repo?” question.
 
 ## Canonical Quick Path
 
