@@ -62,6 +62,7 @@ import {
   ciEvidenceSchema,
   configurationExecutionNodeSchema,
   configurationFingerprintSchema,
+  configurationRepoFitSchema,
   controlPlaneDefaultsSchema,
   deploymentGateArtifactPayloadSchema,
   deploymentGateArtifactSchema,
@@ -112,6 +113,12 @@ import {
   qaRequestSchema,
   releaseApprovalRecommendationSchema,
   releaseCiEvidenceSummarySchema,
+  repoFitConventionsSchema,
+  repoFitContractSchema,
+  repoFitExpectationsSchema,
+  repoFitProvenanceSchema,
+  repoFitStarterProfileSelectionSchema,
+  repoFitStructureSchema,
   securityEvidenceNormalizationSchema,
   securityArtifactPayloadSchema,
   securityArtifactSchema,
@@ -289,8 +296,15 @@ export type WorkflowControlVariant = Infer<typeof workflowControlVariantSchema>;
 export type WorkflowControlAgentBinding = Infer<typeof workflowControlAgentBindingSchema>;
 export type WorkflowControlDefinition = Infer<typeof workflowControlDefinitionSchema>;
 export type ControlPlaneDefaults = Infer<typeof controlPlaneDefaultsSchema>;
+export type RepoFitStructure = Infer<typeof repoFitStructureSchema>;
+export type RepoFitExpectations = Infer<typeof repoFitExpectationsSchema>;
+export type RepoFitConventions = Infer<typeof repoFitConventionsSchema>;
+export type RepoFitStarterProfileSelection = Infer<typeof repoFitStarterProfileSelectionSchema>;
+export type RepoFitProvenance = Infer<typeof repoFitProvenanceSchema>;
+export type RepoFitContract = Infer<typeof repoFitContractSchema>;
 export type ConfigurationFingerprint = Infer<typeof configurationFingerprintSchema>;
 export type ConfigurationExecutionNode = Infer<typeof configurationExecutionNodeSchema>;
+export type ConfigurationRepoFit = Infer<typeof configurationRepoFitSchema>;
 export type ResolvedRunConfigurationSnapshot = Infer<typeof resolvedRunConfigurationSnapshotSchema>;
 export type RunComparisonChange = Infer<typeof runComparisonChangeSchema>;
 export type RunComparisonDocument = Infer<typeof runComparisonDocumentSchema>;

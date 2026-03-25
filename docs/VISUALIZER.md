@@ -41,14 +41,14 @@ Stable now:
 - `/api/config/preview`
 - `/api/config/save`
 
-Direct repo YAML remains canonical for request and control edits. The browser editor is now a supported authoring layer over those files, and it is enabled by default. Repositories that need a temporary compatibility fallback can still disable browser editing with:
+Direct repo YAML remains canonical for request, repo-fit, and control edits. The browser editor is now a supported authoring layer over those files, and it is enabled by default. Repositories that need a temporary compatibility fallback can still disable browser editing with:
 
 ```yaml
 visualizer:
   experimental_config_editing: false
 ```
 
-When disabled, `/configure` remains read-only. When enabled, it defaults to a structured editor for requests, workflow controls, policy presets, and defaults, keeps canonical YAML behind an Advanced toggle, and still routes preview/save through the same CLI-backed validation used by `agentforge config validate`.
+When disabled, `/configure` remains read-only. When enabled, it defaults to a structured editor for requests, workflow controls, policy presets, defaults, and the repo-fit contract, keeps canonical YAML behind an Advanced toggle, and still routes preview/save through the same CLI-backed validation used by `agentforge config validate`.
 
 ## Local Launch
 
@@ -92,11 +92,13 @@ Use the visualizer in this order unless you are already doing operator-level inv
 5. `/configure`
    - supported structured authoring layer over canonical repo YAML
    - structured editor first, Advanced YAML second
+   - includes a dedicated repo-fit target for repo structure, conventions, and optional starter-profile adoption
    - direct repo YAML plus `agentforge config validate` remains canonical
 
 This distinction matters for requirements management:
 
 - requests, workflow controls, and policy presets are managed in repo YAML first
+- `.agentops/repo-fit.yaml` is the canonical repo-conventions contract that onboarding and workflows read
 - `/configure` is subordinate to that YAML and remains a guarded convenience layer
 - run bundles and `/runs/compare` explain how a given configuration produced a given outcome
 - `/outcomes` and configuration hotspots answer which setup correlated with changed decisions or blocked actions

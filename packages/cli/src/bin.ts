@@ -70,6 +70,18 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function parseDelimitedList(value: string | undefined): string[] | undefined {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
 async function promptWithDefault(question: string, defaultValue?: string): Promise<string> {
   const rl = createInterface({
     input: process.stdin,
@@ -283,8 +295,47 @@ program
   .option("--benchmark", "Immediately hand off into the benchmark flow after the onboarding summary.")
   .option("--no-preset", "Initialize .agentops without applying the recommended starter preset.")
   .action(async (options: { json?: boolean; benchmark?: boolean; preset?: boolean }) => {
+    const repoFitAnswers = !options.json && process.stdin.isTTY
+      ? (() => {
+          const profile = analyzeOnboardingProfile(process.cwd());
+          return Promise.resolve(profile);
+        })()
+      : undefined;
+    const initialProfile = repoFitAnswers ? await repoFitAnswers : undefined;
+    const answers = initialProfile
+      ? {
+          architectureStyle: normalizeOptionalString(await promptWithDefault("Architecture style", initialProfile.repoFit.contract.structure.architectureStyle)),
+          sourceRoots: parseDelimitedList(await promptWithDefault("Source roots (comma-separated)", initialProfile.repoFit.contract.structure.sourceRoots.join(", "))),
+          packageRoots: parseDelimitedList(await promptWithDefault("Package roots (comma-separated)", initialProfile.repoFit.contract.structure.packageRoots.join(", "))),
+          ownershipBoundaries: parseDelimitedList(await promptWithDefault("Ownership boundaries (comma-separated)", initialProfile.repoFit.contract.structure.ownershipBoundaries.join(", "))),
+          pathConventions: parseDelimitedList(await promptWithDefault("Path conventions (comma-separated)", initialProfile.repoFit.contract.structure.pathConventions.join(", "))),
+          validationCommands: parseDelimitedList(await promptWithDefault("Validation commands (comma-separated)", initialProfile.repoFit.contract.expectations.validationCommands.join(", "))),
+          evidenceSources: parseDelimitedList(await promptWithDefault("Evidence sources (comma-separated)", initialProfile.repoFit.contract.expectations.evidenceSources.join(", "))),
+          testingConventions: parseDelimitedList(await promptWithDefault("Testing conventions (comma-separated)", initialProfile.repoFit.contract.expectations.testingConventions.join(", "))),
+          releaseConventions: parseDelimitedList(await promptWithDefault("Release conventions (comma-separated)", initialProfile.repoFit.contract.expectations.releaseConventions.join(", "))),
+          securityConventions: parseDelimitedList(await promptWithDefault("Security conventions (comma-separated)", initialProfile.repoFit.contract.expectations.securityConventions.join(", "))),
+          documentationConventions: parseDelimitedList(await promptWithDefault("Documentation conventions (comma-separated)", initialProfile.repoFit.contract.expectations.documentationConventions.join(", "))),
+          operationsConventions: parseDelimitedList(await promptWithDefault("Operations conventions (comma-separated)", initialProfile.repoFit.contract.expectations.operationsConventions.join(", "))),
+          codingConventions: parseDelimitedList(await promptWithDefault("Coding conventions (comma-separated)", initialProfile.repoFit.contract.conventions.coding.join(", "))),
+          designPatterns: parseDelimitedList(await promptWithDefault("Design patterns (comma-separated)", initialProfile.repoFit.contract.conventions.designPatterns.join(", "))),
+          selectedProfileId: normalizeOptionalString(await promptWithDefault("AgentForge starter profile (none or profile id)", initialProfile.repoFit.recommendedProfileId ?? "none")) as
+            | "none"
+            | "agentforge-ts-monorepo"
+            | "agentforge-ts-package"
+            | "agentforge-python-service"
+            | "agentforge-rust-crate"
+            | undefined,
+          adoption: normalizeOptionalString(await promptWithDefault("Starter profile adoption (none/partial/full)", "partial")) as
+            | "none"
+            | "partial"
+            | "full"
+            | undefined
+        }
+      : undefined;
+
     const result = onboardProject(process.cwd(), {
-      applyRecommendedPreset: options.preset
+      applyRecommendedPreset: options.preset,
+      repoFitAnswers: answers
     });
 
     if (options.json) {
@@ -301,6 +352,13 @@ program
     );
     console.log(
       `Release evidence: ${result.profile.recommendedEvidenceExpectations.length > 0 ? result.profile.recommendedEvidenceExpectations.join(", ") : "no release/deployment evidence surfaced"}`
+    );
+    console.log(`Repo-fit contract: ${result.repoFit.contractPath}`);
+    console.log(
+      `Repo-fit profile: ${result.repoFit.selectedProfileId ?? result.repoFit.recommendedProfileId ?? "none"} (${result.repoFit.contract.starterProfile.adoption})`
+    );
+    console.log(
+      `Repo-fit coverage: inferred=${result.repoFit.inferredFields.length}, confirmed=${result.repoFit.confirmedFields.length}, unresolved=${result.repoFit.unresolvedFields.length}`
     );
     if (result.preset) {
       console.log(result.preset.created ? `Created starter request: ${result.preset.requestPath}` : `Starter request already present: ${result.preset.requestPath}`);

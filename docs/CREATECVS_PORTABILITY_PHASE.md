@@ -4,6 +4,8 @@ This document defines the first external portability phase after the AgentForge-
 
 It is an operational benchmark playbook, not a shipped runtime workflow or hosted integration promise.
 
+For the pre-benchmark smoke that validated the current `main` repo-fit onboarding slice against CreateCVs, see [docs/CREATECVS_PORTABILITY_SMOKE.md](CREATECVS_PORTABILITY_SMOKE.md).
+
 Use it only after the AgentForge-first benchmark loop is stable enough to support comparison in another repository without changing the benchmark rules mid-stream.
 
 ## Goal

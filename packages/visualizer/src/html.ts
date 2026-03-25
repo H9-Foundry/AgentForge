@@ -266,7 +266,7 @@ function renderFindings(findings: readonly Finding[]): string {
   }
 
   return `<ul>${findings
-    .map((finding) => `<li><strong>[${escapeHtml(finding.severity)}]</strong> ${escapeHtml(finding.title)}: ${escapeHtml(finding.summary)}</li>`)
+    .map((finding) => `<li><strong>[${escapeHtml(finding.severity)}]</strong> ${escapeHtml(finding.title)}: ${escapeHtml(finding.summary)}${finding.tags.length > 0 ? `<div class="chips">${finding.tags.map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join("")}</div>` : ""}</li>`)
     .join("")}</ul>`;
 }
 
@@ -280,7 +280,7 @@ function renderBlockedPlugins(blockedPlugins: readonly BlockedPlugin[]): string 
     .join("")}</ul>`;
 }
 
-function buildConfigureHref(target: "request" | "workflow-control" | "policy-presets" | "defaults", workflow?: string): string {
+function buildConfigureHref(target: "request" | "workflow-control" | "policy-presets" | "defaults" | "repo-fit", workflow?: string): string {
   const params = new URLSearchParams();
   params.set("target", target);
   if (workflow) {
@@ -294,7 +294,8 @@ function renderConfigurationLinks(workflow: string): string {
     `<a href="${escapeHtml(buildConfigureHref("request", workflow))}">Request</a>`,
     `<a href="${escapeHtml(buildConfigureHref("workflow-control", workflow))}">Workflow control</a>`,
     `<a href="${escapeHtml(buildConfigureHref("policy-presets"))}">Policy presets</a>`,
-    `<a href="${escapeHtml(buildConfigureHref("defaults"))}">Defaults</a>`
+    `<a href="${escapeHtml(buildConfigureHref("defaults"))}">Defaults</a>`,
+    `<a href="${escapeHtml(buildConfigureHref("repo-fit"))}">Repo fit</a>`
   ].join(" · ");
 }
 
@@ -309,9 +310,11 @@ function renderRunConfiguration(run: RunDetailView): string {
       ${metricCard("Policy preset", run.configuration.policyPreset ?? "default")}
       ${metricCard("Workflow variant", run.configuration.workflowVariant)}
       ${metricCard("Agent bindings", run.configuration.agentBindings.length)}
+      ${metricCard("Repo-fit profile", run.configuration.repoFitSelectedProfile ?? run.configuration.repoFitRecommendedProfile ?? "none")}
     </div>
     <dl class="meta-grid">
       <div><dt>Policy fingerprint</dt><dd><code>${escapeHtml(run.configuration.policyFingerprint)}</code></dd></div>
+      <div><dt>Repo-fit</dt><dd>${run.configuration.repoFitPath ? `<a href="${escapeHtml(buildConfigureHref("repo-fit"))}">${escapeHtml(run.configuration.repoFitPath)}</a>${run.configuration.repoFitAdoption ? ` (${escapeHtml(run.configuration.repoFitAdoption)})` : ""}` : "not recorded"}</dd></div>
       <div><dt>Source refs</dt><dd>${run.configuration.sourceRefs.map((ref) => `<span class="chip">${escapeHtml(ref)}</span>`).join("")}</dd></div>
       <div><dt>Open In Configure</dt><dd>${renderConfigurationLinks(run.workflow)}</dd></div>
     </dl>
@@ -1072,7 +1075,7 @@ export function renderConfigurePage(options: {
   const workflowOptions = options.availableWorkflows
     .map((workflow) => `<option value="${escapeHtml(workflow)}"${workflow === options.workflow ? " selected" : ""}>${escapeHtml(workflow)}</option>`)
     .join("");
-  const targetOptions = ["request", "workflow-control", "policy-presets", "defaults"]
+  const targetOptions = ["request", "workflow-control", "policy-presets", "defaults", "repo-fit"]
     .map((targetOption) => `<option value="${escapeHtml(targetOption)}"${targetOption === target ? " selected" : ""}>${escapeHtml(targetOption)}</option>`)
     .join("");
   const body = `
@@ -1318,6 +1321,14 @@ export function renderConfigurePage(options: {
           if (model.target === "defaults") {
             return { workflows: state.workflows };
           }
+          if (model.target === "repo-fit") {
+            return {
+              starterProfile: state.starterProfile,
+              structureFields: state.structureFields,
+              expectationFields: state.expectationFields,
+              conventionFields: state.conventionFields
+            };
+          }
           return state;
         }
 
@@ -1398,6 +1409,23 @@ export function renderConfigurePage(options: {
           if (editorModel.target === "policy-presets") {
             return {
               presets: clone(editorModel.policyPresets.presets)
+            };
+          }
+
+          if (editorModel.target === "repo-fit") {
+            return {
+              starterProfile: {
+                recommendedProfileId: editorModel.repoFit.recommendedProfileId || "",
+                selectedProfileId: editorModel.repoFit.selectedProfileId || "none",
+                adoption: editorModel.repoFit.adoption || "none"
+              },
+              structureFields: clone(editorModel.repoFit.structureFields),
+              expectationFields: clone(editorModel.repoFit.expectationFields),
+              conventionFields: clone(editorModel.repoFit.conventionFields),
+              comparisonNotes: clone(editorModel.repoFit.comparisonNotes || []),
+              inferredFields: clone(editorModel.repoFit.inferredFields || []),
+              confirmedFields: clone(editorModel.repoFit.confirmedFields || []),
+              unresolvedFields: clone(editorModel.repoFit.unresolvedFields || [])
             };
           }
 
@@ -1517,6 +1545,29 @@ export function renderConfigurePage(options: {
             }
             return warnings;
           });
+        }
+
+        function repoFitLocalWarnings() {
+          const warnings = [];
+          const selectedProfileId = String(state.starterProfile && state.starterProfile.selectedProfileId || "").trim();
+          const adoption = String(state.starterProfile && state.starterProfile.adoption || "none").trim();
+          const sourceRootsField = (state.structureFields || []).find(function (field) { return field.key === "sourceRoots"; });
+          const validationCommandsField = (state.expectationFields || []).find(function (field) { return field.key === "validationCommands"; });
+
+          if (!selectedProfileId || selectedProfileId === "none") {
+            warnings.push("No AgentForge starter profile is selected. That is valid, but the contract will not record any opinionated overlay.");
+          }
+          if ((selectedProfileId === "none" || !selectedProfileId) && adoption !== "none") {
+            warnings.push("Starter profile adoption should stay 'none' until a profile is selected.");
+          }
+          if (!Array.isArray(sourceRootsField && sourceRootsField.value) || (sourceRootsField && sourceRootsField.value || []).length === 0) {
+            warnings.push("Source roots are still empty. Add the main implementation roots so workflows can reason about repo boundaries.");
+          }
+          if (!Array.isArray(validationCommandsField && validationCommandsField.value) || (validationCommandsField && validationCommandsField.value || []).length === 0) {
+            warnings.push("Validation commands are empty. This leaves implementation and review workflows without declared evidence expectations.");
+          }
+
+          return warnings;
         }
 
         function renderRequestEditor() {
@@ -1644,6 +1695,47 @@ export function renderConfigurePage(options: {
             }).join("") + '</tbody></table></section>';
         }
 
+        function renderRepoFitEditor() {
+          const repoFit = model.repoFit;
+          const warnings = repoFitLocalWarnings();
+          const renderRepoFields = function (fields, sectionKey) {
+            return (fields || []).map(function (field, fieldIndex) {
+              return renderField(field, sectionKey, { fieldIndex: fieldIndex });
+            }).join("");
+          };
+
+          return '<section class="configure-section">'
+            + renderValidationNotice(warnings)
+            + '<details class="configure-section-card" open><summary>Starter profile</summary><div class="stack">'
+            + '<p class="muted">Keep repo conventions first. Use the starter profile only to record whether this repository wants extra AgentForge opinionated guidance layered on top of its own declared structure.</p>'
+            + '<div class="grid">'
+            + '<label class="configure-field"><span>Recommended profile</span><input type="text" value="' + escapeHtml(repoFit.recommendedProfileId || "none") + '" readonly /></label>'
+            + '<label class="configure-field"><span>Selected profile</span><select id="repo-fit-selected-profile">' + optionMarkup(repoFit.profileOptions || [], state.starterProfile.selectedProfileId || "none", false) + '</select></label>'
+            + '<label class="configure-field"><span>Adoption</span><select id="repo-fit-adoption">' + optionMarkup(repoFit.adoptionOptions || [], state.starterProfile.adoption || "none", false) + '</select></label>'
+            + '</div>'
+            + '<div class="panel panel-subtle"><strong>Comparison notes</strong>'
+            + ((state.comparisonNotes || []).length > 0 ? '<ul>' + state.comparisonNotes.map(function (note) { return '<li>' + escapeHtml(note) + '</li>'; }).join("") + '</ul>' : '<p class="muted">No opinionated differences are currently recorded.</p>')
+            + '</div>'
+            + '<div class="meta-grid">'
+            + '<div><dt>Inferred fields</dt><dd>' + ((state.inferredFields || []).length > 0 ? state.inferredFields.map(function (field) { return '<span class="chip">' + escapeHtml(field) + '</span>'; }).join("") : "none") + '</dd></div>'
+            + '<div><dt>Confirmed fields</dt><dd>' + ((state.confirmedFields || []).length > 0 ? state.confirmedFields.map(function (field) { return '<span class="chip">' + escapeHtml(field) + '</span>'; }).join("") : "none") + '</dd></div>'
+            + '<div><dt>Unresolved fields</dt><dd>' + ((state.unresolvedFields || []).length > 0 ? state.unresolvedFields.map(function (field) { return '<span class="chip">' + escapeHtml(field) + '</span>'; }).join("") : "none") + '</dd></div>'
+            + '</div></div></details>'
+            + '<details class="configure-section-card" open><summary>Structure and boundaries</summary><div class="stack">'
+            + '<p class="muted">Describe where code lives, how modules are divided, and which path boundaries matter when workflows reason about this repo.</p>'
+            + renderRepoFields(state.structureFields, "repo-fit-structure")
+            + '</div></details>'
+            + '<details class="configure-section-card"><summary>Validation and evidence</summary><div class="stack">'
+            + '<p class="muted">Capture the commands, evidence surfaces, and release or QA expectations that should ground reviews and implementation recommendations.</p>'
+            + renderRepoFields(state.expectationFields, "repo-fit-expectations")
+            + '</div></details>'
+            + '<details class="configure-section-card"><summary>Coding and design conventions</summary><div class="stack">'
+            + '<p class="muted">Record the coding style and design patterns the repo prefers so AgentForge can surface mismatches as advisory findings instead of generic suggestions.</p>'
+            + renderRepoFields(state.conventionFields, "repo-fit-conventions")
+            + '</div></details>'
+            + '</section>';
+        }
+
         function renderEditor() {
           if (!model) {
             editorRoot.innerHTML = "";
@@ -1665,6 +1757,8 @@ export function renderConfigurePage(options: {
             markup = renderPolicyPresetEditor();
           } else if (model.target === "defaults") {
             markup = renderDefaultsEditor();
+          } else if (model.target === "repo-fit") {
+            markup = renderRepoFitEditor();
           }
 
           editorRoot.innerHTML += markup;
@@ -1840,10 +1934,34 @@ export function renderConfigurePage(options: {
           document.getElementById("policy-require-reviewed")?.addEventListener("change", function (event) {
             activePreset.requireReviewed = event.target.value === "" ? undefined : event.target.value === "true";
           });
+          document.getElementById("repo-fit-selected-profile")?.addEventListener("change", function (event) {
+            state.starterProfile.selectedProfileId = event.target.value || "none";
+            renderEditor();
+          });
+          document.getElementById("repo-fit-adoption")?.addEventListener("change", function (event) {
+            state.starterProfile.adoption = event.target.value || "none";
+          });
           editorRoot.querySelectorAll("[data-policy-multi]").forEach(function (node) {
             node.addEventListener("change", function (event) {
               const key = event.target.dataset.policyMulti;
               activePreset[key] = toggleArrayValue(activePreset[key], event.target.value, event.target.checked);
+            });
+          });
+          editorRoot.querySelectorAll("[data-section='repo-fit-structure'], [data-section='repo-fit-expectations'], [data-section='repo-fit-conventions']").forEach(function (node) {
+            node.addEventListener("input", function (event) {
+              const fieldIndex = Number(event.target.dataset.fieldIndex);
+              const inputType = event.target.dataset.input;
+              const section = event.target.dataset.section;
+              const fieldCollection = section === "repo-fit-structure"
+                ? state.structureFields
+                : section === "repo-fit-expectations"
+                  ? state.expectationFields
+                  : state.conventionFields;
+              if (inputType === "lines") {
+                fieldCollection[fieldIndex].value = fromLines(event.target.value);
+              } else {
+                fieldCollection[fieldIndex].value = event.target.value;
+              }
             });
           });
           editorRoot.querySelectorAll("[data-policy-tool-key]").forEach(function (node) {

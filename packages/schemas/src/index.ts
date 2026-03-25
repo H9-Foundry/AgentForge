@@ -1220,6 +1220,77 @@ export const controlPlaneDefaultsSchema = z.object({
   ).default({})
 });
 
+export const repoFitStarterAdoptionSchema = z.enum(["none", "partial", "full"]);
+
+export const repoFitStructureSchema = z.object({
+  architectureStyle: z.string().min(1).optional(),
+  sourceRoots: z.array(z.string().min(1)).default([]),
+  packageRoots: z.array(z.string().min(1)).default([]),
+  ownershipBoundaries: z.array(z.string().min(1)).default([]),
+  pathConventions: z.array(z.string().min(1)).default([])
+});
+
+export const repoFitExpectationsSchema = z.object({
+  validationCommands: z.array(z.string().min(1)).default([]),
+  evidenceSources: z.array(z.string().min(1)).default([]),
+  testingConventions: z.array(z.string().min(1)).default([]),
+  releaseConventions: z.array(z.string().min(1)).default([]),
+  securityConventions: z.array(z.string().min(1)).default([]),
+  documentationConventions: z.array(z.string().min(1)).default([]),
+  operationsConventions: z.array(z.string().min(1)).default([])
+});
+
+export const repoFitConventionsSchema = z.object({
+  coding: z.array(z.string().min(1)).default([]),
+  designPatterns: z.array(z.string().min(1)).default([])
+});
+
+export const repoFitStarterProfileSelectionSchema = z.object({
+  recommendedProfileId: z.string().min(1).optional(),
+  selectedProfileId: z.string().min(1).optional(),
+  adoption: repoFitStarterAdoptionSchema.default("none"),
+  comparisonNotes: z.array(z.string().min(1)).default([])
+});
+
+export const repoFitProvenanceSchema = z.object({
+  inferred: z.array(z.string().min(1)).default([]),
+  confirmed: z.array(z.string().min(1)).default([]),
+  unresolved: z.array(z.string().min(1)).default([])
+});
+
+export const repoFitContractSchema = z.object({
+  version: z.number().int().positive(),
+  repoName: z.string().min(1),
+  structure: repoFitStructureSchema.default({
+    sourceRoots: [],
+    packageRoots: [],
+    ownershipBoundaries: [],
+    pathConventions: []
+  }),
+  expectations: repoFitExpectationsSchema.default({
+    validationCommands: [],
+    evidenceSources: [],
+    testingConventions: [],
+    releaseConventions: [],
+    securityConventions: [],
+    documentationConventions: [],
+    operationsConventions: []
+  }),
+  conventions: repoFitConventionsSchema.default({
+    coding: [],
+    designPatterns: []
+  }),
+  starterProfile: repoFitStarterProfileSelectionSchema.default({
+    adoption: "none",
+    comparisonNotes: []
+  }),
+  provenance: repoFitProvenanceSchema.default({
+    inferred: [],
+    confirmed: [],
+    unresolved: []
+  })
+});
+
 export const configurationFingerprintSchema = z.object({
   path: z.string().min(1),
   sha256: z.string().min(1)
@@ -1229,6 +1300,18 @@ export const configurationExecutionNodeSchema = z.object({
   nodeId: z.string().min(1),
   kind: nodeKindSchema,
   agent: z.string().min(1).optional()
+});
+
+export const configurationRepoFitSchema = z.object({
+  path: z.string().min(1),
+  recommendedProfileId: z.string().min(1).optional(),
+  selectedProfileId: z.string().min(1).optional(),
+  adoption: repoFitStarterAdoptionSchema.default("none"),
+  inferredFields: z.array(z.string().min(1)).default([]),
+  confirmedFields: z.array(z.string().min(1)).default([]),
+  unresolvedFields: z.array(z.string().min(1)).default([]),
+  sourceRoots: z.array(z.string().min(1)).default([]),
+  packageRoots: z.array(z.string().min(1)).default([])
 });
 
 export const resolvedRunConfigurationSnapshotSchema = z.object({
@@ -1251,6 +1334,7 @@ export const resolvedRunConfigurationSnapshotSchema = z.object({
     path: z.string().min(1),
     metaPresent: z.boolean().default(false)
   }),
+  repoFit: configurationRepoFitSchema.optional(),
   execution: z.object({
     executedNodes: z.array(configurationExecutionNodeSchema).default([])
   }).default({
@@ -1961,8 +2045,15 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   workflowControlAgentBinding: workflowControlAgentBindingSchema,
   workflowControlDefinition: workflowControlDefinitionSchema,
   controlPlaneDefaults: controlPlaneDefaultsSchema,
+  repoFitStructure: repoFitStructureSchema,
+  repoFitExpectations: repoFitExpectationsSchema,
+  repoFitConventions: repoFitConventionsSchema,
+  repoFitStarterProfileSelection: repoFitStarterProfileSelectionSchema,
+  repoFitProvenance: repoFitProvenanceSchema,
+  repoFitContract: repoFitContractSchema,
   configurationFingerprint: configurationFingerprintSchema,
   configurationExecutionNode: configurationExecutionNodeSchema,
+  configurationRepoFit: configurationRepoFitSchema,
   resolvedRunConfigurationSnapshot: resolvedRunConfigurationSnapshotSchema,
   runComparisonChange: runComparisonChangeSchema,
   runComparisonDocument: runComparisonDocumentSchema,
