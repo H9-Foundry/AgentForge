@@ -9,8 +9,8 @@ Use [docs/CLI_FIRST_DOGFOODING.md](./CLI_FIRST_DOGFOODING.md) as the dogfooding 
 This visualizer is intentionally narrow and local-first:
 
 - local-only
-- read-only
-- backed only by existing `.agentops/runs/**/bundle.json` and `summary.md`
+- stable run inspection and outcomes analysis are read-focused
+- backed by existing `.agentops/runs/**/bundle.json` and `summary.md`
 - optionally overlaid with `.agentops/benchmark-ledger.json`
 - intended first for technical early adopters and benchmark review
 
@@ -27,9 +27,28 @@ The current visualization layer includes:
 - a runs index
 - an outcomes dashboard for decision impact, risk, release benchmark speed/quality/spend, evidence completeness, friction, and workflow-chain coverage
 - a single run detail view
+- a run comparison view
 - a benchmark dashboard for local `benchmark-summary` artifacts
 
-The visualizer reads the same audit bundles and lifecycle artifacts that `agentforge explain last-run --json` exposes. It does not write back to run state or change runtime behavior.
+Stable now:
+
+- request `meta` resolution surfaced in run bundles
+- run-bundle configuration snapshots
+- run comparison and configuration hotspot reporting
+- `/configure`
+- `/api/config/editor`
+- `/api/config/render`
+- `/api/config/preview`
+- `/api/config/save`
+
+Direct repo YAML remains canonical for request and control edits. The browser editor is now a supported authoring layer over those files, and it is enabled by default. Repositories that need a temporary compatibility fallback can still disable browser editing with:
+
+```yaml
+visualizer:
+  experimental_config_editing: false
+```
+
+When disabled, `/configure` remains read-only. When enabled, it defaults to a structured editor for requests, workflow controls, policy presets, and defaults, keeps canonical YAML behind an Advanced toggle, and still routes preview/save through the same CLI-backed validation used by `agentforge config validate`.
 
 ## Local Launch
 
@@ -50,8 +69,39 @@ Default behavior:
 
 - serves a local web app on `http://127.0.0.1:4313`
 - reads runs from `.agentops/runs` under the current workspace root
+- redirects `/` to `/outcomes` so evaluator-first review is the default landing path
 - uses `/outcomes` as the canonical route for process-impact inspection
 - keeps `/value` as a compatibility alias for one transition cycle
+
+## Expected User Journey
+
+Use the visualizer in this order unless you are already doing operator-level investigation:
+
+1. `/outcomes`
+   - evaluator-first landing page
+   - answers whether AgentForge changed the plan, reduced risk, or improved evidence
+2. `/runs`
+   - practitioner drill-down into one run
+   - use when a metric or artifact needs local forensic review
+3. `/runs/compare`
+   - secondary analysis once two candidate runs are known
+   - shows control selections before outcome deltas
+4. `/benchmarks`
+   - deterministic `eval compare` evidence only
+   - not the default product-onboarding page
+5. `/configure`
+   - supported structured authoring layer over canonical repo YAML
+   - structured editor first, Advanced YAML second
+   - direct repo YAML plus `agentforge config validate` remains canonical
+
+This distinction matters for requirements management:
+
+- requests, workflow controls, and policy presets are managed in repo YAML first
+- `/configure` is subordinate to that YAML and remains a guarded convenience layer
+- run bundles and `/runs/compare` explain how a given configuration produced a given outcome
+- `/outcomes` and configuration hotspots answer which setup correlated with changed decisions or blocked actions
+
+Use [docs/VISUALIZER_UX_ACCEPTANCE.md](./VISUALIZER_UX_ACCEPTANCE.md) as the release-time verification checklist for this journey.
 
 Optional flags:
 
@@ -141,11 +191,12 @@ If provider-backed usage was not captured for a run, the run still renders norma
 
 ## Trust Boundary
 
-The visualizer is a presentation layer only.
+The visualizer is a local presentation and inspection layer first.
 
 - it parses run bundles with the existing shared schemas where possible
 - it falls back to a generic payload view for forward-compatibility cases
 - it never rewrites run bundles
+- it only edits request/control YAML through the guarded preview-and-save flow backed by CLI validation and allowlisted paths
 - it should work without network access
 
 Use it to inspect local run state and benchmark value signals more quickly than reading raw JSON, not as a replacement for the CLI or the benchmark ledger in [#268](https://github.com/H9-Foundry/AgentForge/issues/268).
@@ -155,6 +206,7 @@ Supported in this phase:
 - packaged local app via the published CLI
 - local outcomes export for sharing
 - local benchmark-ledger workflows
+- evaluator-first outcomes landing with practitioner drill-down and run comparison
 
 Not supported in this phase:
 

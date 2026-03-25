@@ -166,6 +166,11 @@ export const agentforgeConfigSchema = z.object({
         .optional()
     })
     .default({}),
+  visualizer: z
+    .object({
+      experimentalConfigEditing: z.boolean().default(true)
+    })
+    .default({ experimentalConfigEditing: true }),
   plugins: z
     .object({
       agents: z.array(agentPluginRegistrationSchema).default([])
@@ -403,7 +408,15 @@ export const workflowDefinitionSchema = z.object({
   nodes: z.array(workflowNodeSchema).min(1)
 });
 
+export const requestMetaSchema = z.object({
+  profile: z.string().min(1).default("default"),
+  policyPreset: z.string().min(1).optional(),
+  workflowVariant: z.string().min(1).default("standard"),
+  agentBindings: z.record(z.string(), z.string().min(1)).default({})
+});
+
 export const planningRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   problemStatement: z.string().min(1),
   goals: z.array(z.string().min(1)).default([]),
   constraints: z.array(z.string().min(1)).default([]),
@@ -413,6 +426,7 @@ export const planningRequestSchema = z.object({
 });
 
 export const designRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   planningBriefRef: z.string().min(1),
   decisionTarget: z.string().min(1),
   constraints: z.array(z.string().min(1)).default([]),
@@ -422,6 +436,7 @@ export const designRequestSchema = z.object({
 });
 
 export const implementationRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   designRecordRef: z.string().min(1),
   implementationGoal: z.string().min(1),
   targetPaths: z.array(z.string().min(1)).default([]),
@@ -431,6 +446,7 @@ export const implementationRequestSchema = z.object({
 });
 
 export const qaRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   targetRef: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
   executedChecks: z.array(z.string().min(1)).default([]),
@@ -440,6 +456,7 @@ export const qaRequestSchema = z.object({
 });
 
 export const securityRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   targetRef: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
   focusAreas: z.array(z.string().min(1)).default([]),
@@ -448,6 +465,7 @@ export const securityRequestSchema = z.object({
 });
 
 export const pipelineRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   pipelineScope: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
   qaReportRefs: z.array(z.string().min(1)).default([]),
@@ -826,6 +844,7 @@ export const workflowStateEnvelopeSchema = z.object({
   lifecycleArtifacts: z.array(z.lazy(() => lifecycleArtifactSchema)).default([]),
   blockedPlugins: z.array(blockedPluginSchema).default([]),
   workflowInputs: z.record(z.string(), z.unknown()).default({}),
+  configuration: z.lazy(() => resolvedRunConfigurationSnapshotSchema).optional(),
   agentResults: z.record(z.string(), agentOutputSchema).default({}),
   auditTrail: z.array(auditEntrySchema).default([]),
   usage: providerUsageAggregateSchema.optional()
@@ -1073,6 +1092,7 @@ export const releaseCiEvidenceSummarySchema = z.object({
 });
 
 export const releaseRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   releaseScope: z.string().min(1),
   versionTargets: z.array(releaseVersionTargetSchema).min(1),
   qaReportRefs: z.array(z.string().min(1)).default([]),
@@ -1082,6 +1102,7 @@ export const releaseRequestSchema = z.object({
 });
 
 export const deploymentRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   deploymentScope: z.string().min(1),
   targetEnvironment: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
@@ -1094,6 +1115,7 @@ export const deploymentRequestSchema = z.object({
 });
 
 export const promotionRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   promotionScope: z.string().min(1),
   targetEnvironment: z.string().min(1),
   evidenceSources: z.array(z.string().min(1)).default([]),
@@ -1106,6 +1128,7 @@ export const promotionRequestSchema = z.object({
 });
 
 export const incidentRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   incidentSummary: z.string().min(1),
   severityHint: z.enum(["unknown", "low", "medium", "high", "critical"]).default("unknown"),
   evidenceSources: z.array(z.string().min(1)).default([]),
@@ -1115,12 +1138,157 @@ export const incidentRequestSchema = z.object({
 });
 
 export const maintenanceRequestSchema = z.object({
+  meta: requestMetaSchema.optional(),
   maintenanceGoal: z.string().min(1),
   dependencyAlertRefs: z.array(z.string().min(1)).default([]),
   docsTaskRefs: z.array(z.string().min(1)).default([]),
   releaseReportRefs: z.array(z.string().min(1)).default([]),
   issueRefs: z.array(z.string().min(1)).default([]),
   constraints: z.array(z.string().min(1)).default([])
+});
+
+const policyDefaultsOverlaySchema = z.object(policyDefaultsShape).partial();
+const policyPathsOverlaySchema = z.object(policyPathsShape).partial();
+const policyPluginsOverlaySchema = z.object(policyPluginShape).partial();
+
+export const policyPresetSchema = z.object({
+  description: z.string().min(1).optional(),
+  defaults: policyDefaultsOverlaySchema.optional(),
+  paths: policyPathsOverlaySchema.optional(),
+  plugins: policyPluginsOverlaySchema.optional(),
+  tools: z.record(z.string(), toolPolicySchema).default({})
+});
+
+export const policyPresetDocumentSchema = z.object({
+  version: z.number().int().positive(),
+  presets: z.record(z.string(), policyPresetSchema).default({})
+});
+
+export const workflowControlProfileSchema = z.object({
+  description: z.string().min(1).optional(),
+  requestPatch: z.record(z.string(), z.unknown()).default({}),
+  allowedPolicyPresets: z.array(z.string().min(1)).default([]),
+  allowedWorkflowVariants: z.array(z.string().min(1)).default([])
+});
+
+export const workflowControlFieldOptionSchema = z.object({
+  label: z.string().min(1),
+  value: z.string().min(1)
+});
+
+export const workflowControlFieldSchema = z.object({
+  path: z.string().min(1),
+  label: z.string().min(1),
+  helpText: z.string().min(1).optional(),
+  input: z.enum(["text", "textarea", "string-array", "path-array", "select", "name-version-array", "json"]).default("text"),
+  required: z.boolean().default(false),
+  options: z.array(workflowControlFieldOptionSchema).default([])
+});
+
+export const workflowControlVariantSchema = z.object({
+  description: z.string().min(1).optional(),
+  nodeAgentOverrides: z.record(z.string(), z.string().min(1)).default({}),
+  disabledNodes: z.array(z.string().min(1)).default([])
+});
+
+export const workflowControlAgentBindingSchema = z.object({
+  description: z.string().min(1).optional(),
+  nodeIds: z.array(z.string().min(1)).min(1),
+  allowedAgents: z.array(z.string().min(1)).min(1),
+  defaultAgent: z.string().min(1).optional()
+});
+
+export const workflowControlDefinitionSchema = z.object({
+  version: z.number().int().positive(),
+  workflow: z.string().min(1),
+  profiles: z.record(z.string(), workflowControlProfileSchema).default({}),
+  fieldMetadata: z.array(workflowControlFieldSchema).default([]),
+  workflowVariants: z.record(z.string(), workflowControlVariantSchema).default({}),
+  allowedPolicyPresets: z.array(z.string().min(1)).default([]),
+  agentBindings: z.record(z.string(), workflowControlAgentBindingSchema).default({})
+});
+
+export const controlPlaneDefaultsSchema = z.object({
+  version: z.number().int().positive(),
+  workflows: z.record(
+    z.string(),
+    z.object({
+      profile: z.string().min(1).optional(),
+      policyPreset: z.string().min(1).optional(),
+      workflowVariant: z.string().min(1).optional()
+    })
+  ).default({})
+});
+
+export const configurationFingerprintSchema = z.object({
+  path: z.string().min(1),
+  sha256: z.string().min(1)
+});
+
+export const configurationExecutionNodeSchema = z.object({
+  nodeId: z.string().min(1),
+  kind: nodeKindSchema,
+  agent: z.string().min(1).optional()
+});
+
+export const resolvedRunConfigurationSnapshotSchema = z.object({
+  selectedControls: z.object({
+    profile: z.string().min(1),
+    policyPreset: z.string().min(1).optional(),
+    workflowVariant: z.string().min(1),
+    agentBindings: z.record(z.string(), z.string().min(1)).default({})
+  }),
+  sourceRefs: z.array(z.string().min(1)).default([]),
+  fingerprints: z.array(configurationFingerprintSchema).default([]),
+  effective: z.object({
+    workflow: z.string().min(1),
+    policyFingerprint: z.string().min(1),
+    nodeAgents: z.record(z.string(), z.string().min(1)).default({}),
+    disabledNodes: z.array(z.string().min(1)).default([]),
+    toolEffects: z.record(z.string(), permissionEffectSchema).default({})
+  }),
+  request: z.object({
+    path: z.string().min(1),
+    metaPresent: z.boolean().default(false)
+  }),
+  execution: z.object({
+    executedNodes: z.array(configurationExecutionNodeSchema).default([])
+  }).default({
+    executedNodes: []
+  })
+});
+
+export const runComparisonChangeSchema = z.object({
+  field: z.string().min(1),
+  left: z.unknown().optional(),
+  right: z.unknown().optional()
+});
+
+export const runComparisonDocumentSchema = z.object({
+  leftRunId: z.string().min(1),
+  rightRunId: z.string().min(1),
+  controlChanges: z.array(runComparisonChangeSchema).default([]),
+  executionChanges: z.object({
+    workflowChanged: z.boolean().default(false),
+    profileChanged: z.boolean().default(false),
+    policyPresetChanged: z.boolean().default(false),
+    workflowVariantChanged: z.boolean().default(false),
+    agentBindingChanged: z.boolean().default(false),
+    nodeChanges: z.array(
+      z.object({
+        nodeId: z.string().min(1),
+        leftAgent: z.string().min(1).optional(),
+        rightAgent: z.string().min(1).optional()
+      })
+    ).default([])
+  }),
+  outcomeChanges: z.object({
+    findingsDelta: z.number().int(),
+    blockedActionsDelta: z.number().int(),
+    artifactKindsAdded: z.array(z.string().min(1)).default([]),
+    artifactKindsRemoved: z.array(z.string().min(1)).default([]),
+    changedDecision: z.boolean().default(false)
+  })
 });
 
 export const evalPolicyExpectationSchema = z.object({
@@ -1656,6 +1824,7 @@ export const auditBundleSchema = z.object({
   proposedActions: z.array(proposedActionSchema).default([]),
   blockedPlugins: z.array(blockedPluginSchema).default([]),
   lifecycleArtifacts: z.array(lifecycleArtifactSchema).default([]),
+  configuration: resolvedRunConfigurationSnapshotSchema.optional(),
   artifactPaths: z.object({
     json: z.string().min(1),
     markdown: z.string().min(1)
@@ -1771,6 +1940,7 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   agentManifest: agentManifestSchema,
   agentPluginRegistration: agentPluginRegistrationSchema,
   agentforgeConfig: agentforgeConfigSchema,
+  requestMeta: requestMetaSchema,
   planningRequest: planningRequestSchema,
   designRequest: designRequestSchema,
   implementationRequest: implementationRequestSchema,
@@ -1782,6 +1952,20 @@ export const schemaRegistry: Record<string, ZodTypeAny> = {
   promotionRequest: promotionRequestSchema,
   incidentRequest: incidentRequestSchema,
   maintenanceRequest: maintenanceRequestSchema,
+  policyPreset: policyPresetSchema,
+  policyPresetDocument: policyPresetDocumentSchema,
+  workflowControlProfile: workflowControlProfileSchema,
+  workflowControlFieldOption: workflowControlFieldOptionSchema,
+  workflowControlField: workflowControlFieldSchema,
+  workflowControlVariant: workflowControlVariantSchema,
+  workflowControlAgentBinding: workflowControlAgentBindingSchema,
+  workflowControlDefinition: workflowControlDefinitionSchema,
+  controlPlaneDefaults: controlPlaneDefaultsSchema,
+  configurationFingerprint: configurationFingerprintSchema,
+  configurationExecutionNode: configurationExecutionNodeSchema,
+  resolvedRunConfigurationSnapshot: resolvedRunConfigurationSnapshotSchema,
+  runComparisonChange: runComparisonChangeSchema,
+  runComparisonDocument: runComparisonDocumentSchema,
   evalPolicyExpectation: evalPolicyExpectationSchema,
   evalRedactionExpectation: evalRedactionExpectationSchema,
   evalArtifactExpectation: evalArtifactExpectationSchema,

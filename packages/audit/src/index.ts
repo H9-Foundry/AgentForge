@@ -265,6 +265,7 @@ export function buildAuditBundle(
     proposedActions: state.proposedActions,
     blockedPlugins: state.blockedPlugins,
     lifecycleArtifacts: state.lifecycleArtifacts,
+    ...(state.configuration ? { configuration: state.configuration } : {}),
     artifactPaths: {
       json: options.jsonPath,
       markdown: options.markdownPath

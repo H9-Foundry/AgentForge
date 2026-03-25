@@ -4,6 +4,7 @@ import type {
   ArtifactPanelView,
   BenchmarkIndexView,
   BenchmarkSummaryView,
+  ConfigurationHotspotView,
   EvidenceCategoryView,
   InvalidRunView,
   OutcomeDetailRowView,
@@ -11,6 +12,7 @@ import type {
   OutcomeSummaryView,
   OutcomesDashboardView,
   RiskSummaryView,
+  RunComparisonView,
   RunDetailView,
   RunFilters,
   RunListItemView,
@@ -26,7 +28,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function layout(title: string, active: "runs" | "benchmarks" | "outcomes", body: string): string {
+function layout(title: string, active: "runs" | "benchmarks" | "outcomes" | "configure" | "compare", body: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -39,12 +41,14 @@ function layout(title: string, active: "runs" | "benchmarks" | "outcomes", body:
     <header class="topbar">
       <div>
         <h1>AgentForge Visualizer</h1>
-        <p class="muted">Source-build-only local run inspector for AgentForge dogfooding and benchmark review.</p>
+        <p class="muted">Published-CLI local outcomes and run inspector for evaluating one repository at a time.</p>
       </div>
       <nav class="nav">
-        <a href="/" class="${active === "runs" ? "active" : ""}">Runs</a>
         <a href="/outcomes" class="${active === "outcomes" ? "active" : ""}">Outcomes</a>
+        <a href="/runs" class="${active === "runs" ? "active" : ""}">Runs</a>
+        <a href="/runs/compare" class="${active === "compare" ? "active" : ""}">Compare</a>
         <a href="/benchmarks" class="${active === "benchmarks" ? "active" : ""}">Benchmarks</a>
+        <a href="/configure" class="${active === "configure" ? "active" : ""}">Configure</a>
       </nav>
     </header>
     <main class="page">${body}</main>
@@ -144,8 +148,9 @@ export function renderRunsIndexPage(
   const body = `
     <section class="panel">
       <h2>Runs</h2>
-      <p class="muted">Newest-first index of local AgentForge runs under <code>.agentops/runs</code>.</p>
-      <form class="filters" method="get" action="/">
+      <p class="muted">Practitioner drill-down over local runs in <code>.agentops/runs</code>. Start with <a href="/outcomes">Outcomes</a> when you want the evaluator summary first, then use this page to inspect specific runs.</p>
+      <p class="backlinks"><a href="/outcomes">Back to evaluator summary</a> · <a href="/runs/compare">Compare two runs</a></p>
+      <form class="filters" method="get" action="/runs">
         <label>Search run id <input type="search" name="search" value="${escapeHtml(filters.search ?? "")}" /></label>
         <label>Workflow <select name="workflow">${renderOptions(options.workflows, filters.workflow)}</select></label>
         <label>Status <select name="status">${renderOptions(options.statuses, filters.status)}</select></label>
@@ -275,6 +280,60 @@ function renderBlockedPlugins(blockedPlugins: readonly BlockedPlugin[]): string 
     .join("")}</ul>`;
 }
 
+function buildConfigureHref(target: "request" | "workflow-control" | "policy-presets" | "defaults", workflow?: string): string {
+  const params = new URLSearchParams();
+  params.set("target", target);
+  if (workflow) {
+    params.set("workflow", workflow);
+  }
+  return `/configure?${params.toString()}`;
+}
+
+function renderConfigurationLinks(workflow: string): string {
+  return [
+    `<a href="${escapeHtml(buildConfigureHref("request", workflow))}">Request</a>`,
+    `<a href="${escapeHtml(buildConfigureHref("workflow-control", workflow))}">Workflow control</a>`,
+    `<a href="${escapeHtml(buildConfigureHref("policy-presets"))}">Policy presets</a>`,
+    `<a href="${escapeHtml(buildConfigureHref("defaults"))}">Defaults</a>`
+  ].join(" · ");
+}
+
+function renderRunConfiguration(run: RunDetailView): string {
+  if (!run.configuration) {
+    return `<p class="muted">No resolved configuration snapshot was recorded for this run.</p>`;
+  }
+
+  return `
+    <div class="metrics">
+      ${metricCard("Profile", run.configuration.profile)}
+      ${metricCard("Policy preset", run.configuration.policyPreset ?? "default")}
+      ${metricCard("Workflow variant", run.configuration.workflowVariant)}
+      ${metricCard("Agent bindings", run.configuration.agentBindings.length)}
+    </div>
+    <dl class="meta-grid">
+      <div><dt>Policy fingerprint</dt><dd><code>${escapeHtml(run.configuration.policyFingerprint)}</code></dd></div>
+      <div><dt>Source refs</dt><dd>${run.configuration.sourceRefs.map((ref) => `<span class="chip">${escapeHtml(ref)}</span>`).join("")}</dd></div>
+      <div><dt>Open In Configure</dt><dd>${renderConfigurationLinks(run.workflow)}</dd></div>
+    </dl>
+    <section class="artifact-section">
+      <h3>Node Agents</h3>
+      ${
+        run.configuration.nodeAgents.length === 0
+          ? `<p class="muted">No node-agent mapping recorded.</p>`
+          : `<ul>${run.configuration.nodeAgents.map((entry) => `<li><strong>${escapeHtml(entry.nodeId)}</strong>: ${escapeHtml(entry.agent)}</li>`).join("")}</ul>`
+      }
+    </section>
+    <section class="artifact-section">
+      <h3>Executed Nodes</h3>
+      ${
+        run.configuration.executedNodes.length === 0
+          ? `<p class="muted">No executed-node trace recorded.</p>`
+          : `<ul>${run.configuration.executedNodes.map((entry) => `<li><strong>${escapeHtml(entry.nodeId)}</strong>: ${escapeHtml(entry.kind)}${entry.agent ? ` via ${escapeHtml(entry.agent)}` : ""}</li>`).join("")}</ul>`
+      }
+    </section>
+  `;
+}
+
 function renderArtifactSections(artifact: ArtifactPanelView): string {
   const sections = artifact.sections
     .map((section) => `<section class="artifact-section"><h4>${escapeHtml(section.heading)}</h4><ul>${section.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul></section>`)
@@ -392,6 +451,40 @@ function renderOutcomeSummaryCards(cards: readonly OutcomeSummaryView[]): string
       </a>`
     )
     .join("")}</div>`;
+}
+
+function renderConfigurationHotspots(hotspots: readonly ConfigurationHotspotView[]): string {
+  if (hotspots.length === 0) {
+    return `<p class="muted">No runs with resolved configuration snapshots are available yet. This usually means the current corpus is older than the control-plane release or no recent runs used resolved configuration metadata.</p>`;
+  }
+
+  return `<table class="data-table">
+    <thead>
+      <tr>
+        <th>Dimension</th>
+        <th>Value</th>
+        <th>Runs</th>
+        <th>Changed decisions</th>
+        <th>Blocked actions</th>
+        <th>Workflows</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${hotspots
+        .slice(0, 12)
+        .map(
+          (hotspot) => `<tr>
+            <td>${escapeHtml(hotspot.dimension)}</td>
+            <td><code>${escapeHtml(hotspot.value)}</code></td>
+            <td>${escapeHtml(String(hotspot.runs))}</td>
+            <td>${escapeHtml(String(hotspot.changedDecisions))}</td>
+            <td>${escapeHtml(String(hotspot.blockedActions))}</td>
+            <td>${hotspot.workflows.map((workflow) => `<span class="chip">${escapeHtml(workflow)}</span>`).join("")}</td>
+          </tr>`
+        )
+        .join("")}
+    </tbody>
+  </table>`;
 }
 
 function renderReleaseArmMarkdownLines(view: OutcomesExportDocument["releaseBenchmark"]["arms"][number]): string[] {
@@ -572,7 +665,7 @@ export function renderRunDetailPage(run: RunDetailView): string {
         <div><dt>Bundle</dt><dd><a href="/api/runs/${encodeURIComponent(run.runId)}/bundle.json">bundle.json</a></dd></div>
         <div><dt>Summary</dt><dd><a href="/api/runs/${encodeURIComponent(run.runId)}/summary.md">summary.md</a></dd></div>
       </dl>
-      <p class="backlinks"><a href="/outcomes">Back to Outcomes</a> · <a href="/runs${backToRunsHref ? `?${backToRunsHref}` : ""}">Back to filtered runs</a></p>
+      <p class="backlinks"><a href="/outcomes">Back to Outcomes</a> · <a href="/runs${backToRunsHref ? `?${backToRunsHref}` : ""}">Back to filtered runs</a> · ${renderConfigurationLinks(run.workflow)}</p>
       <details>
         <summary>summary.md</summary>
         <pre>${escapeHtml(run.summaryMarkdown)}</pre>
@@ -585,6 +678,11 @@ export function renderRunDetailPage(run: RunDetailView): string {
     <section class="grid">
       <section class="panel"><h2>Findings</h2>${renderFindings(run.findingsList)}</section>
       <section class="panel"><h2>Blocked Plugins</h2>${renderBlockedPlugins(run.blockedPluginsList)}</section>
+    </section>
+    <section class="panel" id="configuration">
+      <h2>Resolved Configuration</h2>
+      <p class="muted">This run snapshot records which control-plane selections and effective node mappings produced the final outcome.</p>
+      ${renderRunConfiguration(run)}
     </section>
     <section class="panel" id="usage-summary">
       <h2>Usage Summary</h2>
@@ -718,7 +816,8 @@ export function renderBenchmarksPage(view: BenchmarkIndexView): string {
   const body = `
     <section class="panel">
       <h2>Benchmark Dashboard</h2>
-      <p class="muted">Read-only view over local <code>benchmark-summary</code> artifacts emitted by <code>agentforge eval compare</code>.</p>
+      <p class="muted">Deterministic eval evidence only. Use this page after you already understand the live workflow story in <a href="/outcomes">Outcomes</a>.</p>
+      <p class="backlinks"><a href="/outcomes">Back to evaluator summary</a> · <a href="/runs">Inspect local runs</a></p>
       ${
         view.benchmarks.length === 0
           ? `<p class="muted">No benchmark-summary runs found in the current runs root.</p>`
@@ -735,7 +834,8 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
   const body = `
     <section class="panel">
       <h2>Outcomes</h2>
-      <p class="muted">Leadership summary first, practitioner drill-down second. Every metric below links to filtered details and then down to the exact runs that produced it.</p>
+      <p class="muted">Start here after your first run. This page answers whether AgentForge changed the plan, reduced risk, or added enough evidence to justify the workflow.</p>
+      <p class="muted">Use <a href="/runs">Runs</a> for forensic drill-down, <a href="/runs/compare">Compare</a> after you have two candidate runs, <a href="/benchmarks">Benchmarks</a> for deterministic eval evidence, and <a href="/configure">Configure</a> when you need supported config authoring over canonical repo YAML.</p>
       <p class="backlinks"><a href="/api/outcomes/export.json">Export JSON</a> · <a href="/outcomes/export.md">Export Markdown</a> · <a href="/api/outcomes">Raw outcomes JSON</a></p>
       <div class="metrics">
         ${stackedMetricCard("Runs in scope", view.runCount, view.filteredPanel ? `Filtered to ${view.filteredPanel}` : "Full local run corpus")}
@@ -868,6 +968,11 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
       }
       ${renderOutcomeDetailTable(view.details.workflowChain, "No workflow-chain rows match the current filters.")}
     </section>
+    <section class="panel" id="configuration-hotspots">
+      <h2>Configuration Hotspots</h2>
+      <p class="muted">These group runs by profile, policy preset, workflow variant, and explicit agent binding so you can see which control-plane choices correlate with changed decisions or blocked actions.</p>
+      ${renderConfigurationHotspots(view.configurationHotspots)}
+    </section>
     <section class="panel">
       <h2>Benchmark Ledger Overlay</h2>
       <p class="muted">Ledger path: <code>${escapeHtml(view.ledger.path)}</code></p>
@@ -886,6 +991,1028 @@ export function renderOutcomesDashboardPage(view: OutcomesDashboardView): string
 
 export function renderValueDashboardPage(view: OutcomesDashboardView): string {
   return renderOutcomesDashboardPage(view);
+}
+
+export function renderRunComparePage(view: RunComparisonView | undefined, leftRunId?: string, rightRunId?: string): string {
+  const body = !view
+    ? `
+      <section class="panel">
+        <h2>Compare Runs</h2>
+        <p class="muted">Secondary analysis step for operators. Use this after <a href="/outcomes">Outcomes</a> or <a href="/runs">Runs</a> has already identified the two runs worth comparing.</p>
+        <p class="backlinks"><a href="/outcomes">Back to evaluator summary</a> · <a href="/runs">Browse runs</a></p>
+        <form class="filters" method="get" action="/runs/compare">
+          <label>Left run id <input type="text" name="left" value="${escapeHtml(leftRunId ?? "")}" /></label>
+          <label>Right run id <input type="text" name="right" value="${escapeHtml(rightRunId ?? "")}" /></label>
+          <button type="submit">Compare</button>
+        </form>
+      </section>
+    `
+    : `
+      <section class="panel">
+        <h2>Compare Runs</h2>
+        <p class="muted">Secondary analysis step for operators. Control selections are shown before outcome deltas so configuration changes stay explainable.</p>
+        <p class="backlinks"><a href="/outcomes">Back to evaluator summary</a> · <a href="/runs">Browse runs</a></p>
+        <form class="filters" method="get" action="/runs/compare">
+          <label>Left run id <input type="text" name="left" value="${escapeHtml(view.leftRunId)}" /></label>
+          <label>Right run id <input type="text" name="right" value="${escapeHtml(view.rightRunId)}" /></label>
+          <button type="submit">Compare</button>
+        </form>
+        <div class="metrics">
+          ${metricCard("Findings delta", view.outcomeChanges.findingsDelta)}
+          ${metricCard("Blocked actions delta", view.outcomeChanges.blockedActionsDelta)}
+          ${metricCard("Control changes", view.controlChanges.length)}
+          ${metricCard("Node changes", view.executionChanges.nodeChanges.length)}
+        </div>
+      </section>
+      <section class="grid">
+        <section class="panel">
+          <h3>Input And Control Changes</h3>
+          ${
+            view.controlChanges.length === 0
+              ? `<p class="muted">No control selections changed.</p>`
+              : `<ul>${view.controlChanges.map((change) => `<li><strong>${escapeHtml(change.field)}</strong>: <code>${escapeHtml(JSON.stringify(change.left) ?? "null")}</code> -> <code>${escapeHtml(JSON.stringify(change.right) ?? "null")}</code></li>`).join("")}</ul>`
+          }
+        </section>
+        <section class="panel">
+          <h3>Execution Changes</h3>
+          ${
+            view.executionChanges.nodeChanges.length === 0
+              ? `<p class="muted">No node-agent mapping changes recorded.</p>`
+              : `<ul>${view.executionChanges.nodeChanges.map((change) => `<li><strong>${escapeHtml(change.nodeId)}</strong>: ${escapeHtml(change.leftAgent ?? "none")} -> ${escapeHtml(change.rightAgent ?? "none")}</li>`).join("")}</ul>`
+          }
+        </section>
+      </section>
+      <section class="grid">
+        <section class="panel">
+          <h3>Left Run</h3>
+          ${view.left ? `<p><a href="/runs/${encodeURIComponent(view.left.runId)}">${escapeHtml(view.left.runId)}</a> · ${escapeHtml(view.left.workflow)}</p><p class="muted">${renderConfigurationLinks(view.left.workflow)}</p>` : `<p class="muted">Unavailable.</p>`}
+        </section>
+        <section class="panel">
+          <h3>Right Run</h3>
+          ${view.right ? `<p><a href="/runs/${encodeURIComponent(view.right.runId)}">${escapeHtml(view.right.runId)}</a> · ${escapeHtml(view.right.workflow)}</p><p class="muted">${renderConfigurationLinks(view.right.workflow)}</p>` : `<p class="muted">Unavailable.</p>`}
+        </section>
+      </section>
+    `;
+
+  return layout("AgentForge Visualizer - Compare", "compare", body);
+}
+
+export function renderConfigurePage(options: {
+  workflow?: string;
+  target?: string;
+  availableWorkflows: readonly string[];
+  editingEnabled: boolean;
+}): string {
+  const target = options.target ?? "request";
+  const bootstrap = JSON.stringify({
+    workflow: options.workflow ?? "",
+    target,
+    editingEnabled: options.editingEnabled
+  }).replaceAll("<", "\\u003c");
+  const workflowOptions = options.availableWorkflows
+    .map((workflow) => `<option value="${escapeHtml(workflow)}"${workflow === options.workflow ? " selected" : ""}>${escapeHtml(workflow)}</option>`)
+    .join("");
+  const targetOptions = ["request", "workflow-control", "policy-presets", "defaults"]
+    .map((targetOption) => `<option value="${escapeHtml(targetOption)}"${targetOption === target ? " selected" : ""}>${escapeHtml(targetOption)}</option>`)
+    .join("");
+  const body = `
+    <section class="panel">
+      <h2>Configure</h2>
+      <p class="muted">Configuration management is YAML-first. Repo documents stay canonical and <code>agentforge config validate</code> remains the safety path; this browser editor is a supported structured authoring layer over those same files.</p>
+      <form class="filters" method="get" action="/configure">
+        <label>Workflow
+          <select name="workflow" id="configure-workflow">
+            <option value="">select</option>
+            ${workflowOptions}
+          </select>
+        </label>
+        <label>Target
+          <select name="target" id="configure-target">
+            ${targetOptions}
+          </select>
+        </label>
+        <button type="submit">Load</button>
+      </form>
+      <p class="muted">Default path: use the structured editor to understand what each control does, preview the effective resolution, and save only after validation. Advanced YAML remains available for power users and debugging.</p>
+    </section>
+    <section class="panel">
+      <div class="configure-summary-grid">
+        ${metricCard("Workflow", options.workflow ?? "select a workflow")}
+        ${metricCard("Target", target)}
+        ${stackedMetricCard("Editing", options.editingEnabled ? "enabled" : "disabled", options.editingEnabled ? "Preview and save still require validation and approval." : "This repository has explicitly disabled browser config editing. Use visualizer.experimental_config_editing: false only as a temporary compatibility override.")}
+        ${stackedMetricCard("Canonical path", ".agentops/*.yaml", "Structured edits render back to canonical YAML before preview or save.")}
+      </div>
+      <div id="configure-intro" class="panel panel-subtle">
+        <strong>Structured editor</strong>
+        <p class="muted">Loading the target-aware form surface for this document.</p>
+      </div>
+    </section>
+    <section class="panel stack">
+      <div class="row between">
+        <div>
+          <h3>Structured Editor</h3>
+          <p class="muted">Forms and selectors are the default authoring path. Use <strong>View YAML</strong> only when you need to inspect or override the rendered canonical document directly.</p>
+        </div>
+        <span class="badge ${options.editingEnabled ? "badge-complete" : "badge-missing"}">${options.editingEnabled ? "Supported editing enabled" : "Editing disabled"}</span>
+      </div>
+      <div id="configure-status" class="panel panel-subtle">
+        <strong>Loading</strong>
+        <p class="muted">Fetching the CLI-owned editor model for this target.</p>
+      </div>
+      <div id="configure-structured-editor" class="stack"></div>
+    </section>
+    <section class="panel stack">
+      <div class="row between">
+        <div>
+          <h3>Preview And Save</h3>
+          <p class="muted">${options.editingEnabled ? "Semantic preview appears before the raw diff. Save remains approval-gated and only writes the allowlisted YAML files." : "Preview and save are disabled for this repository. Use direct YAML edits plus agentforge config validate if you need to change control documents today."}</p>
+        </div>
+        <div class="row">
+          ${options.editingEnabled ? `<button type="button" id="configure-preview-button">Preview Changes</button>
+          <button type="button" id="configure-save-button">Approve And Save</button>` : ""}
+        </div>
+      </div>
+      <div id="configure-semantic" class="stack">
+        <div class="panel panel-subtle">
+          <strong>No preview yet</strong>
+          <p class="muted">Preview the current structured selections to see the effective run summary, validation result, and policy posture before saving.</p>
+        </div>
+      </div>
+      <pre id="configure-preview-summary">No preview generated yet.</pre>
+      <pre id="configure-preview-diff">No preview generated yet.</pre>
+      <details class="configure-advanced" id="configure-advanced-panel">
+        <summary>View YAML (Advanced)</summary>
+        <p class="muted">This is the canonical document that the structured editor renders. Use it for trust, debugging, or deliberate power-user overrides. Manual YAML editing does not bypass validation, preview hashing, or approval-gated save rules.</p>
+        <textarea id="configure-raw-yaml" rows="24"${options.editingEnabled ? "" : " readonly"}></textarea>
+      </details>
+    </section>
+    <script>
+      (function () {
+        const bootstrap = ${bootstrap};
+        const intro = document.getElementById("configure-intro");
+        const statusBox = document.getElementById("configure-status");
+        const editorRoot = document.getElementById("configure-structured-editor");
+        const semanticRoot = document.getElementById("configure-semantic");
+        const previewSummary = document.getElementById("configure-preview-summary");
+        const previewDiff = document.getElementById("configure-preview-diff");
+        const rawYaml = document.getElementById("configure-raw-yaml");
+        const previewButton = document.getElementById("configure-preview-button");
+        const saveButton = document.getElementById("configure-save-button");
+        const advancedPanel = document.getElementById("configure-advanced-panel");
+
+        let model = undefined;
+        let state = undefined;
+        let rawDirty = false;
+        let lastRenderedDraft = "";
+        let lastPreviewHash = "";
+        let activePresetIndex = 0;
+
+        function escapeHtml(value) {
+          return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+        }
+
+        function clone(value) {
+          return JSON.parse(JSON.stringify(value));
+        }
+
+        function postJson(url, body) {
+          return fetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body)
+          }).then(async function (response) {
+            const json = await response.json();
+            if (!response.ok) {
+              throw new Error(json.error || "Request failed");
+            }
+            return json;
+          });
+        }
+
+        function getJson(url) {
+          return fetch(url).then(async function (response) {
+            const json = await response.json();
+            if (!response.ok) {
+              throw new Error(json.error || "Request failed");
+            }
+            return json;
+          });
+        }
+
+        function targetRequiresWorkflow(target) {
+          return target === "request" || target === "workflow-control";
+        }
+
+        function toLines(values) {
+          return Array.isArray(values) ? values.join("\\n") : "";
+        }
+
+        function fromLines(value) {
+          return String(value || "")
+            .split(/\\r?\\n/)
+            .map(function (entry) { return entry.trim(); })
+            .filter(function (entry) { return entry.length > 0; });
+        }
+
+        function optionMarkup(options, selectedValue, includeBlank, blankLabel) {
+          const values = [];
+          if (includeBlank) {
+            values.push('<option value="">' + escapeHtml(blankLabel || "select") + '</option>');
+          }
+          (options || []).forEach(function (option) {
+            const selected = option.value === selectedValue ? " selected" : "";
+            values.push('<option value="' + escapeHtml(option.value) + '"' + selected + ">" + escapeHtml(option.label) + "</option>");
+          });
+          return values.join("");
+        }
+
+        function checkboxGroupMarkup(options, selectedValues, dataAttrs) {
+          const selected = new Set(selectedValues || []);
+          if (!options || options.length === 0) {
+            return '<p class="muted">No bounded options are available for this section.</p>';
+          }
+          return '<div class="configure-checkbox-list">' + options.map(function (option) {
+            const checked = selected.has(option.value) ? " checked" : "";
+            return '<label class="configure-checkbox"><input type="checkbox" value="' + escapeHtml(option.value) + '"' + dataAttrs + checked + " /> <span>" + escapeHtml(option.label) + "</span></label>";
+          }).join("") + "</div>";
+        }
+
+        function codeHint(text) {
+          return text ? '<div class="configure-help">' + escapeHtml(text) + "</div>" : "";
+        }
+
+        function renderField(field, sectionKey, indexes) {
+          const baseAttrs = ' data-section="' + sectionKey + '" data-field-index="' + indexes.fieldIndex + '"';
+          const help = codeHint(field.helpText);
+
+          if (field.input === "textarea") {
+            return '<label class="configure-field"><span>' + escapeHtml(field.label) + (field.required ? ' <strong>*</strong>' : "") + '</span><textarea rows="5"' + baseAttrs + ' data-input="text">' + escapeHtml(field.value || "") + '</textarea>' + help + "</label>";
+          }
+
+          if (field.input === "select") {
+            return '<label class="configure-field"><span>' + escapeHtml(field.label) + (field.required ? ' <strong>*</strong>' : "") + '</span><select' + baseAttrs + ' data-input="select">' + optionMarkup(field.options || [], field.value || "", !field.required, field.required ? undefined : "none") + '</select>' + help + "</label>";
+          }
+
+          if (field.input === "string-array" || field.input === "path-array") {
+            return '<label class="configure-field"><span>' + escapeHtml(field.label) + (field.required ? ' <strong>*</strong>' : "") + '</span><textarea rows="4"' + baseAttrs + ' data-input="lines">' + escapeHtml(toLines(field.value)) + '</textarea><small class="muted">One value per line.' + (field.input === "path-array" ? " Use repo-relative paths or refs when possible." : "") + '</small>' + help + "</label>";
+          }
+
+          if (field.input === "name-version-array") {
+            const rows = Array.isArray(field.value) && field.value.length > 0 ? field.value : [{ name: "", version: "" }];
+            return '<div class="configure-field"><div class="row between"><span>' + escapeHtml(field.label) + (field.required ? ' <strong>*</strong>' : "") + '</span><button type="button" class="secondary" data-action="add-name-version-row" data-field-index="' + indexes.fieldIndex + '">Add target</button></div><div class="stack">' + rows.map(function (row, rowIndex) {
+              return '<div class="configure-pair-row"><input type="text" placeholder="package or artifact name" value="' + escapeHtml(row.name || "") + '" data-section="' + sectionKey + '" data-field-index="' + indexes.fieldIndex + '" data-row-index="' + rowIndex + '" data-pair-key="name" /><input type="text" placeholder="version or tag" value="' + escapeHtml(row.version || "") + '" data-section="' + sectionKey + '" data-field-index="' + indexes.fieldIndex + '" data-row-index="' + rowIndex + '" data-pair-key="version" /><button type="button" class="secondary" data-action="remove-name-version-row" data-field-index="' + indexes.fieldIndex + '" data-row-index="' + rowIndex + '">Remove</button></div>';
+            }).join("") + "</div>" + help + "</div>";
+          }
+
+          if (field.input === "json") {
+            return '<label class="configure-field"><span>' + escapeHtml(field.label) + '</span><textarea rows="6"' + baseAttrs + ' data-input="json">' + escapeHtml(field.value || "") + '</textarea><small class="muted">Structured JSON for advanced field patches or options.</small>' + help + "</label>";
+          }
+
+          return '<label class="configure-field"><span>' + escapeHtml(field.label) + (field.required ? ' <strong>*</strong>' : "") + '</span><input type="text"' + baseAttrs + ' data-input="text" value="' + escapeHtml(field.value || "") + '" />' + help + "</label>";
+        }
+
+        function setIntro() {
+          if (!model) {
+            return;
+          }
+          intro.innerHTML = '<strong>' + escapeHtml(model.title) + '</strong><p class="muted">' + escapeHtml(model.intro) + '</p><p class="muted">Next step: ' + escapeHtml(model.nextStep) + '</p><p class="muted">Canonical document: <code>' + escapeHtml(model.relativePath) + '</code></p>';
+        }
+
+        function setStatus(title, detail, warning) {
+          statusBox.innerHTML = '<strong>' + escapeHtml(title) + '</strong><p class="' + (warning ? "warning" : "muted") + '">' + escapeHtml(detail) + "</p>";
+        }
+
+        function currentRequestRenderState() {
+          const bindingSelections = {};
+          (state.agentBindings || []).forEach(function (binding) {
+            if (binding.selectedAgent) {
+              bindingSelections[binding.key] = binding.selectedAgent;
+            }
+          });
+          return {
+            meta: {
+              profile: state.meta.profile,
+              policyPreset: state.meta.policyPreset || undefined,
+              workflowVariant: state.meta.workflowVariant,
+              agentBindings: bindingSelections
+            },
+            fields: state.fields
+          };
+        }
+
+        function currentStateForRender() {
+          if (!state) {
+            return {};
+          }
+          if (model.target === "request") {
+            return currentRequestRenderState();
+          }
+          if (model.target === "policy-presets") {
+            return { presets: state.presets };
+          }
+          if (model.target === "defaults") {
+            return { workflows: state.workflows };
+          }
+          return state;
+        }
+
+        function buildSemanticSummary(result) {
+          const sections = [];
+          if (result.semantic) {
+            const semantic = result.semantic;
+            sections.push('<div class="panel panel-subtle"><h4>Effective run summary</h4><div class="configure-summary-grid">'
+              + '<div class="metric"><div class="metric-label">Workflow</div><div class="metric-value">' + escapeHtml(semantic.workflow || model.workflow || "n/a") + '</div></div>'
+              + '<div class="metric"><div class="metric-label">Profile</div><div class="metric-value">' + escapeHtml(semantic.selectedProfile || "default") + '</div></div>'
+              + '<div class="metric"><div class="metric-label">Policy preset</div><div class="metric-value">' + escapeHtml(semantic.selectedPolicyPreset || "default") + '</div></div>'
+              + '<div class="metric"><div class="metric-label">Variant</div><div class="metric-value">' + escapeHtml(semantic.selectedWorkflowVariant || "standard") + '</div></div>'
+              + '</div><div class="meta-grid">'
+              + '<div><dt>Disabled nodes</dt><dd>' + escapeHtml((semantic.disabledNodes || []).join(", ") || "none") + '</dd></div>'
+              + '<div><dt>Node agents</dt><dd>' + escapeHtml(Object.entries(semantic.nodeAgents || {}).map(function (entry) { return entry[0] + "=" + entry[1]; }).join(", ") || "none") + '</dd></div>'
+              + '<div><dt>Policy posture</dt><dd>' + escapeHtml("execution=" + semantic.policySummary.executionMode + ", modelAccess=" + semantic.policySummary.modelAccess + ", network=" + semantic.policySummary.network + ", writes=" + semantic.policySummary.writes) + '</dd></div>'
+              + '<div><dt>Denied tools</dt><dd>' + escapeHtml((semantic.policySummary.deniedTools || []).join(", ") || "none") + '</dd></div>'
+              + '<div><dt>Approval tools</dt><dd>' + escapeHtml((semantic.policySummary.approvalTools || []).join(", ") || "none") + '</dd></div>'
+              + '</div></div>');
+          }
+
+          if (result.validation) {
+            sections.push('<div class="panel ' + (result.validation.valid ? "panel-subtle" : "panel-warning") + '"><h4>Validation</h4><p class="' + (result.validation.valid ? "muted" : "warning") + '">' + escapeHtml(result.validation.valid ? "Passed" : "Failed") + '</p>' + ((result.validation.errors || []).length ? '<ul>' + result.validation.errors.map(function (error) { return '<li>' + escapeHtml(error) + '</li>'; }).join("") + '</ul>' : '<p class="muted">No validation errors.</p>') + '</div>');
+          }
+
+          semanticRoot.innerHTML = sections.join("") || '<div class="panel panel-subtle"><strong>No semantic data</strong><p class="muted">Preview this target to inspect the effective resolution.</p></div>';
+        }
+
+        async function renderDraftFromStructuredState() {
+          const result = await postJson("/api/config/render", {
+            workflow: bootstrap.workflow || undefined,
+            target: bootstrap.target,
+            state: currentStateForRender()
+          });
+          lastRenderedDraft = result.draft;
+          if (!rawDirty) {
+            rawYaml.value = result.draft;
+          }
+          return result.draft;
+        }
+
+        function bindingOptionsForNodes(nodeIds) {
+          const values = new Map();
+          (nodeIds || []).forEach(function (nodeId) {
+            ((model.workflowControl && model.workflowControl.nodeAgentOptions && model.workflowControl.nodeAgentOptions[nodeId]) || []).forEach(function (option) {
+              values.set(option.value, option);
+            });
+          });
+          return Array.from(values.values()).sort(function (left, right) {
+            return left.label.localeCompare(right.label);
+          });
+        }
+
+        function buildInitialState(editorModel) {
+          if (editorModel.target === "request") {
+            return {
+              meta: {
+                profile: editorModel.request.selectedProfile,
+                policyPreset: editorModel.request.selectedPolicyPreset || "",
+                workflowVariant: editorModel.request.selectedWorkflowVariant,
+                agentBindings: {}
+              },
+              fields: clone(editorModel.request.fields),
+              agentBindings: clone(editorModel.request.agentBindings)
+            };
+          }
+
+          if (editorModel.target === "workflow-control") {
+            return {
+              profiles: clone(editorModel.workflowControl.profiles),
+              fieldMetadata: clone(editorModel.workflowControl.fieldMetadata),
+              workflowVariants: clone(editorModel.workflowControl.workflowVariants),
+              allowedPolicyPresets: clone(editorModel.workflowControl.allowedPolicyPresets),
+              agentBindings: clone(editorModel.workflowControl.agentBindings)
+            };
+          }
+
+          if (editorModel.target === "policy-presets") {
+            return {
+              presets: clone(editorModel.policyPresets.presets)
+            };
+          }
+
+          return {
+            workflows: clone(editorModel.defaults.workflows)
+          };
+        }
+
+        function renderValidationNotice(messages) {
+          if (!messages || messages.length === 0) {
+            return "";
+          }
+          return '<div class="panel panel-warning"><strong>Check before preview</strong><ul>' + messages.map(function (message) {
+            return '<li>' + escapeHtml(message) + '</li>';
+          }).join("") + "</ul></div>";
+        }
+
+        function requestLocalWarnings() {
+          return (state.fields || []).flatMap(function (field) {
+            if (!field.required) {
+              return [];
+            }
+            if (field.input === "string-array" || field.input === "path-array") {
+              return Array.isArray(field.value) && field.value.length > 0 ? [] : [field.label + " is required."];
+            }
+            if (field.input === "name-version-array") {
+              return Array.isArray(field.value) && field.value.some(function (entry) { return (entry.name || "").trim().length > 0 || (entry.version || "").trim().length > 0; }) ? [] : [field.label + " needs at least one entry."];
+            }
+            return String(field.value || "").trim().length > 0 ? [] : [field.label + " is required."];
+          });
+        }
+
+        function workflowControlLocalWarnings() {
+          const profileNames = new Set();
+          const variantNames = new Set();
+          const bindingNames = new Set();
+          const messages = {
+            profiles: [],
+            fieldMetadata: [],
+            variants: [],
+            bindings: []
+          };
+
+          (state.profiles || []).forEach(function (profile, index) {
+            const name = String(profile.name || "").trim();
+            if (!name) {
+              messages.profiles.push("Profile " + (index + 1) + " is missing a name.");
+            } else if (profileNames.has(name)) {
+              messages.profiles.push("Profile " + name + " is duplicated.");
+            } else {
+              profileNames.add(name);
+            }
+          });
+
+          (state.fieldMetadata || []).forEach(function (field, index) {
+            if (!String(field.path || "").trim()) {
+              messages.fieldMetadata.push("Field metadata row " + (index + 1) + " is missing a path.");
+            }
+            if (!String(field.label || "").trim()) {
+              messages.fieldMetadata.push("Field metadata row " + (index + 1) + " is missing a label.");
+            }
+          });
+
+          (state.workflowVariants || []).forEach(function (variant, index) {
+            const name = String(variant.name || "").trim();
+            if (!name) {
+              messages.variants.push("Variant " + (index + 1) + " is missing a name.");
+            } else if (variantNames.has(name)) {
+              messages.variants.push("Variant " + name + " is duplicated.");
+            } else {
+              variantNames.add(name);
+            }
+          });
+
+          (state.agentBindings || []).forEach(function (binding, index) {
+            const name = String(binding.name || "").trim();
+            if (!name) {
+              messages.bindings.push("Binding " + (index + 1) + " is missing a name.");
+            } else if (bindingNames.has(name)) {
+              messages.bindings.push("Binding " + name + " is duplicated.");
+            } else {
+              bindingNames.add(name);
+            }
+            if (!Array.isArray(binding.nodeIds) || binding.nodeIds.length === 0) {
+              messages.bindings.push((name || ("Binding " + (index + 1))) + " must target at least one node.");
+            }
+            if (!Array.isArray(binding.allowedAgents) || binding.allowedAgents.length === 0) {
+              messages.bindings.push((name || ("Binding " + (index + 1))) + " must allow at least one agent.");
+            }
+          });
+
+          return messages;
+        }
+
+        function policyPresetLocalWarnings(activePreset) {
+          const warnings = [];
+          const name = String(activePreset.name || "").trim();
+          if (!name) {
+            warnings.push("The active preset needs a name.");
+          }
+          (activePreset.tools || []).forEach(function (tool, index) {
+            if (!String(tool.toolName || "").trim() || !String(tool.effect || "").trim()) {
+              warnings.push("Tool override " + (index + 1) + " needs both a tool and an effect.");
+            }
+          });
+          return warnings;
+        }
+
+        function defaultsLocalWarnings() {
+          return (state.workflows || []).flatMap(function (workflow) {
+            const warnings = [];
+            if (!String(workflow.profile || "").trim()) {
+              warnings.push(workflow.workflow + " has no default profile.");
+            }
+            if (!String(workflow.workflowVariant || "").trim()) {
+              warnings.push(workflow.workflow + " has no default workflow variant.");
+            }
+            return warnings;
+          });
+        }
+
+        function renderRequestEditor() {
+          const request = model.request;
+          const profileRule = (request.profileRules || []).find(function (rule) { return rule.profile === state.meta.profile; });
+          const warnings = requestLocalWarnings();
+          const agentBindings = (state.agentBindings || []).map(function (binding, bindingIndex) {
+            return '<article class="panel panel-subtle"><div class="row between"><strong>' + escapeHtml(binding.label) + '</strong><span class="chip">' + escapeHtml((binding.nodeIds || []).join(", ")) + '</span></div>'
+              + (binding.description ? '<p class="muted">' + escapeHtml(binding.description) + '</p>' : "")
+              + '<label class="configure-field"><span>Assigned agent</span><select data-request-binding-index="' + bindingIndex + '">' + optionMarkup(binding.options || [], binding.selectedAgent || "", true, "inherit default") + '</select></label></article>';
+          }).join("");
+
+          return '<section class="configure-section">' + renderValidationNotice(warnings) + '<h4>Execution selectors</h4><p class="muted">Choose the profile, preset, workflow variant, and agent bindings that shape this run. These selectors become the request meta block in canonical YAML.</p><div class="grid">'
+            + '<label class="configure-field"><span>Profile</span><select id="request-profile">' + optionMarkup(request.profileOptions, state.meta.profile, false) + '</select></label>'
+            + '<label class="configure-field"><span>Policy preset</span><select id="request-policy-preset">' + optionMarkup(request.policyPresetOptions, state.meta.policyPreset, true, "inherit default") + '</select></label>'
+            + '<label class="configure-field"><span>Workflow variant</span><select id="request-workflow-variant">' + optionMarkup(request.workflowVariantOptions, state.meta.workflowVariant, false) + '</select></label>'
+            + '</div>'
+            + '<div class="panel panel-subtle"><strong>Profile guardrails</strong><p class="muted">Allowed policy presets: ' + escapeHtml((profileRule && profileRule.allowedPolicyPresets || []).join(", ") || "default") + '</p><p class="muted">Allowed workflow variants: ' + escapeHtml((profileRule && profileRule.allowedWorkflowVariants || []).join(", ") || "standard") + '</p></div>'
+            + (agentBindings ? '<div class="stack"><h4>Agent bindings</h4>' + agentBindings + '</div>' : "")
+            + '<div class="stack"><h4>Request content</h4>' + state.fields.map(function (field, fieldIndex) {
+              return renderField(field, "request", { fieldIndex: fieldIndex });
+            }).join("") + '</div></section>';
+        }
+
+        function renderWorkflowControlEditor() {
+          const control = model.workflowControl;
+          const warnings = workflowControlLocalWarnings();
+          const profilesMarkup = (state.profiles || []).map(function (profile, profileIndex) {
+            return '<article class="panel panel-subtle"><div class="row between"><h4>Profile ' + escapeHtml(profile.name || ("profile-" + (profileIndex + 1))) + '</h4><button type="button" class="secondary" data-action="remove-profile" data-profile-index="' + profileIndex + '">Remove</button></div>'
+              + '<div class="grid">'
+              + '<label class="configure-field"><span>Name</span><input type="text" data-profile-index="' + profileIndex + '" data-profile-field="name" value="' + escapeHtml(profile.name || "") + '" /></label>'
+              + '<label class="configure-field"><span>Description</span><input type="text" data-profile-index="' + profileIndex + '" data-profile-field="description" value="' + escapeHtml(profile.description || "") + '" /></label>'
+              + '</div>'
+              + '<div><span class="configure-label">Allowed policy presets</span>' + checkboxGroupMarkup(control.policyPresetOptions || [], profile.allowedPolicyPresets || [], ' data-profile-index="' + profileIndex + '" data-profile-multi="allowedPolicyPresets"') + '</div>'
+              + '<div><span class="configure-label">Allowed workflow variants</span>' + checkboxGroupMarkup(control.workflowVariants.map(function (variant) { return { label: variant.name, value: variant.name }; }), profile.allowedWorkflowVariants || [], ' data-profile-index="' + profileIndex + '" data-profile-multi="allowedWorkflowVariants"') + '</div>'
+              + '<div class="stack"><strong>Request patch fields</strong>' + (profile.requestFields || []).map(function (field, fieldIndex) {
+                return renderField(field, "profile-request-field", { fieldIndex: fieldIndex }) .replaceAll('data-section="profile-request-field"', 'data-section="profile-request-field" data-profile-index="' + profileIndex + '"');
+              }).join("") + '</div></article>';
+          }).join("");
+
+          const fieldMetadataMarkup = (state.fieldMetadata || []).map(function (field, fieldIndex) {
+            return '<article class="panel panel-subtle"><div class="row between"><strong>' + escapeHtml(field.path || ("field-" + (fieldIndex + 1))) + '</strong><button type="button" class="secondary" data-action="remove-field-metadata" data-field-index="' + fieldIndex + '">Remove</button></div>'
+              + '<div class="grid">'
+              + '<label class="configure-field"><span>Path</span><input type="text" data-field-metadata-index="' + fieldIndex + '" data-field-metadata-key="path" value="' + escapeHtml(field.path || "") + '" /></label>'
+              + '<label class="configure-field"><span>Label</span><input type="text" data-field-metadata-index="' + fieldIndex + '" data-field-metadata-key="label" value="' + escapeHtml(field.label || "") + '" /></label>'
+              + '<label class="configure-field"><span>Input type</span><select data-field-metadata-index="' + fieldIndex + '" data-field-metadata-key="input">' + optionMarkup([{ label: "text", value: "text" }, { label: "textarea", value: "textarea" }, { label: "string-array", value: "string-array" }, { label: "path-array", value: "path-array" }, { label: "select", value: "select" }, { label: "name-version-array", value: "name-version-array" }, { label: "json", value: "json" }], field.input || "text", false) + '</select></label>'
+              + '<label class="configure-field"><span>Required</span><select data-field-metadata-index="' + fieldIndex + '" data-field-metadata-key="required"><option value="true"' + (field.required ? " selected" : "") + '>true</option><option value="false"' + (!field.required ? " selected" : "") + '>false</option></select></label>'
+              + '</div>'
+              + '<label class="configure-field"><span>Help text</span><input type="text" data-field-metadata-index="' + fieldIndex + '" data-field-metadata-key="helpText" value="' + escapeHtml(field.helpText || "") + '" /></label>'
+              + '<label class="configure-field"><span>Options</span><textarea rows="3" data-field-metadata-index="' + fieldIndex + '" data-field-metadata-key="options">' + escapeHtml((field.options || []).map(function (option) { return option.value + "|" + option.label; }).join("\\n")) + '</textarea><small class="muted">One option per line as value|Label.</small></label></article>';
+          }).join("");
+
+          const variantsMarkup = (state.workflowVariants || []).map(function (variant, variantIndex) {
+            return '<article class="panel panel-subtle"><div class="row between"><h4>Variant ' + escapeHtml(variant.name || ("variant-" + (variantIndex + 1))) + '</h4><button type="button" class="secondary" data-action="remove-variant" data-variant-index="' + variantIndex + '">Remove</button></div>'
+              + '<div class="grid">'
+              + '<label class="configure-field"><span>Name</span><input type="text" data-variant-index="' + variantIndex + '" data-variant-key="name" value="' + escapeHtml(variant.name || "") + '" /></label>'
+              + '<label class="configure-field"><span>Description</span><input type="text" data-variant-index="' + variantIndex + '" data-variant-key="description" value="' + escapeHtml(variant.description || "") + '" /></label>'
+              + '</div>'
+              + '<div><span class="configure-label">Disabled nodes</span>' + checkboxGroupMarkup(control.nodeOptions || [], variant.disabledNodes || [], ' data-variant-index="' + variantIndex + '" data-variant-multi="disabledNodes"') + '</div>'
+              + '<div class="stack"><div class="row between"><strong>Node agent overrides</strong><button type="button" class="secondary" data-action="add-override" data-variant-index="' + variantIndex + '">Add override</button></div>'
+              + ((variant.nodeAgentOverrides || []).length === 0 ? '<p class="muted">No overrides yet.</p>' : (variant.nodeAgentOverrides || []).map(function (override, overrideIndex) {
+                const nodeOptions = optionMarkup(control.nodeOptions || [], override.nodeId || "", true, "select node");
+                const agentOptions = optionMarkup(((control.nodeAgentOptions || {})[override.nodeId] || []), override.agent || "", true, "select agent");
+                return '<div class="configure-pair-row"><select data-variant-index="' + variantIndex + '" data-override-index="' + overrideIndex + '" data-override-key="nodeId">' + nodeOptions + '</select><select data-variant-index="' + variantIndex + '" data-override-index="' + overrideIndex + '" data-override-key="agent">' + agentOptions + '</select><button type="button" class="secondary" data-action="remove-override" data-variant-index="' + variantIndex + '" data-override-index="' + overrideIndex + '">Remove</button></div>';
+              }).join("")) + '</div></article>';
+          }).join("");
+
+          const agentBindingsMarkup = (state.agentBindings || []).map(function (binding, bindingIndex) {
+            const options = bindingOptionsForNodes(binding.nodeIds || []);
+            return '<article class="panel panel-subtle"><div class="row between"><h4>Binding ' + escapeHtml(binding.name || ("binding-" + (bindingIndex + 1))) + '</h4><button type="button" class="secondary" data-action="remove-agent-binding" data-binding-index="' + bindingIndex + '">Remove</button></div>'
+              + '<div class="grid">'
+              + '<label class="configure-field"><span>Name</span><input type="text" data-binding-index="' + bindingIndex + '" data-binding-key="name" value="' + escapeHtml(binding.name || "") + '" /></label>'
+              + '<label class="configure-field"><span>Default agent</span><select data-binding-index="' + bindingIndex + '" data-binding-key="defaultAgent">' + optionMarkup(options, binding.defaultAgent || "", true, "inherit none") + '</select></label>'
+              + '</div>'
+              + '<label class="configure-field"><span>Description</span><input type="text" data-binding-index="' + bindingIndex + '" data-binding-key="description" value="' + escapeHtml(binding.description || "") + '" /></label>'
+              + '<div><span class="configure-label">Node ids</span>' + checkboxGroupMarkup(control.nodeOptions || [], binding.nodeIds || [], ' data-binding-index="' + bindingIndex + '" data-binding-multi="nodeIds"') + '</div>'
+              + '<div><span class="configure-label">Allowed agents</span>' + checkboxGroupMarkup(options, binding.allowedAgents || [], ' data-binding-index="' + bindingIndex + '" data-binding-multi="allowedAgents"') + '</div></article>';
+          }).join("");
+
+          return '<section class="configure-section">'
+            + '<details class="configure-section-card" open><summary>Profiles</summary><div class="stack">' + renderValidationNotice(warnings.profiles) + '<div class="row between"><div><h4>Profiles</h4><p class="muted">Profiles define bounded request patches and selector guardrails.</p></div><button type="button" class="secondary" data-action="add-profile">Add profile</button></div>' + profilesMarkup + '</div></details>'
+            + '<details class="configure-section-card"><summary>Request Fields</summary><div class="stack">' + renderValidationNotice(warnings.fieldMetadata) + '<div class="row between"><div><h4>Request field metadata</h4><p class="muted">These definitions drive the request form shown for this workflow.</p></div><button type="button" class="secondary" data-action="add-field-metadata">Add field</button></div>' + fieldMetadataMarkup + '<div><h4>Allowed policy presets</h4>' + checkboxGroupMarkup(control.policyPresetOptions || [], state.allowedPolicyPresets || [], ' data-root-multi="allowedPolicyPresets"') + '</div></div></details>'
+            + '<details class="configure-section-card"><summary>Variants</summary><div class="stack">' + renderValidationNotice(warnings.variants) + '<div class="row between"><div><h4>Workflow variants</h4><p class="muted">Variants can disable nodes and override node-agent assignments.</p></div><button type="button" class="secondary" data-action="add-variant">Add variant</button></div>' + variantsMarkup + '</div></details>'
+            + '<details class="configure-section-card"><summary>Bindings</summary><div class="stack">' + renderValidationNotice(warnings.bindings) + '<div class="row between"><div><h4>Agent bindings</h4><p class="muted">Bindings constrain which approved agents can execute a node or node group.</p></div><button type="button" class="secondary" data-action="add-agent-binding">Add binding</button></div>' + agentBindingsMarkup + '</div></details>'
+            + '</section>';
+        }
+
+        function renderPolicyPresetEditor() {
+          const policy = model.policyPresets;
+          const presets = state.presets || [];
+          const activePreset = presets[activePresetIndex] || presets[0] || {
+            name: "",
+            description: "",
+            defaults: {},
+            blockedPaths: [],
+            pluginAllowedTiers: [],
+            pluginAllowedSources: [],
+            requireReviewed: undefined,
+            tools: []
+          };
+          return '<section class="configure-section">' + renderValidationNotice(policyPresetLocalWarnings(activePreset)) + '<div class="row between"><div><h4>Policy presets</h4><p class="muted">Presets may narrow the base policy only. Use these to define bounded execution postures for requests and profiles.</p></div><div class="row"><button type="button" class="secondary" data-action="add-policy-preset">Add preset</button>' + (presets.length > 0 ? '<button type="button" class="secondary" data-action="remove-policy-preset">Remove preset</button>' : '') + '</div></div>'
+            + '<label class="configure-field"><span>Active preset</span><select id="policy-preset-selector">' + optionMarkup(presets.map(function (preset, index) { return { label: preset.name || ("preset-" + (index + 1)), value: String(index) }; }), String(activePresetIndex), false) + '</select></label>'
+            + '<div class="grid">'
+            + '<label class="configure-field"><span>Name</span><input type="text" id="policy-preset-name" value="' + escapeHtml(activePreset.name || "") + '" /></label>'
+            + '<label class="configure-field"><span>Description</span><input type="text" id="policy-preset-description" value="' + escapeHtml(activePreset.description || "") + '" /></label>'
+            + '<label class="configure-field"><span>Execution mode</span><select id="policy-default-executionMode">' + optionMarkup(policy.executionModeOptions || [], activePreset.defaults && activePreset.defaults.executionMode || "", true, "inherit base") + '</select></label>'
+            + '<label class="configure-field"><span>Model access</span><select id="policy-default-modelAccess"><option value=""' + ((activePreset.defaults && activePreset.defaults.modelAccess) === undefined ? " selected" : "") + '>inherit base</option><option value="true"' + ((activePreset.defaults && activePreset.defaults.modelAccess) === true ? " selected" : "") + '>true</option><option value="false"' + ((activePreset.defaults && activePreset.defaults.modelAccess) === false ? " selected" : "") + '>false</option></select></label>'
+            + '<label class="configure-field"><span>Network</span><select id="policy-default-network">' + optionMarkup(policy.permissionOptions || [], activePreset.defaults && activePreset.defaults.network || "", true, "inherit base") + '</select></label>'
+            + '<label class="configure-field"><span>Writes</span><select id="policy-default-writes">' + optionMarkup(policy.permissionOptions || [], activePreset.defaults && activePreset.defaults.writes || "", true, "inherit base") + '</select></label>'
+            + '</div>'
+            + '<label class="configure-field"><span>Blocked paths</span><textarea rows="4" id="policy-blocked-paths">' + escapeHtml(toLines(activePreset.blockedPaths)) + '</textarea><small class="muted">One blocked repo path or glob per line.</small></label>'
+            + '<div><span class="configure-label">Allowed plugin tiers</span>' + checkboxGroupMarkup(policy.tierOptions || [], activePreset.pluginAllowedTiers || [], ' data-policy-multi="pluginAllowedTiers"') + '</div>'
+            + '<div><span class="configure-label">Allowed plugin sources</span>' + checkboxGroupMarkup(policy.sourceOptions || [], activePreset.pluginAllowedSources || [], ' data-policy-multi="pluginAllowedSources"') + '</div>'
+            + '<label class="configure-field"><span>Require reviewed plugins</span><select id="policy-require-reviewed"><option value=""' + (activePreset.requireReviewed === undefined ? " selected" : "") + '>inherit base</option><option value="true"' + (activePreset.requireReviewed === true ? " selected" : "") + '>true</option><option value="false"' + (activePreset.requireReviewed === false ? " selected" : "") + '>false</option></select></label>'
+            + '<div class="stack"><div class="row between"><strong>Tool effects</strong><button type="button" class="secondary" data-action="add-policy-tool">Add tool override</button></div>'
+            + ((activePreset.tools || []).length === 0 ? '<p class="muted">No tool-specific narrowing rules yet.</p>' : activePreset.tools.map(function (tool, toolIndex) {
+              return '<div class="configure-pair-row"><select data-policy-tool-index="' + toolIndex + '" data-policy-tool-key="toolName">' + optionMarkup(policy.availableTools || [], tool.toolName || "", true, "select tool") + '</select><select data-policy-tool-index="' + toolIndex + '" data-policy-tool-key="effect">' + optionMarkup(policy.toolEffectOptions || [], tool.effect || "", true, "select effect") + '</select><button type="button" class="secondary" data-action="remove-policy-tool" data-policy-tool-index="' + toolIndex + '">Remove</button></div>';
+            }).join("")) + '</div></section>';
+        }
+
+        function renderDefaultsEditor() {
+          return '<section class="configure-section">' + renderValidationNotice(defaultsLocalWarnings()) + '<h4>Workflow defaults</h4><p class="muted">Defaults define which profile, preset, and variant are used when a request omits the meta selectors.</p><table class="data-table"><thead><tr><th>Workflow</th><th>Profile</th><th>Policy preset</th><th>Workflow variant</th></tr></thead><tbody>'
+            + (state.workflows || []).map(function (workflow, workflowIndex) {
+              return '<tr><td><strong>' + escapeHtml(workflow.workflow) + '</strong></td><td><select data-default-index="' + workflowIndex + '" data-default-key="profile">' + optionMarkup(workflow.profileOptions || [], workflow.profile || "", true, "inherit workflow default") + '</select></td><td><select data-default-index="' + workflowIndex + '" data-default-key="policyPreset">' + optionMarkup(workflow.policyPresetOptions || [], workflow.policyPreset || "", true, "inherit default") + '</select></td><td><select data-default-index="' + workflowIndex + '" data-default-key="workflowVariant">' + optionMarkup(workflow.workflowVariantOptions || [], workflow.workflowVariant || "", true, "inherit standard") + '</select></td></tr>';
+            }).join("") + '</tbody></table></section>';
+        }
+
+        function renderEditor() {
+          if (!model) {
+            editorRoot.innerHTML = "";
+            return;
+          }
+
+          if (model.loadError) {
+            editorRoot.innerHTML = '<div class="panel panel-warning"><strong>Document parse warning</strong><p>' + escapeHtml(model.loadError) + '</p><p class="muted">The structured editor is showing the safest recoverable state. Review the raw YAML in Advanced mode before saving.</p></div>';
+          } else {
+            editorRoot.innerHTML = "";
+          }
+
+          let markup = "";
+          if (model.target === "request") {
+            markup = renderRequestEditor();
+          } else if (model.target === "workflow-control") {
+            markup = renderWorkflowControlEditor();
+          } else if (model.target === "policy-presets") {
+            markup = renderPolicyPresetEditor();
+          } else if (model.target === "defaults") {
+            markup = renderDefaultsEditor();
+          }
+
+          editorRoot.innerHTML += markup;
+          bindInputs();
+        }
+
+        function toggleArrayValue(array, value, checked) {
+          const current = Array.isArray(array) ? array.slice() : [];
+          const next = current.filter(function (entry) { return entry !== value; });
+          if (checked) {
+            next.push(value);
+          }
+          return Array.from(new Set(next));
+        }
+
+        function bindInputs() {
+          const requestProfile = document.getElementById("request-profile");
+          const requestPolicyPreset = document.getElementById("request-policy-preset");
+          const requestWorkflowVariant = document.getElementById("request-workflow-variant");
+          const policyPresetSelector = document.getElementById("policy-preset-selector");
+
+          requestProfile && requestProfile.addEventListener("change", function (event) {
+            state.meta.profile = event.target.value;
+            renderEditor();
+          });
+          requestPolicyPreset && requestPolicyPreset.addEventListener("change", function (event) {
+            state.meta.policyPreset = event.target.value;
+          });
+          requestWorkflowVariant && requestWorkflowVariant.addEventListener("change", function (event) {
+            state.meta.workflowVariant = event.target.value;
+          });
+          policyPresetSelector && policyPresetSelector.addEventListener("change", function (event) {
+            activePresetIndex = Number(event.target.value || "0");
+            renderEditor();
+          });
+
+          editorRoot.querySelectorAll("[data-request-binding-index]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const index = Number(event.target.dataset.requestBindingIndex);
+              state.agentBindings[index].selectedAgent = event.target.value || undefined;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-section='request'], [data-section='profile-request-field']").forEach(function (node) {
+            node.addEventListener("input", function (event) {
+              const fieldIndex = Number(event.target.dataset.fieldIndex);
+              const inputType = event.target.dataset.input;
+              const profileIndex = event.target.dataset.profileIndex ? Number(event.target.dataset.profileIndex) : undefined;
+              const fieldCollection = profileIndex === undefined ? state.fields : state.profiles[profileIndex].requestFields;
+              if (inputType === "lines") {
+                fieldCollection[fieldIndex].value = fromLines(event.target.value);
+              } else if (inputType === "json") {
+                fieldCollection[fieldIndex].value = event.target.value;
+              } else {
+                fieldCollection[fieldIndex].value = event.target.value;
+              }
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-pair-key]").forEach(function (node) {
+            node.addEventListener("input", function (event) {
+              const fieldIndex = Number(event.target.dataset.fieldIndex);
+              const rowIndex = Number(event.target.dataset.rowIndex);
+              const key = event.target.dataset.pairKey;
+              const collection = state.fields[fieldIndex].value;
+              collection[rowIndex][key] = event.target.value;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-profile-field]").forEach(function (node) {
+            node.addEventListener("input", function (event) {
+              const profileIndex = Number(event.target.dataset.profileIndex);
+              state.profiles[profileIndex][event.target.dataset.profileField] = event.target.value;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-profile-multi]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const profileIndex = Number(event.target.dataset.profileIndex);
+              const key = event.target.dataset.profileMulti;
+              state.profiles[profileIndex][key] = toggleArrayValue(state.profiles[profileIndex][key], event.target.value, event.target.checked);
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-field-metadata-key]").forEach(function (node) {
+            node.addEventListener("input", function (event) {
+              const index = Number(event.target.dataset.fieldMetadataIndex);
+              const key = event.target.dataset.fieldMetadataKey;
+              if (key === "required") {
+                state.fieldMetadata[index][key] = event.target.value === "true";
+              } else if (key === "options") {
+                state.fieldMetadata[index][key] = fromLines(event.target.value).map(function (line) {
+                  const pieces = line.split("|");
+                  const value = (pieces[0] || "").trim();
+                  const label = (pieces[1] || pieces[0] || "").trim();
+                  return { value: value, label: label };
+                }).filter(function (option) { return option.value.length > 0; });
+              } else {
+                state.fieldMetadata[index][key] = event.target.value;
+              }
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-root-multi]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const key = event.target.dataset.rootMulti;
+              state[key] = toggleArrayValue(state[key], event.target.value, event.target.checked);
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-variant-key]").forEach(function (node) {
+            node.addEventListener("input", function (event) {
+              const variantIndex = Number(event.target.dataset.variantIndex);
+              state.workflowVariants[variantIndex][event.target.dataset.variantKey] = event.target.value;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-variant-multi]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const variantIndex = Number(event.target.dataset.variantIndex);
+              const key = event.target.dataset.variantMulti;
+              state.workflowVariants[variantIndex][key] = toggleArrayValue(state.workflowVariants[variantIndex][key], event.target.value, event.target.checked);
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-override-key]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const variantIndex = Number(event.target.dataset.variantIndex);
+              const overrideIndex = Number(event.target.dataset.overrideIndex);
+              const key = event.target.dataset.overrideKey;
+              state.workflowVariants[variantIndex].nodeAgentOverrides[overrideIndex][key] = event.target.value;
+              if (key === "nodeId") {
+                state.workflowVariants[variantIndex].nodeAgentOverrides[overrideIndex].agent = "";
+                renderEditor();
+              }
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-binding-key]").forEach(function (node) {
+            node.addEventListener(node.tagName === "SELECT" ? "change" : "input", function (event) {
+              const bindingIndex = Number(event.target.dataset.bindingIndex);
+              state.agentBindings[bindingIndex][event.target.dataset.bindingKey] = event.target.value || undefined;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-binding-multi]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const bindingIndex = Number(event.target.dataset.bindingIndex);
+              const key = event.target.dataset.bindingMulti;
+              state.agentBindings[bindingIndex][key] = toggleArrayValue(state.agentBindings[bindingIndex][key], event.target.value, event.target.checked);
+            });
+          });
+
+          const activePreset = state.presets && state.presets[activePresetIndex];
+          document.getElementById("policy-preset-name")?.addEventListener("input", function (event) {
+            activePreset.name = event.target.value;
+          });
+          document.getElementById("policy-preset-description")?.addEventListener("input", function (event) {
+            activePreset.description = event.target.value;
+          });
+          ["executionMode", "network", "writes"].forEach(function (key) {
+            const node = document.getElementById("policy-default-" + key);
+            node && node.addEventListener("change", function (event) {
+              activePreset.defaults[key] = event.target.value || undefined;
+            });
+          });
+          document.getElementById("policy-default-modelAccess")?.addEventListener("change", function (event) {
+            activePreset.defaults.modelAccess = event.target.value === "" ? undefined : event.target.value === "true";
+          });
+          document.getElementById("policy-blocked-paths")?.addEventListener("input", function (event) {
+            activePreset.blockedPaths = fromLines(event.target.value);
+          });
+          document.getElementById("policy-require-reviewed")?.addEventListener("change", function (event) {
+            activePreset.requireReviewed = event.target.value === "" ? undefined : event.target.value === "true";
+          });
+          editorRoot.querySelectorAll("[data-policy-multi]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const key = event.target.dataset.policyMulti;
+              activePreset[key] = toggleArrayValue(activePreset[key], event.target.value, event.target.checked);
+            });
+          });
+          editorRoot.querySelectorAll("[data-policy-tool-key]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const toolIndex = Number(event.target.dataset.policyToolIndex);
+              activePreset.tools[toolIndex][event.target.dataset.policyToolKey] = event.target.value;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-default-key]").forEach(function (node) {
+            node.addEventListener("change", function (event) {
+              const index = Number(event.target.dataset.defaultIndex);
+              state.workflows[index][event.target.dataset.defaultKey] = event.target.value || undefined;
+            });
+          });
+
+          editorRoot.querySelectorAll("[data-action]").forEach(function (node) {
+            node.addEventListener("click", function (event) {
+              const action = event.target.dataset.action;
+              if (action === "add-name-version-row") {
+                state.fields[Number(event.target.dataset.fieldIndex)].value.push({ name: "", version: "" });
+              } else if (action === "remove-name-version-row") {
+                state.fields[Number(event.target.dataset.fieldIndex)].value.splice(Number(event.target.dataset.rowIndex), 1);
+              } else if (action === "add-profile") {
+                state.profiles.push({ name: "", description: "", allowedPolicyPresets: [], allowedWorkflowVariants: [], requestFields: clone(model.workflowControl.requestFieldDefinitions).map(function (field) { return Object.assign({}, field, { value: field.input === "string-array" || field.input === "path-array" ? [] : field.input === "name-version-array" ? [] : "" }); }) });
+              } else if (action === "remove-profile") {
+                state.profiles.splice(Number(event.target.dataset.profileIndex), 1);
+              } else if (action === "add-field-metadata") {
+                state.fieldMetadata.push({ path: "", label: "", helpText: "", input: "text", required: false, options: [] });
+              } else if (action === "remove-field-metadata") {
+                state.fieldMetadata.splice(Number(event.target.dataset.fieldIndex), 1);
+              } else if (action === "add-variant") {
+                state.workflowVariants.push({ name: "", description: "", disabledNodes: [], nodeAgentOverrides: [] });
+              } else if (action === "remove-variant") {
+                state.workflowVariants.splice(Number(event.target.dataset.variantIndex), 1);
+              } else if (action === "add-override") {
+                state.workflowVariants[Number(event.target.dataset.variantIndex)].nodeAgentOverrides.push({ nodeId: "", agent: "" });
+              } else if (action === "remove-override") {
+                state.workflowVariants[Number(event.target.dataset.variantIndex)].nodeAgentOverrides.splice(Number(event.target.dataset.overrideIndex), 1);
+              } else if (action === "add-agent-binding") {
+                state.agentBindings.push({ name: "", description: "", nodeIds: [], allowedAgents: [], defaultAgent: "" });
+              } else if (action === "remove-agent-binding") {
+                state.agentBindings.splice(Number(event.target.dataset.bindingIndex), 1);
+              } else if (action === "add-policy-preset") {
+                state.presets.push({ name: "", description: "", defaults: {}, blockedPaths: [], pluginAllowedTiers: [], pluginAllowedSources: [], requireReviewed: undefined, tools: [] });
+                activePresetIndex = state.presets.length - 1;
+              } else if (action === "remove-policy-preset") {
+                state.presets.splice(activePresetIndex, 1);
+                activePresetIndex = Math.max(0, activePresetIndex - 1);
+              } else if (action === "add-policy-tool") {
+                state.presets[activePresetIndex].tools.push({ toolName: "", effect: "" });
+              } else if (action === "remove-policy-tool") {
+                state.presets[activePresetIndex].tools.splice(Number(event.target.dataset.policyToolIndex), 1);
+              }
+              rawDirty = false;
+              renderEditor();
+            });
+          });
+        }
+
+        async function loadModel() {
+          if (targetRequiresWorkflow(bootstrap.target) && !bootstrap.workflow) {
+            setStatus("Workflow required", "Select a workflow before editing request or workflow-control targets.", true);
+            editorRoot.innerHTML = '<div class="panel panel-subtle"><p class="muted">Choose a workflow above, then reload this page to see the structured editor for that document.</p></div>';
+            rawYaml.value = "";
+            return;
+          }
+
+          setStatus("Loading editor model", "Fetching the CLI-owned editor model for this target.");
+          try {
+            const query = new URLSearchParams({
+              target: bootstrap.target,
+              workflow: bootstrap.workflow || ""
+            });
+            model = await getJson("/api/config/editor?" + query.toString());
+            state = buildInitialState(model);
+            activePresetIndex = 0;
+            rawDirty = false;
+            lastRenderedDraft = model.rawDocument || "";
+            lastPreviewHash = "";
+            rawYaml.value = model.rawDocument || "";
+            setIntro();
+            setStatus(model.editingEnabled ? "Structured editing ready" : "Structured editing disabled", model.editingEnabled ? "Preview the effective resolution before saving. YAML stays canonical." : "This repository has explicitly disabled browser config editing. The structured form is still available for inspection and learning.");
+            renderEditor();
+          } catch (error) {
+            setStatus("Failed to load editor", String(error), true);
+            editorRoot.innerHTML = '<div class="panel panel-warning"><p>' + escapeHtml(String(error)) + '</p></div>';
+          }
+        }
+
+        async function draftForPreviewOrSave() {
+          if (rawDirty) {
+            lastRenderedDraft = rawYaml.value;
+            return rawYaml.value;
+          }
+          return renderDraftFromStructuredState();
+        }
+
+        previewButton && previewButton.addEventListener("click", async function () {
+          try {
+            const draft = await draftForPreviewOrSave();
+            const result = await postJson("/api/config/preview", {
+              workflow: bootstrap.workflow || undefined,
+              target: bootstrap.target,
+              draft: draft
+            });
+            lastPreviewHash = result.previewHash;
+            buildSemanticSummary(result);
+            previewSummary.textContent = [result.summary, result.validation ? ("Validation: " + (result.validation.valid ? "passed" : "failed")) : ""].filter(Boolean).join("\\n");
+            previewDiff.textContent = result.diff || "No textual diff.";
+            if (!rawDirty) {
+              rawYaml.value = draft;
+            }
+          } catch (error) {
+            previewSummary.textContent = String(error);
+            previewDiff.textContent = String(error);
+            semanticRoot.innerHTML = '<div class="panel panel-warning"><strong>Preview failed</strong><p>' + escapeHtml(String(error)) + '</p></div>';
+          }
+        });
+
+        saveButton && saveButton.addEventListener("click", async function () {
+          try {
+            if (!lastPreviewHash) {
+              previewSummary.textContent = "Save blocked until preview completes successfully.";
+              previewDiff.textContent = "Run Preview Changes first so the guarded save path has a matching preview hash.";
+              return;
+            }
+            const draft = await draftForPreviewOrSave();
+            const result = await postJson("/api/config/save", {
+              workflow: bootstrap.workflow || undefined,
+              target: bootstrap.target,
+              draft: draft,
+              previewHash: lastPreviewHash,
+              approval: "approve-write"
+            });
+            rawDirty = false;
+            previewSummary.textContent = result.validation && result.validation.valid === false ? "Save rejected by validation." : "Saved " + result.path;
+            previewDiff.textContent = result.validation && result.validation.errors && result.validation.errors.length > 0 ? result.validation.errors.join("\\n") : "Saved " + result.path;
+            if (!rawDirty) {
+              rawYaml.value = draft;
+            }
+            await loadModel();
+          } catch (error) {
+            previewSummary.textContent = String(error);
+            previewDiff.textContent = String(error);
+          }
+        });
+
+        rawYaml.addEventListener("input", function () {
+          rawDirty = true;
+          lastPreviewHash = "";
+        });
+
+        advancedPanel.addEventListener("toggle", async function () {
+          if (advancedPanel.open && !rawDirty && !rawYaml.value.trim().length) {
+            try {
+              rawYaml.value = await renderDraftFromStructuredState();
+            } catch (error) {
+              previewSummary.textContent = String(error);
+            }
+          }
+        });
+
+        loadModel();
+      })();
+    </script>
+  `;
+
+  return layout("AgentForge Visualizer - Configure", "configure", body);
 }
 
 export function visualizerStyles(): string {
@@ -963,6 +2090,15 @@ input, select, button {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: #fff;
+}
+textarea {
+  width: 100%;
+  font: 0.92rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  min-height: 20rem;
 }
 button {
   cursor: pointer;
@@ -1059,6 +2195,71 @@ button {
 .workflow-chain-stage-present { background: #f8fbfb; }
 .workflow-chain-stage-missing { background: #fff6f3; border-color: #f2d0c4; }
 .backlinks { margin-top: 1rem; }
+.configure-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.configure-section {
+  display: grid;
+  gap: 1rem;
+}
+.configure-field {
+  display: grid;
+  gap: 0.4rem;
+}
+.configure-label {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.45rem;
+}
+.configure-help {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.configure-checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.configure-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #f8fbfb;
+}
+.configure-checkbox input {
+  margin: 0;
+}
+.configure-pair-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+.configure-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.configure-section-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+  background: #fbfdfd;
+}
+.configure-section-card summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+button.secondary {
+  background: #fff;
+  color: var(--accent);
+  border-color: var(--border);
+}
 pre {
   margin: 0.8rem 0 0;
   padding: 1rem;
@@ -1070,5 +2271,17 @@ pre {
 }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 a { color: var(--accent); }
+@media (max-width: 820px) {
+  .topbar,
+  .row,
+  .between {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .configure-pair-row {
+    grid-template-columns: 1fr;
+  }
+}
 `;
 }

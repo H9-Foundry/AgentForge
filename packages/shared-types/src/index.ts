@@ -60,6 +60,9 @@ import {
   jenkinsCiEvidenceExportSchema,
   ciArtifactEvidenceSchema,
   ciEvidenceSchema,
+  configurationExecutionNodeSchema,
+  configurationFingerprintSchema,
+  controlPlaneDefaultsSchema,
   deploymentGateArtifactPayloadSchema,
   deploymentGateArtifactSchema,
   deploymentGateEvidenceNormalizationSchema,
@@ -114,6 +117,8 @@ import {
   securityArtifactSchema,
   securityRequestSchema,
   planningRequestSchema,
+  policyPresetDocumentSchema,
+  policyPresetSchema,
   planningArtifactPayloadSchema,
   planningArtifactSchema,
   proposedActionSchema,
@@ -136,7 +141,17 @@ import {
   trustTierSchema,
   toolRequestSchema,
   toolResultSchema,
+  requestMetaSchema,
+  resolvedRunConfigurationSnapshotSchema,
+  runComparisonChangeSchema,
+  runComparisonDocumentSchema,
   workflowDefinitionSchema,
+  workflowControlAgentBindingSchema,
+  workflowControlDefinitionSchema,
+  workflowControlFieldOptionSchema,
+  workflowControlFieldSchema,
+  workflowControlProfileSchema,
+  workflowControlVariantSchema,
   workflowStateEnvelopeSchema
 } from "@h9-foundry/agentforge-schemas";
 
@@ -193,6 +208,7 @@ export type LifecycleArtifactEnvelope = Infer<typeof lifecycleArtifactEnvelopeSc
 export type LifecycleArtifact = Infer<typeof lifecycleArtifactSchema>;
 export type PlanningArtifactPayload = Infer<typeof planningArtifactPayloadSchema>;
 export type PlanningArtifact = Infer<typeof planningArtifactSchema>;
+export type RequestMeta = Infer<typeof requestMetaSchema>;
 export type PlanningRequest = Infer<typeof planningRequestSchema>;
 export type DesignArtifactOption = Infer<typeof designArtifactOptionSchema>;
 export type DesignArtifactPayload = Infer<typeof designArtifactPayloadSchema>;
@@ -264,6 +280,20 @@ export type MaintenanceArtifactPayload = Infer<typeof maintenanceArtifactPayload
 export type MaintenanceArtifact = Infer<typeof maintenanceArtifactSchema>;
 export type MaintenanceEvidenceNormalization = Infer<typeof maintenanceEvidenceNormalizationSchema>;
 export type MaintenanceRequest = Infer<typeof maintenanceRequestSchema>;
+export type PolicyPreset = Infer<typeof policyPresetSchema>;
+export type PolicyPresetDocument = Infer<typeof policyPresetDocumentSchema>;
+export type WorkflowControlProfile = Infer<typeof workflowControlProfileSchema>;
+export type WorkflowControlFieldOption = Infer<typeof workflowControlFieldOptionSchema>;
+export type WorkflowControlField = Infer<typeof workflowControlFieldSchema>;
+export type WorkflowControlVariant = Infer<typeof workflowControlVariantSchema>;
+export type WorkflowControlAgentBinding = Infer<typeof workflowControlAgentBindingSchema>;
+export type WorkflowControlDefinition = Infer<typeof workflowControlDefinitionSchema>;
+export type ControlPlaneDefaults = Infer<typeof controlPlaneDefaultsSchema>;
+export type ConfigurationFingerprint = Infer<typeof configurationFingerprintSchema>;
+export type ConfigurationExecutionNode = Infer<typeof configurationExecutionNodeSchema>;
+export type ResolvedRunConfigurationSnapshot = Infer<typeof resolvedRunConfigurationSnapshotSchema>;
+export type RunComparisonChange = Infer<typeof runComparisonChangeSchema>;
+export type RunComparisonDocument = Infer<typeof runComparisonDocumentSchema>;
 export type AgentOutput = Infer<typeof agentOutputSchema>;
 export type AgentManifest = Infer<typeof agentManifestSchema>;
 export type AgentPluginRegistration = Infer<typeof agentPluginRegistrationSchema>;

@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import process from "node:process";
 
@@ -18,7 +19,19 @@ import {
   resolveRunsRoot as resolveVisualizerRunsRoot,
   startVisualizerServer
 } from "@h9-foundry/agentforge-visualizer";
-import type { OutcomesExportDocument } from "@h9-foundry/agentforge-visualizer";
+import type {
+  OutcomesExportDocument,
+  VisualizerConfigAgentBindingEditorModel,
+  VisualizerConfigBindingSelectionModel,
+  VisualizerConfigEditor,
+  VisualizerConfigEditorModel,
+  VisualizerConfigFieldInput,
+  VisualizerConfigFieldModel,
+  VisualizerConfigOption,
+  VisualizerConfigPreviewResult,
+  VisualizerConfigRenderResult,
+  VisualizerConfigSaveResult
+} from "@h9-foundry/agentforge-visualizer";
 import {
   agentforgeConfigSchema,
   auditBundleSchema,
@@ -26,6 +39,7 @@ import {
   benchmarkLedgerDocumentSchema,
   benchmarkLedgerEntrySchema,
   benchmarkLedgerTokenUsageSchema,
+  controlPlaneDefaultsSchema,
   designArtifactSchema,
   designRequestSchema,
   deploymentRequestSchema,
@@ -37,12 +51,16 @@ import {
   pipelineRequestSchema,
   planningArtifactSchema,
   planningRequestSchema,
+  policyPresetDocumentSchema,
   promotionRequestSchema,
   qaRequestSchema,
+  requestMetaSchema,
   releaseRequestSchema,
+  resolvedRunConfigurationSnapshotSchema,
   schemaVersion,
   schemaFixtures,
   securityRequestSchema,
+  workflowControlDefinitionSchema,
   workflowDefinitionSchema
 } from "@h9-foundry/agentforge-schemas";
 import type {
@@ -77,12 +95,16 @@ import type {
   PipelineRequest,
   PlanningArtifact,
   PlanningRequest,
+  PolicyPresetDocument,
   PromotionRequest,
   ProviderUsageAggregate,
   QaRequest,
+  RequestMeta,
+  ResolvedRunConfigurationSnapshot,
   ReleaseRequest,
   ScmReference,
   SecurityRequest,
+  WorkflowControlDefinition,
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
@@ -103,6 +125,216 @@ export type { ReleaseVerifyEntry, ReleaseVerifyResult, ReleaseVerifyTarball } fr
 
 export const startupPresetNames = ["planning-discovery"] as const;
 export type StartupPresetName = (typeof startupPresetNames)[number];
+
+const controlDirName = "control";
+const policyPresetsFileName = "policy-presets.yaml";
+const controlDefaultsFileName = "defaults.yaml";
+
+const workflowRequestPaths: Record<string, string> = {
+  "planning-discovery": ".agentops/requests/planning.yaml",
+  "architecture-design-review": ".agentops/requests/design.yaml",
+  "implementation-proposal": ".agentops/requests/implementation.yaml",
+  "qa-review": ".agentops/requests/qa.yaml",
+  "security-review": ".agentops/requests/security.yaml",
+  "pipeline-evidence-review": ".agentops/requests/pipeline.yaml",
+  "release-readiness": ".agentops/requests/release.yaml",
+  "deployment-gate-review": ".agentops/requests/deployment.yaml",
+  "promotion-approval": ".agentops/requests/promotion.yaml",
+  "incident-handoff": ".agentops/requests/incident.yaml",
+  "maintenance-triage": ".agentops/requests/maintenance.yaml"
+};
+
+const workflowMissingRequestErrors: Record<string, string> = {
+  "planning-discovery": "Missing planning request",
+  "architecture-design-review": "Missing design request",
+  "implementation-proposal": "Missing implementation request",
+  "qa-review": "Missing QA request",
+  "security-review": "Missing security request",
+  "pipeline-evidence-review": "Missing pipeline request",
+  "release-readiness": "Missing release request",
+  "deployment-gate-review": "Missing deployment request",
+  "promotion-approval": "Missing promotion request",
+  "incident-handoff": "Missing incident request",
+  "maintenance-triage": "Missing maintenance request"
+};
+
+type WorkflowFieldInput = "text" | "textarea" | "string-array" | "path-array" | "select" | "name-version-array" | "json";
+
+interface WorkflowFieldDescriptor {
+  path: string;
+  label: string;
+  input?: WorkflowFieldInput;
+  helpText?: string;
+  options?: Array<{ label: string; value: string }>;
+}
+
+const workflowFieldMetadata: Record<string, WorkflowFieldDescriptor[]> = {
+  "planning-discovery": [
+    { path: "problemStatement", label: "Problem Statement", input: "textarea" },
+    { path: "goals", label: "Goals", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" },
+    { path: "issueRefs", label: "Issue References", input: "string-array" },
+    { path: "pathHints", label: "Path Hints", input: "path-array" },
+    { path: "assumptions", label: "Assumptions", input: "string-array" }
+  ],
+  "architecture-design-review": [
+    { path: "planningBriefRef", label: "Planning Brief Reference", input: "text" },
+    { path: "decisionTarget", label: "Decision Target", input: "textarea" },
+    { path: "constraints", label: "Constraints", input: "string-array" },
+    { path: "pathHints", label: "Path Hints", input: "path-array" },
+    { path: "alternatives", label: "Alternatives", input: "string-array" },
+    { path: "questions", label: "Open Questions", input: "string-array" }
+  ],
+  "implementation-proposal": [
+    { path: "designRecordRef", label: "Design Record Reference", input: "text" },
+    { path: "implementationGoal", label: "Implementation Goal", input: "textarea" },
+    { path: "targetPaths", label: "Target Paths", input: "path-array" },
+    { path: "validationCommands", label: "Validation Commands", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" },
+    {
+      path: "approvalMode",
+      label: "Approval Mode",
+      input: "select",
+      options: [
+        { label: "Proposal Only", value: "proposal-only" },
+        { label: "Apply Capable", value: "apply-capable" }
+      ]
+    }
+  ],
+  "qa-review": [
+    { path: "targetRef", label: "Target Reference", input: "text" },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "executedChecks", label: "Executed Checks", input: "string-array" },
+    { path: "focusAreas", label: "Focus Areas", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" },
+    {
+      path: "releaseContext",
+      label: "Release Context",
+      input: "select",
+      options: [
+        { label: "None", value: "none" },
+        { label: "Candidate", value: "candidate" },
+        { label: "Blocking", value: "blocking" }
+      ]
+    }
+  ],
+  "security-review": [
+    { path: "targetRef", label: "Target Reference", input: "text" },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "focusAreas", label: "Focus Areas", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" },
+    {
+      path: "releaseContext",
+      label: "Release Context",
+      input: "select",
+      options: [
+        { label: "None", value: "none" },
+        { label: "Candidate", value: "candidate" },
+        { label: "Blocking", value: "blocking" }
+      ]
+    }
+  ],
+  "pipeline-evidence-review": [
+    { path: "pipelineScope", label: "Pipeline Scope", input: "textarea" },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "qaReportRefs", label: "QA Report References", input: "path-array" },
+    { path: "securityReportRefs", label: "Security Report References", input: "path-array" },
+    { path: "releaseReportRefs", label: "Release Report References", input: "path-array" },
+    { path: "issueRefs", label: "Issue References", input: "string-array" },
+    { path: "focusAreas", label: "Focus Areas", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" }
+  ],
+  "release-readiness": [
+    { path: "releaseScope", label: "Release Scope", input: "textarea" },
+    { path: "versionTargets", label: "Version Targets", input: "name-version-array" },
+    { path: "qaReportRefs", label: "QA Report References", input: "path-array" },
+    { path: "securityReportRefs", label: "Security Report References", input: "path-array" },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" }
+  ],
+  "deployment-gate-review": [
+    { path: "deploymentScope", label: "Deployment Scope", input: "textarea" },
+    { path: "targetEnvironment", label: "Target Environment", input: "text" },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "qaReportRefs", label: "QA Report References", input: "path-array" },
+    { path: "securityReportRefs", label: "Security Report References", input: "path-array" },
+    { path: "releaseReportRefs", label: "Release Report References", input: "path-array" },
+    { path: "pipelineReportRefs", label: "Pipeline Report References", input: "path-array" },
+    { path: "issueRefs", label: "Issue References", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" }
+  ],
+  "promotion-approval": [
+    { path: "promotionScope", label: "Promotion Scope", input: "textarea" },
+    { path: "targetEnvironment", label: "Target Environment", input: "text" },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "qaReportRefs", label: "QA Report References", input: "path-array" },
+    { path: "securityReportRefs", label: "Security Report References", input: "path-array" },
+    { path: "releaseReportRefs", label: "Release Report References", input: "path-array" },
+    { path: "deploymentGateReportRefs", label: "Deployment Gate Report References", input: "path-array" },
+    { path: "issueRefs", label: "Issue References", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" }
+  ],
+  "incident-handoff": [
+    { path: "incidentSummary", label: "Incident Summary", input: "textarea" },
+    {
+      path: "severityHint",
+      label: "Severity Hint",
+      input: "select",
+      options: [
+        { label: "Unknown", value: "unknown" },
+        { label: "Low", value: "low" },
+        { label: "Medium", value: "medium" },
+        { label: "High", value: "high" },
+        { label: "Critical", value: "critical" }
+      ]
+    },
+    { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
+    { path: "releaseReportRefs", label: "Release Report References", input: "path-array" },
+    { path: "issueRefs", label: "Issue References", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" }
+  ],
+  "maintenance-triage": [
+    { path: "maintenanceGoal", label: "Maintenance Goal", input: "textarea" },
+    { path: "dependencyAlertRefs", label: "Dependency Alerts", input: "string-array" },
+    { path: "docsTaskRefs", label: "Docs Tasks", input: "string-array" },
+    { path: "releaseReportRefs", label: "Release Report References", input: "path-array" },
+    { path: "issueRefs", label: "Issue References", input: "string-array" },
+    { path: "constraints", label: "Constraints", input: "string-array" }
+  ]
+};
+
+type ConfigDocumentTarget = "request" | "workflow-control" | "policy-presets" | "defaults";
+type ConfigDocumentOverrides = Record<string, string>;
+type RequestEditorFieldState = Record<string, unknown>;
+
+const executionModeOptions = ["inspect", "suggest", "apply"] as const;
+const permissionOptions = ["allow", "approval_required", "deny"] as const;
+
+function labelizeConfigValue(value: string): string {
+  return value
+    .split(/[-_]/)
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function toEditorOptions(values: readonly string[]): VisualizerConfigOption[] {
+  return values.map((value) => ({ label: labelizeConfigValue(value), value }));
+}
+
+export interface ConfigValidationResult {
+  root: string;
+  valid: boolean;
+  workflows: Array<{
+    workflow: string;
+    requestPath: string;
+    profileCount: number;
+    variantCount: number;
+    policyPresetCount: number;
+    bindingCount: number;
+  }>;
+  errors: string[];
+}
 
 const agentforgeConfigTemplate = `version: 1
 project:
@@ -1196,7 +1428,8 @@ function loadLifecycleArtifactSourceReferences(
 function prepareWorkflowInputs(
   workflow: WorkflowDefinition,
   root: string,
-  policyEngine: ReturnType<typeof createPolicyEngine>
+  policyEngine: ReturnType<typeof createPolicyEngine>,
+  resolvedRequest?: unknown
 ): Record<string, unknown> {
   const requestsDir = join(root, ".agentops", "requests");
   ensureDirectory(requestsDir);
@@ -1205,7 +1438,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/planning.yaml";
     ensureReadablePath(policyEngine, requestPath, "planning request");
     const planningRequest = validatePlanningRequestCompleteness(
-      readYamlFile(join(root, requestPath), planningRequestSchema, "planning request")
+      resolvedRequest
+        ? planningRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), planningRequestSchema, "planning request")
     );
     const planningScmRefs = normalizeScmReferences(planningRequest.issueRefs, inferScmRepoContext(root));
     const planningGithubRefs = normalizeGitHubReferences(planningRequest.issueRefs, inferGitHubRepoContext(root));
@@ -1221,7 +1456,9 @@ function prepareWorkflowInputs(
   if (workflow.name === "architecture-design-review") {
     const requestPath = ".agentops/requests/design.yaml";
     ensureReadablePath(policyEngine, requestPath, "design request");
-    const designRequest = readYamlFile(join(root, requestPath), designRequestSchema, "design request");
+    const designRequest = resolvedRequest
+      ? designRequestSchema.parse(resolvedRequest)
+      : readYamlFile(join(root, requestPath), designRequestSchema, "design request");
     ensureReadablePath(policyEngine, designRequest.planningBriefRef, "planning brief reference");
     const planningBrief = loadPlanningBundleArtifact(root, designRequest.planningBriefRef);
 
@@ -1235,7 +1472,9 @@ function prepareWorkflowInputs(
   if (workflow.name === "implementation-proposal") {
     const requestPath = ".agentops/requests/implementation.yaml";
     ensureReadablePath(policyEngine, requestPath, "implementation request");
-    const implementationRequest = readYamlFile(join(root, requestPath), implementationRequestSchema, "implementation request");
+    const implementationRequest = resolvedRequest
+      ? implementationRequestSchema.parse(resolvedRequest)
+      : readYamlFile(join(root, requestPath), implementationRequestSchema, "implementation request");
     ensureReadablePath(policyEngine, implementationRequest.designRecordRef, "design record reference");
     const designRecord = loadDesignBundleArtifact(root, implementationRequest.designRecordRef);
 
@@ -1249,7 +1488,9 @@ function prepareWorkflowInputs(
   if (workflow.name === "qa-review") {
     const requestPath = ".agentops/requests/qa.yaml";
     ensureReadablePath(policyEngine, requestPath, "QA request");
-    const qaRequest = readYamlFile(join(root, requestPath), qaRequestSchema, "QA request");
+    const qaRequest = resolvedRequest
+      ? qaRequestSchema.parse(resolvedRequest)
+      : readYamlFile(join(root, requestPath), qaRequestSchema, "QA request");
     ensureReadablePath(policyEngine, qaRequest.targetRef, "QA target reference");
     if (!existsSync(join(root, qaRequest.targetRef))) {
       throw new Error(`QA target reference not found: ${qaRequest.targetRef}`);
@@ -1274,7 +1515,9 @@ function prepareWorkflowInputs(
   if (workflow.name === "security-review") {
     const requestPath = ".agentops/requests/security.yaml";
     ensureReadablePath(policyEngine, requestPath, "security request");
-    const securityRequest = readYamlFile(join(root, requestPath), securityRequestSchema, "security request");
+    const securityRequest = resolvedRequest
+      ? securityRequestSchema.parse(resolvedRequest)
+      : readYamlFile(join(root, requestPath), securityRequestSchema, "security request");
     ensureReadablePath(policyEngine, securityRequest.targetRef, "security target reference");
     if (!existsSync(join(root, securityRequest.targetRef))) {
       throw new Error(`Security target reference not found: ${securityRequest.targetRef}`);
@@ -1311,7 +1554,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/pipeline.yaml";
     ensureReadablePath(policyEngine, requestPath, "pipeline request");
     const pipelineRequest = validatePipelineRequestCompleteness(
-      readYamlFile(join(root, requestPath), pipelineRequestSchema, "pipeline request")
+      resolvedRequest
+        ? pipelineRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), pipelineRequestSchema, "pipeline request")
     );
 
     const scmRepoContext = inferScmRepoContext(root);
@@ -1367,7 +1612,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/release.yaml";
     ensureReadablePath(policyEngine, requestPath, "release request");
     const releaseRequest = validateReleaseRequestCompleteness(
-      readYamlFile(join(root, requestPath), releaseRequestSchema, "release request")
+      resolvedRequest
+        ? releaseRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), releaseRequestSchema, "release request")
     );
 
     const releaseIssueRefs = new Set<string>();
@@ -1423,7 +1670,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/deployment.yaml";
     ensureReadablePath(policyEngine, requestPath, "deployment request");
     const deploymentRequest = validateDeploymentRequestCompleteness(
-      readYamlFile(join(root, requestPath), deploymentRequestSchema, "deployment request")
+      resolvedRequest
+        ? deploymentRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), deploymentRequestSchema, "deployment request")
     );
 
     const scmRepoContext = inferScmRepoContext(root);
@@ -1485,7 +1734,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/promotion.yaml";
     ensureReadablePath(policyEngine, requestPath, "promotion request");
     const promotionRequest = validatePromotionRequestCompleteness(
-      readYamlFile(join(root, requestPath), promotionRequestSchema, "promotion request")
+      resolvedRequest
+        ? promotionRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), promotionRequestSchema, "promotion request")
     );
 
     const scmRepoContext = inferScmRepoContext(root);
@@ -1547,7 +1798,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/incident.yaml";
     ensureReadablePath(policyEngine, requestPath, "incident request");
     const incidentRequest = validateIncidentRequestCompleteness(
-      readYamlFile(join(root, requestPath), incidentRequestSchema, "incident request")
+      resolvedRequest
+        ? incidentRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), incidentRequestSchema, "incident request")
     );
 
     const scmRepoContext = inferScmRepoContext(root);
@@ -1597,7 +1850,9 @@ function prepareWorkflowInputs(
     const requestPath = ".agentops/requests/maintenance.yaml";
     ensureReadablePath(policyEngine, requestPath, "maintenance request");
     const maintenanceRequest = validateMaintenanceRequestCompleteness(
-      readYamlFile(join(root, requestPath), maintenanceRequestSchema, "maintenance request")
+      resolvedRequest
+        ? maintenanceRequestSchema.parse(resolvedRequest)
+        : readYamlFile(join(root, requestPath), maintenanceRequestSchema, "maintenance request")
     );
 
     const scmRepoContext = inferScmRepoContext(root);
@@ -1688,6 +1943,7 @@ function normalizeAgentForgeConfigInput(value: unknown): unknown {
   const providers = isRecord(value.providers) ? value.providers : {};
   const plugins = isRecord(value.plugins) ? value.plugins : {};
   const project = isRecord(value.project) ? value.project : {};
+  const visualizer = isRecord(value.visualizer) ? value.visualizer : {};
 
   return {
     version: value.version,
@@ -1708,6 +1964,9 @@ function normalizeAgentForgeConfigInput(value: unknown): unknown {
             trackerIssue: github.tracker_issue ?? github.trackerIssue
           }
         : undefined
+    },
+    visualizer: {
+      experimentalConfigEditing: visualizer.experimental_config_editing ?? visualizer.experimentalConfigEditing ?? true
     },
     plugins: {
       agents: Array.isArray(plugins.agents)
@@ -2183,6 +2442,9 @@ function loadAgentForgeConfig(root: string): AgentForgeConfig {
         default: "disabled"
       },
       reporting: {},
+      visualizer: {
+        experimentalConfigEditing: true
+      },
       plugins: {
         agents: []
       }
@@ -2199,6 +2461,1560 @@ function ensureDirectory(pathValue: string): void {
 
 function writeYamlFile(filePath: string, value: unknown): void {
   writeFileSync(filePath, yaml.dump(value), "utf8");
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function deepMerge(base: unknown, override: unknown): unknown {
+  if (Array.isArray(base) && Array.isArray(override)) {
+    return [...override];
+  }
+
+  if (isRecord(base) && isRecord(override)) {
+    const keys = new Set([...Object.keys(base), ...Object.keys(override)]);
+    return Object.fromEntries(
+      [...keys].map((key) => [key, key in override ? deepMerge(base[key], override[key]) : base[key]])
+    );
+  }
+
+  return override === undefined ? base : override;
+}
+
+function toRelativeRepoPath(root: string, absolutePath: string): string {
+  return absolutePath.startsWith(`${root}/`) ? absolutePath.slice(root.length + 1) : absolutePath;
+}
+
+function workflowControlPath(root: string, workflowName: string): string {
+  return join(root, ".agentops", controlDirName, `${workflowName}.yaml`);
+}
+
+function policyPresetPath(root: string): string {
+  return join(root, ".agentops", controlDirName, policyPresetsFileName);
+}
+
+function controlDefaultsPath(root: string): string {
+  return join(root, ".agentops", controlDirName, controlDefaultsFileName);
+}
+
+function assertSafeWorkflowSlug(workflow: string | undefined): string | undefined {
+  if (workflow === undefined || workflow === "") {
+    return undefined;
+  }
+
+  if (!/^[a-z0-9-]+$/i.test(workflow)) {
+    throw new Error("Workflow name must be a simple slug.");
+  }
+
+  return workflow;
+}
+
+function resolveEditableConfigDocument(root: string, workflow: string | undefined, target: ConfigDocumentTarget): { path: string; relativePath: string } {
+  const safeWorkflow = assertSafeWorkflowSlug(workflow);
+  if (target === "policy-presets") {
+    return {
+      path: policyPresetPath(root),
+      relativePath: toRelativeRepoPath(root, policyPresetPath(root))
+    };
+  }
+  if (target === "defaults") {
+    return {
+      path: controlDefaultsPath(root),
+      relativePath: toRelativeRepoPath(root, controlDefaultsPath(root))
+    };
+  }
+  if (target === "workflow-control") {
+    if (!safeWorkflow) {
+      throw new Error("Workflow is required for workflow-control edits.");
+    }
+    const pathValue = workflowControlPath(root, safeWorkflow);
+    return {
+      path: pathValue,
+      relativePath: toRelativeRepoPath(root, pathValue)
+    };
+  }
+  if (target === "request") {
+    if (!safeWorkflow) {
+      throw new Error("Workflow is required for request edits.");
+    }
+    const requestPath = workflowRequestPaths[safeWorkflow];
+    if (!requestPath) {
+      throw new Error(`Workflow ${safeWorkflow} does not have a request document.`);
+    }
+    return {
+      path: join(root, requestPath),
+      relativePath: requestPath
+    };
+  }
+
+  throw new Error(`Unsupported configure target: ${target}`);
+}
+
+function assertWritableConfigPath(relativePath: string): void {
+  if (!/^\.agentops\/(requests|control)\/[^/]+\.yaml$/.test(relativePath)) {
+    throw new Error(`Config edits are only allowed for .agentops/requests/*.yaml and .agentops/control/*.yaml. Received ${relativePath}.`);
+  }
+}
+
+function readConfigDocumentContents(root: string, absolutePath: string, overrides: ConfigDocumentOverrides = {}): string {
+  const relativePath = toRelativeRepoPath(root, absolutePath);
+  if (relativePath in overrides) {
+    return overrides[relativePath] ?? "";
+  }
+  return readFileSync(absolutePath, "utf8");
+}
+
+function loadYamlDocument(root: string, absolutePath: string, overrides: ConfigDocumentOverrides = {}): unknown {
+  return yaml.load(readConfigDocumentContents(root, absolutePath, overrides));
+}
+
+function createDefaultPolicyPresetDocument(): PolicyPresetDocument {
+  return policyPresetDocumentSchema.parse({
+    version: 1,
+    presets: {
+      default: {
+        description: "Use the repository base policy as-is."
+      },
+      "strict-readonly": {
+        description: "Narrow the default policy to explicit read-only execution with denied writes.",
+        defaults: {
+          executionMode: "inspect",
+          modelAccess: false,
+          network: "deny",
+          writes: "deny"
+        },
+        tools: {
+          "filesystem.write-file": { effect: "deny" },
+          "shell.run-template": { effect: "deny" },
+          "github.create-check": { effect: "deny" }
+        }
+      }
+    }
+  });
+}
+
+function createDefaultControlPlaneDefaults(workflows: readonly WorkflowDefinition[]) {
+  return controlPlaneDefaultsSchema.parse({
+    version: 1,
+    workflows: Object.fromEntries(
+      workflows.map((workflow) => [
+        workflow.name,
+        {
+          profile: "default",
+          policyPreset: "default",
+          workflowVariant: "standard"
+        }
+      ])
+    )
+  });
+}
+
+function createDefaultWorkflowControl(workflow: WorkflowDefinition): WorkflowControlDefinition {
+  return workflowControlDefinitionSchema.parse({
+    version: 1,
+    workflow: workflow.name,
+    profiles: {
+      default: {
+        description: "Base repository-defined request profile.",
+        requestPatch: {},
+        allowedPolicyPresets: ["default", "strict-readonly"],
+        allowedWorkflowVariants: ["standard"]
+      }
+    },
+    fieldMetadata: (workflowFieldMetadata[workflow.name] ?? []).map((field) => ({
+      path: field.path,
+      label: field.label,
+      input: field.input ?? "text",
+      helpText: field.helpText,
+      required: field.path !== "constraints" && field.path !== "issueRefs" && !field.path.endsWith("Sources") && !field.path.endsWith("Refs"),
+      options: field.options ?? []
+    })),
+    workflowVariants: {
+      standard: {
+        description: "Use the shipped workflow topology and built-in node ordering.",
+        nodeAgentOverrides: {},
+        disabledNodes: []
+      }
+    },
+    allowedPolicyPresets: ["default", "strict-readonly"],
+    agentBindings: Object.fromEntries(
+      workflow.nodes
+        .filter((node) => node.agent)
+        .map((node) => [
+          node.id,
+          {
+            description: `Select which approved agent implementation executes the ${node.id} node.`,
+            nodeIds: [node.id],
+            allowedAgents: [node.agent],
+            defaultAgent: node.agent
+          }
+        ])
+    )
+  });
+}
+
+function ensureControlFiles(root: string): string[] {
+  const created: string[] = [];
+  const controlDir = join(root, ".agentops", controlDirName);
+  const workflowsDir = join(root, ".agentops", "workflows");
+  ensureDirectory(controlDir);
+
+  const workflowFiles = readdirSync(workflowsDir)
+    .filter((entry) => entry.endsWith(".yaml"))
+    .map((entry) => normalizeWorkflow(loadYaml(join(workflowsDir, entry))));
+
+  const presetsPath = policyPresetPath(root);
+  if (!existsSync(presetsPath)) {
+    writeYamlFile(presetsPath, createDefaultPolicyPresetDocument());
+    created.push(presetsPath);
+  }
+
+  const defaultsPathValue = controlDefaultsPath(root);
+  if (!existsSync(defaultsPathValue)) {
+    writeYamlFile(defaultsPathValue, createDefaultControlPlaneDefaults(workflowFiles));
+    created.push(defaultsPathValue);
+  }
+
+  for (const workflow of workflowFiles) {
+    const pathValue = workflowControlPath(root, workflow.name);
+    if (!existsSync(pathValue)) {
+      writeYamlFile(pathValue, createDefaultWorkflowControl(workflow));
+      created.push(pathValue);
+    }
+  }
+
+  return created;
+}
+
+function loadControlPlaneDefaults(root: string, workflows: readonly WorkflowDefinition[], overrides: ConfigDocumentOverrides = {}) {
+  const defaultsPathValue = controlDefaultsPath(root);
+  if (!existsSync(defaultsPathValue)) {
+    return createDefaultControlPlaneDefaults(workflows);
+  }
+
+  return controlPlaneDefaultsSchema.parse(loadYamlDocument(root, defaultsPathValue, overrides));
+}
+
+function loadPolicyPresetDocument(root: string, overrides: ConfigDocumentOverrides = {}): PolicyPresetDocument {
+  const presetsPath = policyPresetPath(root);
+  if (!existsSync(presetsPath)) {
+    return createDefaultPolicyPresetDocument();
+  }
+
+  return policyPresetDocumentSchema.parse(loadYamlDocument(root, presetsPath, overrides));
+}
+
+function loadWorkflowControlDefinition(root: string, workflow: WorkflowDefinition, overrides: ConfigDocumentOverrides = {}): WorkflowControlDefinition {
+  const controlPath = workflowControlPath(root, workflow.name);
+  if (!existsSync(controlPath)) {
+    return createDefaultWorkflowControl(workflow);
+  }
+
+  return workflowControlDefinitionSchema.parse(loadYamlDocument(root, controlPath, overrides));
+}
+
+function findWorkflowDefinitionByName(root: string, workflowName: string): WorkflowDefinition {
+  const workflow = listWorkflowDefinitions(root).find((candidate) => candidate.name === workflowName);
+  if (!workflow) {
+    throw new Error(`Unknown workflow '${workflowName}'.`);
+  }
+  return workflow;
+}
+
+function cloneValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function parseConfigDocumentForEditor(
+  root: string,
+  workflow: string | undefined,
+  target: ConfigDocumentTarget
+): {
+  resolvedDocument: { path: string; relativePath: string };
+  rawDocument: string;
+  parsedDocument: unknown;
+  loadError?: string;
+} {
+  const resolvedDocument = resolveEditableConfigDocument(root, workflow, target);
+  const rawDocument = existsSync(resolvedDocument.path) ? readFileSync(resolvedDocument.path, "utf8") : "";
+
+  if (rawDocument.trim().length === 0) {
+    return {
+      resolvedDocument,
+      rawDocument,
+      parsedDocument: {}
+    };
+  }
+
+  try {
+    return {
+      resolvedDocument,
+      rawDocument,
+      parsedDocument: yaml.load(rawDocument) ?? {}
+    };
+  } catch (error) {
+    return {
+      resolvedDocument,
+      rawDocument,
+      parsedDocument: {},
+      loadError: error instanceof Error ? error.message : "Failed to parse YAML document."
+    };
+  }
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => String(entry ?? "").trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function normalizeEditorOptionalString(value: unknown): string | undefined {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeBooleanValue(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeNameVersionArray(value: unknown): Array<{ name: string; version: string }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    if (!isRecord(entry)) {
+      return [];
+    }
+    const name = typeof entry.name === "string" ? entry.name : "";
+    const version = typeof entry.version === "string" ? entry.version : "";
+    return [{ name, version }];
+  });
+}
+
+function inferFieldInputFromValue(path: string, value: unknown): WorkflowFieldInput {
+  if (Array.isArray(value)) {
+    if (value.every((entry) => isRecord(entry) && "name" in entry && "version" in entry)) {
+      return "name-version-array";
+    }
+    if (path.endsWith("Refs") || path.endsWith("Sources") || path.endsWith("Paths") || path.endsWith("Hints")) {
+      return "path-array";
+    }
+    return "string-array";
+  }
+
+  if (path.endsWith("Summary") || path.endsWith("Scope") || path.endsWith("Statement") || path.endsWith("Goal") || path.endsWith("Target")) {
+    return "textarea";
+  }
+
+  return "text";
+}
+
+function createFallbackWorkflowFieldDescriptor(path: string, value: unknown): WorkflowFieldDescriptor {
+  return {
+    path,
+    label: labelizeConfigValue(path),
+    input: inferFieldInputFromValue(path, value)
+  };
+}
+
+function createEmptyRequestFields(workflowName: string): RequestEditorFieldState {
+  switch (workflowName) {
+    case "planning-discovery":
+      return { problemStatement: "", goals: [], constraints: [], issueRefs: [], pathHints: [], assumptions: [] };
+    case "architecture-design-review":
+      return { planningBriefRef: "", decisionTarget: "", constraints: [], pathHints: [], alternatives: [], questions: [] };
+    case "implementation-proposal":
+      return { designRecordRef: "", implementationGoal: "", targetPaths: [], validationCommands: [], constraints: [], approvalMode: "" };
+    case "qa-review":
+      return { targetRef: "", evidenceSources: [], executedChecks: [], focusAreas: [], constraints: [], releaseContext: "none" };
+    case "security-review":
+      return { targetRef: "", evidenceSources: [], focusAreas: [], constraints: [], releaseContext: "none" };
+    case "pipeline-evidence-review":
+      return { pipelineScope: "", evidenceSources: [], qaReportRefs: [], securityReportRefs: [], releaseReportRefs: [], issueRefs: [], focusAreas: [], constraints: [] };
+    case "release-readiness":
+      return { releaseScope: "", versionTargets: [], qaReportRefs: [], securityReportRefs: [], evidenceSources: [], constraints: [] };
+    case "deployment-gate-review":
+      return { deploymentScope: "", targetEnvironment: "", evidenceSources: [], qaReportRefs: [], securityReportRefs: [], releaseReportRefs: [], pipelineReportRefs: [], issueRefs: [], constraints: [] };
+    case "promotion-approval":
+      return { promotionScope: "", targetEnvironment: "", evidenceSources: [], qaReportRefs: [], securityReportRefs: [], releaseReportRefs: [], deploymentGateReportRefs: [], issueRefs: [], constraints: [] };
+    case "incident-handoff":
+      return { incidentSummary: "", severityHint: "unknown", evidenceSources: [], releaseReportRefs: [], issueRefs: [], constraints: [] };
+    case "maintenance-triage":
+      return { maintenanceGoal: "", dependencyAlertRefs: [], docsTaskRefs: [], releaseReportRefs: [], issueRefs: [], constraints: [] };
+    default:
+      return {};
+  }
+}
+
+function createFieldModel(
+  descriptor: WorkflowFieldDescriptor,
+  value: unknown,
+  required?: boolean
+): VisualizerConfigFieldModel {
+  const input = descriptor.input ?? inferFieldInputFromValue(descriptor.path, value);
+  let normalizedValue: unknown = value;
+
+  if (input === "string-array" || input === "path-array") {
+    normalizedValue = normalizeStringArray(value);
+  } else if (input === "name-version-array") {
+    normalizedValue = normalizeNameVersionArray(value);
+  } else if (input === "select") {
+    normalizedValue = typeof value === "string" ? value : "";
+  } else if (input === "json") {
+    normalizedValue = value === undefined ? "" : JSON.stringify(value, null, 2);
+  } else {
+    normalizedValue = typeof value === "string" ? value : "";
+  }
+
+  return {
+    key: descriptor.path,
+    label: descriptor.label,
+    input,
+    required: required ?? false,
+    helpText: descriptor.helpText,
+    options: descriptor.options,
+    value: normalizedValue
+  };
+}
+
+function buildRequestFieldDefinitions(
+  workflowName: string,
+  control: WorkflowControlDefinition,
+  currentFields: Record<string, unknown>
+): WorkflowFieldDescriptor[] {
+  const baseDefinitions = (control.fieldMetadata.length > 0
+    ? control.fieldMetadata.map((field) => ({
+        path: field.path,
+        label: field.label,
+        input: (field.input === "json" ? "json" : field.input) as WorkflowFieldInput,
+        helpText: field.helpText,
+        options: field.options
+      }))
+    : workflowFieldMetadata[workflowName] ?? []
+  ).map((definition) => ({ ...definition }));
+
+  const seen = new Set(baseDefinitions.map((definition) => definition.path));
+  for (const [key, value] of Object.entries(currentFields)) {
+    if (key === "meta" || seen.has(key)) {
+      continue;
+    }
+    baseDefinitions.push(createFallbackWorkflowFieldDescriptor(key, value));
+    seen.add(key);
+  }
+
+  return baseDefinitions;
+}
+
+function valueToStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => String(entry ?? "").trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function requestFieldsFromState(fields: VisualizerConfigFieldModel[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    if (field.input === "string-array" || field.input === "path-array") {
+      const values = valueToStringArray(field.value);
+      if (values.length > 0 || field.required) {
+        result[field.key] = values;
+      }
+      continue;
+    }
+
+    if (field.input === "name-version-array") {
+      const values = Array.isArray(field.value)
+        ? field.value.flatMap((entry) => {
+            if (!isRecord(entry)) {
+              return [];
+            }
+            const name = typeof entry.name === "string" ? entry.name.trim() : "";
+            const version = typeof entry.version === "string" ? entry.version.trim() : "";
+            if (name.length === 0 && version.length === 0) {
+              return [];
+            }
+            return [{ name, version }];
+          })
+        : [];
+      if (values.length > 0 || field.required) {
+        result[field.key] = values;
+      }
+      continue;
+    }
+
+    if (field.input === "json") {
+      const raw = typeof field.value === "string" ? field.value.trim() : "";
+      if (raw.length === 0) {
+        if (field.required) {
+          result[field.key] = {};
+        }
+        continue;
+      }
+      try {
+        result[field.key] = JSON.parse(raw);
+      } catch {
+        result[field.key] = raw;
+      }
+      continue;
+    }
+
+    const value = typeof field.value === "string" ? field.value : "";
+    if (value.trim().length > 0 || field.required) {
+      result[field.key] = value;
+    }
+  }
+
+  return result;
+}
+
+function requestFieldDefinitionsForWorkflow(workflowName: string): WorkflowFieldDescriptor[] {
+  return cloneValue(workflowFieldMetadata[workflowName] ?? []);
+}
+
+function baseRequestFieldOptions(workflowName: string): Array<Omit<VisualizerConfigFieldModel, "value">> {
+  const emptyFields = createEmptyRequestFields(workflowName);
+  return requestFieldDefinitionsForWorkflow(workflowName).map((definition) => {
+    const field = createFieldModel(definition, emptyFields[definition.path], definition.path !== "constraints" && definition.path !== "issueRefs" && !definition.path.endsWith("Sources") && !definition.path.endsWith("Refs"));
+    return {
+      key: field.key,
+      label: field.label,
+      input: field.input,
+      required: field.required,
+      helpText: field.helpText,
+      options: field.options
+    };
+  });
+}
+
+function createEditorIntro(target: ConfigDocumentTarget): { title: string; intro: string; nextStep: string } {
+  switch (target) {
+    case "request":
+      return {
+        title: "Workflow Request",
+        intro: "Set the request inputs and execution selectors for one workflow without hand-authoring YAML.",
+        nextStep: "Preview the effective run summary, then save the canonical request YAML."
+      };
+    case "workflow-control":
+      return {
+        title: "Workflow Control",
+        intro: "Manage profiles, request form metadata, workflow variants, allowed presets, and agent bindings for this workflow.",
+        nextStep: "Preview validation and semantic resolution before saving the control document."
+      };
+    case "policy-presets":
+      return {
+        title: "Policy Presets",
+        intro: "Edit narrowing-only policy presets that specialize the base policy without widening permissions.",
+        nextStep: "Preview the effective policy posture, then save the preset document."
+      };
+    case "defaults":
+      return {
+        title: "Workflow Defaults",
+        intro: "Choose the default profile, preset, and workflow variant for each workflow family.",
+        nextStep: "Preview the resulting selections, then save the defaults document."
+      };
+  }
+}
+
+function buildBindingSelectionModels(
+  control: WorkflowControlDefinition,
+  selectedBindings: Record<string, string>
+): VisualizerConfigBindingSelectionModel[] {
+  return Object.entries(control.agentBindings).map(([bindingName, binding]) => ({
+    key: bindingName,
+    label: labelizeConfigValue(bindingName),
+    description: binding.description,
+    nodeIds: binding.nodeIds,
+    selectedAgent: selectedBindings[bindingName] ?? binding.defaultAgent,
+    options: toEditorOptions(binding.allowedAgents)
+  }));
+}
+
+function buildRequestEditorModel(root: string, workflowName: string, editingEnabled: boolean): VisualizerConfigEditorModel {
+  const workflow = findWorkflowDefinitionByName(root, workflowName);
+  const { resolvedDocument, rawDocument, parsedDocument, loadError } = parseConfigDocumentForEditor(root, workflowName, "request");
+  const control = loadWorkflowControlDefinition(root, workflow);
+  const presets = loadPolicyPresetDocument(root);
+  const defaults = loadControlPlaneDefaults(root, [workflow]);
+  const defaultSelection = defaults.workflows[workflow.name];
+  const rawRecord = isRecord(parsedDocument) ? parsedDocument : {};
+  const selectedMeta = resolveRequestMetaSelection(rawRecord.meta, defaultSelection);
+  const currentFields = {
+    ...createEmptyRequestFields(workflow.name),
+    ...Object.fromEntries(Object.entries(rawRecord).filter(([key]) => key !== "meta"))
+  };
+  const fieldDefinitions = buildRequestFieldDefinitions(workflow.name, control, currentFields);
+  const fields = fieldDefinitions.map((definition) =>
+    createFieldModel(
+      definition,
+      currentFields[definition.path],
+      control.fieldMetadata.find((field) => field.path === definition.path)?.required
+        ?? (definition.path !== "constraints" && definition.path !== "issueRefs" && !definition.path.endsWith("Sources") && !definition.path.endsWith("Refs"))
+    )
+  );
+  const allPolicyPresets = [...new Set(["default", ...Object.keys(presets.presets)])].sort();
+  const allVariants = [...new Set(["standard", ...Object.keys(control.workflowVariants)])].sort();
+
+  return {
+    workflow: workflow.name,
+    target: "request",
+    path: resolvedDocument.path,
+    relativePath: resolvedDocument.relativePath,
+    editingEnabled,
+    rawDocument,
+    loadError,
+    ...createEditorIntro("request"),
+    request: {
+      selectedProfile: selectedMeta.profile,
+      selectedPolicyPreset: selectedMeta.policyPreset,
+      selectedWorkflowVariant: selectedMeta.workflowVariant,
+      profileOptions: toEditorOptions(Object.keys(control.profiles).sort()),
+      policyPresetOptions: toEditorOptions(allPolicyPresets),
+      workflowVariantOptions: toEditorOptions(allVariants),
+      profileRules: Object.entries(control.profiles).map(([profile, profileValue]) => ({
+        profile,
+        allowedPolicyPresets: [...new Set(["default", ...control.allowedPolicyPresets, ...profileValue.allowedPolicyPresets])].sort(),
+        allowedWorkflowVariants: [...new Set(["standard", ...profileValue.allowedWorkflowVariants])].sort()
+      })),
+      fields,
+      agentBindings: buildBindingSelectionModels(control, selectedMeta.agentBindings)
+    }
+  };
+}
+
+function buildWorkflowControlEditorModel(root: string, workflowName: string, editingEnabled: boolean): VisualizerConfigEditorModel {
+  const workflow = findWorkflowDefinitionByName(root, workflowName);
+  const { resolvedDocument, rawDocument, parsedDocument, loadError } = parseConfigDocumentForEditor(root, workflowName, "workflow-control");
+  const parsedControl = (() => {
+    try {
+      return workflowControlDefinitionSchema.parse(parsedDocument);
+    } catch {
+      return createDefaultWorkflowControl(workflow);
+    }
+  })();
+  const presets = loadPolicyPresetDocument(root);
+  const requestFieldDefinitions = buildRequestFieldDefinitions(workflow.name, parsedControl, createEmptyRequestFields(workflow.name)).map((definition) => {
+    const field = createFieldModel(definition, createEmptyRequestFields(workflow.name)[definition.path], parsedControl.fieldMetadata.find((candidate) => candidate.path === definition.path)?.required);
+    return {
+      key: field.key,
+      label: field.label,
+      input: field.input,
+      required: field.required,
+      helpText: field.helpText,
+      options: field.options
+    };
+  });
+  const nodeOptions = workflow.nodes.map((node) => ({ label: node.id, value: node.id }));
+  const nodeAgentOptions = Object.fromEntries(
+    workflow.nodes.map((node) => {
+      const binding = parsedControl.agentBindings[node.id];
+      const values = binding?.allowedAgents.length ? binding.allowedAgents : node.agent ? [node.agent] : [];
+      return [node.id, toEditorOptions([...new Set(values)].sort())];
+    })
+  );
+
+  return {
+    workflow: workflow.name,
+    target: "workflow-control",
+    path: resolvedDocument.path,
+    relativePath: resolvedDocument.relativePath,
+    editingEnabled,
+    rawDocument,
+    loadError,
+    ...createEditorIntro("workflow-control"),
+    workflowControl: {
+      requestFieldDefinitions,
+      profiles: Object.entries(parsedControl.profiles).map(([name, profile]) => ({
+        name,
+        description: profile.description,
+        allowedPolicyPresets: cloneValue(profile.allowedPolicyPresets),
+        allowedWorkflowVariants: cloneValue(profile.allowedWorkflowVariants),
+        requestFields: requestFieldDefinitions.map((definition) =>
+          createFieldModel(
+            {
+              path: definition.key,
+              label: definition.label,
+              input: definition.input,
+              helpText: definition.helpText,
+              options: definition.options
+            },
+            isRecord(profile.requestPatch) ? profile.requestPatch[definition.key] : undefined,
+            definition.required
+          )
+        )
+      })),
+      fieldMetadata: parsedControl.fieldMetadata.map((field) => ({
+        path: field.path,
+        label: field.label,
+        helpText: field.helpText,
+        input: (field.input === "json" ? "json" : field.input) as VisualizerConfigFieldInput,
+        required: field.required,
+        options: cloneValue(field.options)
+      })),
+      workflowVariants: Object.entries(parsedControl.workflowVariants).map(([name, variant]) => ({
+        name,
+        description: variant.description,
+        disabledNodes: cloneValue(variant.disabledNodes),
+        nodeAgentOverrides: Object.entries(variant.nodeAgentOverrides).map(([nodeId, agent]) => ({ nodeId, agent }))
+      })),
+      allowedPolicyPresets: cloneValue(parsedControl.allowedPolicyPresets),
+      policyPresetOptions: toEditorOptions([...new Set(["default", ...Object.keys(presets.presets)])].sort()),
+      agentBindings: Object.entries(parsedControl.agentBindings).map(([name, binding]) => ({
+        name,
+        description: binding.description,
+        nodeIds: cloneValue(binding.nodeIds),
+        allowedAgents: cloneValue(binding.allowedAgents),
+        defaultAgent: binding.defaultAgent
+      })),
+      nodeOptions,
+      nodeAgentOptions
+    }
+  };
+}
+
+function buildPolicyPresetsEditorModel(root: string, editingEnabled: boolean): VisualizerConfigEditorModel {
+  const { resolvedDocument, rawDocument, parsedDocument, loadError } = parseConfigDocumentForEditor(root, undefined, "policy-presets");
+  const document = (() => {
+    try {
+      return policyPresetDocumentSchema.parse(parsedDocument);
+    } catch {
+      return createDefaultPolicyPresetDocument();
+    }
+  })();
+  const basePolicy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+
+  return {
+    target: "policy-presets",
+    path: resolvedDocument.path,
+    relativePath: resolvedDocument.relativePath,
+    editingEnabled,
+    rawDocument,
+    loadError,
+    ...createEditorIntro("policy-presets"),
+    policyPresets: {
+      presets: Object.entries(document.presets).map(([name, preset]) => ({
+        name,
+        description: preset.description,
+        defaults: {
+          executionMode: preset.defaults?.executionMode,
+          modelAccess: preset.defaults?.modelAccess,
+          network: preset.defaults?.network,
+          writes: preset.defaults?.writes
+        },
+        blockedPaths: cloneValue(preset.paths?.blocked ?? []),
+        pluginAllowedTiers: cloneValue(preset.plugins?.allowedTiers ?? []),
+        pluginAllowedSources: cloneValue(preset.plugins?.allowedSources ?? []),
+        requireReviewed: preset.plugins?.requireReviewed,
+        tools: Object.entries(preset.tools ?? {}).map(([toolName, tool]) => ({
+          toolName,
+          effect: tool.effect
+        }))
+      })),
+      availableTools: toEditorOptions(Object.keys(basePolicy.tools).sort()),
+      toolEffectOptions: toEditorOptions([...permissionOptions]),
+      tierOptions: toEditorOptions(basePolicy.plugins.allowedTiers),
+      sourceOptions: toEditorOptions(basePolicy.plugins.allowedSources),
+      executionModeOptions: toEditorOptions([...executionModeOptions]),
+      permissionOptions: toEditorOptions([...permissionOptions])
+    }
+  };
+}
+
+function buildDefaultsEditorModel(root: string, editingEnabled: boolean): VisualizerConfigEditorModel {
+  const workflows = listWorkflowDefinitions(root);
+  const { resolvedDocument, rawDocument, parsedDocument, loadError } = parseConfigDocumentForEditor(root, undefined, "defaults");
+  const defaultsDocument = (() => {
+    try {
+      return controlPlaneDefaultsSchema.parse(parsedDocument);
+    } catch {
+      return createDefaultControlPlaneDefaults(workflows);
+    }
+  })();
+  const presets = loadPolicyPresetDocument(root);
+
+  return {
+    target: "defaults",
+    path: resolvedDocument.path,
+    relativePath: resolvedDocument.relativePath,
+    editingEnabled,
+    rawDocument,
+    loadError,
+    ...createEditorIntro("defaults"),
+    defaults: {
+      workflows: workflows.map((workflow) => {
+        const control = loadWorkflowControlDefinition(root, workflow);
+        const current = defaultsDocument.workflows[workflow.name] ?? {};
+        return {
+          workflow: workflow.name,
+          profile: current.profile,
+          policyPreset: current.policyPreset,
+          workflowVariant: current.workflowVariant,
+          profileOptions: toEditorOptions(Object.keys(control.profiles).sort()),
+          policyPresetOptions: toEditorOptions([...new Set(["default", ...Object.keys(presets.presets)])].sort()),
+          workflowVariantOptions: toEditorOptions(["standard", ...Object.keys(control.workflowVariants)].sort())
+        };
+      })
+    }
+  };
+}
+
+function loadVisualizerConfigEditorModel(
+  root: string,
+  input: { workflow?: string; target: ConfigDocumentTarget },
+  editingEnabled: boolean
+): VisualizerConfigEditorModel {
+  switch (input.target) {
+    case "request":
+      if (!input.workflow) {
+        throw new Error("Workflow is required for request editing.");
+      }
+      return buildRequestEditorModel(root, input.workflow, editingEnabled);
+    case "workflow-control":
+      if (!input.workflow) {
+        throw new Error("Workflow is required for workflow-control editing.");
+      }
+      return buildWorkflowControlEditorModel(root, input.workflow, editingEnabled);
+    case "policy-presets":
+      return buildPolicyPresetsEditorModel(root, editingEnabled);
+    case "defaults":
+      return buildDefaultsEditorModel(root, editingEnabled);
+  }
+
+  const unsupportedTarget: never = input.target;
+  throw new Error(`Unsupported configure target: ${unsupportedTarget}`);
+}
+
+function compactYamlValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const items = value
+      .map((entry) => compactYamlValue(entry))
+      .filter((entry) => entry !== undefined);
+    return items.length > 0 ? items : undefined;
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
+      .map(([key, entry]) => [key, compactYamlValue(entry)] as const)
+      .filter(([, entry]) => entry !== undefined);
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? value : undefined;
+  }
+
+  return value;
+}
+
+function renderRequestDocumentFromState(
+  root: string,
+  workflowName: string,
+  state: unknown
+): string {
+  const workflow = findWorkflowDefinitionByName(root, workflowName);
+  const control = loadWorkflowControlDefinition(root, workflow);
+  const stateRecord = isRecord(state) ? state : {};
+  const metaRecord = isRecord(stateRecord.meta) ? stateRecord.meta : {};
+  const selectedBindings = isRecord(metaRecord.agentBindings) ? Object.fromEntries(
+    Object.entries(metaRecord.agentBindings)
+      .map(([key, value]) => [key, typeof value === "string" ? value : ""])
+      .filter(([, value]) => value.length > 0)
+  ) : {};
+  const fields = Array.isArray(stateRecord.fields) ? stateRecord.fields : [];
+  const requestFields = requestFieldsFromState(fields as VisualizerConfigFieldModel[]);
+  const meta = requestMetaSchema.parse({
+    profile: typeof metaRecord.profile === "string" && metaRecord.profile.length > 0 ? metaRecord.profile : "default",
+    policyPreset: normalizeEditorOptionalString(metaRecord.policyPreset),
+    workflowVariant: typeof metaRecord.workflowVariant === "string" && metaRecord.workflowVariant.length > 0 ? metaRecord.workflowVariant : "standard",
+    agentBindings: selectedBindings
+  });
+  const requestDocument = {
+    meta,
+    ...requestFields
+  };
+  const compact = compactYamlValue(requestDocument);
+  return yaml.dump(compact ?? requestDocument, { lineWidth: -1, noRefs: true });
+}
+
+function renderWorkflowControlDocumentFromState(
+  root: string,
+  workflowName: string,
+  state: unknown
+): string {
+  const workflow = findWorkflowDefinitionByName(root, workflowName);
+  const control = loadWorkflowControlDefinition(root, workflow);
+  const stateRecord = isRecord(state) ? state : {};
+  const profiles = Array.isArray(stateRecord.profiles) ? stateRecord.profiles : [];
+  const fieldMetadata = Array.isArray(stateRecord.fieldMetadata) ? stateRecord.fieldMetadata : [];
+  const workflowVariants = Array.isArray(stateRecord.workflowVariants) ? stateRecord.workflowVariants : [];
+  const agentBindings = Array.isArray(stateRecord.agentBindings) ? stateRecord.agentBindings : [];
+  const allowedPolicyPresets = valueToStringArray(stateRecord.allowedPolicyPresets);
+
+  const requestFieldMap = new Map(buildRequestFieldDefinitions(workflow.name, control, createEmptyRequestFields(workflow.name)).map((field) => [field.path, field]));
+
+  const document = workflowControlDefinitionSchema.parse({
+    version: 1,
+    workflow: workflow.name,
+    profiles: Object.fromEntries(
+      profiles.flatMap((profileValue) => {
+        if (!isRecord(profileValue)) {
+          return [];
+        }
+        const name = normalizeEditorOptionalString(profileValue.name);
+        if (!name) {
+          return [];
+        }
+        const requestFields = Array.isArray(profileValue.requestFields) ? profileValue.requestFields as VisualizerConfigFieldModel[] : [];
+        return [[
+          name,
+          {
+            description: normalizeEditorOptionalString(profileValue.description),
+            allowedPolicyPresets: valueToStringArray(profileValue.allowedPolicyPresets),
+            allowedWorkflowVariants: valueToStringArray(profileValue.allowedWorkflowVariants),
+            requestPatch: requestFieldsFromState(requestFields.map((field) => ({
+              ...field,
+              label: field.label ?? requestFieldMap.get(field.key)?.label ?? labelizeConfigValue(field.key),
+              input: (field.input ?? requestFieldMap.get(field.key)?.input ?? inferFieldInputFromValue(field.key, field.value)) as VisualizerConfigFieldInput,
+              required: field.required ?? false
+            })))
+          }
+        ]];
+      })
+    ),
+    fieldMetadata: fieldMetadata.flatMap((fieldValue) => {
+      if (!isRecord(fieldValue)) {
+        return [];
+      }
+      const path = normalizeEditorOptionalString(fieldValue.path);
+      const label = normalizeEditorOptionalString(fieldValue.label);
+      const input = normalizeEditorOptionalString(fieldValue.input) as WorkflowFieldInput | undefined;
+      if (!path || !label || !input) {
+        return [];
+      }
+      return [{
+        path,
+        label,
+        helpText: normalizeEditorOptionalString(fieldValue.helpText),
+        input,
+        required: Boolean(fieldValue.required),
+        options: Array.isArray(fieldValue.options)
+          ? fieldValue.options.flatMap((option) => {
+              if (!isRecord(option)) {
+                return [];
+              }
+              const optionValue = normalizeEditorOptionalString(option.value);
+              const optionLabel = normalizeEditorOptionalString(option.label);
+              return optionValue && optionLabel ? [{ value: optionValue, label: optionLabel }] : [];
+            })
+          : []
+      }];
+    }),
+    workflowVariants: Object.fromEntries(
+      workflowVariants.flatMap((variantValue) => {
+        if (!isRecord(variantValue)) {
+          return [];
+        }
+        const name = normalizeEditorOptionalString(variantValue.name);
+        if (!name) {
+          return [];
+        }
+        const overrides = Array.isArray(variantValue.nodeAgentOverrides) ? variantValue.nodeAgentOverrides : [];
+        return [[
+          name,
+          {
+            description: normalizeEditorOptionalString(variantValue.description),
+            disabledNodes: valueToStringArray(variantValue.disabledNodes),
+            nodeAgentOverrides: Object.fromEntries(
+              overrides.flatMap((override) => {
+                if (!isRecord(override)) {
+                  return [];
+                }
+                const nodeId = normalizeEditorOptionalString(override.nodeId);
+                const agent = normalizeEditorOptionalString(override.agent);
+                return nodeId && agent ? [[nodeId, agent]] : [];
+              })
+            )
+          }
+        ]];
+      })
+    ),
+    allowedPolicyPresets,
+    agentBindings: Object.fromEntries(
+      agentBindings.flatMap((bindingValue) => {
+        if (!isRecord(bindingValue)) {
+          return [];
+        }
+        const name = normalizeEditorOptionalString(bindingValue.name);
+        if (!name) {
+          return [];
+        }
+        return [[
+          name,
+          {
+            description: normalizeEditorOptionalString(bindingValue.description),
+            nodeIds: valueToStringArray(bindingValue.nodeIds),
+            allowedAgents: valueToStringArray(bindingValue.allowedAgents),
+            defaultAgent: normalizeEditorOptionalString(bindingValue.defaultAgent)
+          }
+        ]];
+      })
+    )
+  });
+
+  return yaml.dump(compactYamlValue(document) ?? document, { lineWidth: -1, noRefs: true });
+}
+
+function renderPolicyPresetDocumentFromState(state: unknown): string {
+  const stateRecord = isRecord(state) ? state : {};
+  const presets = Array.isArray(stateRecord.presets) ? stateRecord.presets : [];
+  const document = policyPresetDocumentSchema.parse({
+    version: 1,
+    presets: Object.fromEntries(
+      presets.flatMap((presetValue) => {
+        if (!isRecord(presetValue)) {
+          return [];
+        }
+        const name = normalizeEditorOptionalString(presetValue.name);
+        if (!name) {
+          return [];
+        }
+        const defaults = isRecord(presetValue.defaults) ? presetValue.defaults : {};
+        return [[
+          name,
+          {
+            description: normalizeEditorOptionalString(presetValue.description),
+            defaults: {
+              executionMode: normalizeEditorOptionalString(defaults.executionMode) as typeof executionModeOptions[number] | undefined,
+              modelAccess: normalizeBooleanValue(defaults.modelAccess),
+              network: normalizeEditorOptionalString(defaults.network) as typeof permissionOptions[number] | undefined,
+              writes: normalizeEditorOptionalString(defaults.writes) as typeof permissionOptions[number] | undefined
+            },
+            paths: {
+              blocked: valueToStringArray(presetValue.blockedPaths)
+            },
+            plugins: {
+              allowedTiers: valueToStringArray(presetValue.pluginAllowedTiers),
+              allowedSources: valueToStringArray(presetValue.pluginAllowedSources),
+              requireReviewed: normalizeBooleanValue(presetValue.requireReviewed)
+            },
+            tools: Object.fromEntries(
+              (Array.isArray(presetValue.tools) ? presetValue.tools : []).flatMap((toolValue) => {
+                if (!isRecord(toolValue)) {
+                  return [];
+                }
+                const toolName = normalizeEditorOptionalString(toolValue.toolName);
+                const effect = normalizeEditorOptionalString(toolValue.effect);
+                return toolName && effect ? [[toolName, { effect }]] : [];
+              })
+            )
+          }
+        ]];
+      })
+    )
+  });
+
+  return yaml.dump(compactYamlValue(document) ?? document, { lineWidth: -1, noRefs: true });
+}
+
+function renderDefaultsDocumentFromState(state: unknown): string {
+  const stateRecord = isRecord(state) ? state : {};
+  const workflows = Array.isArray(stateRecord.workflows) ? stateRecord.workflows : [];
+  const document = controlPlaneDefaultsSchema.parse({
+    version: 1,
+    workflows: Object.fromEntries(
+      workflows.flatMap((workflowValue) => {
+        if (!isRecord(workflowValue)) {
+          return [];
+        }
+        const workflow = normalizeEditorOptionalString(workflowValue.workflow);
+        if (!workflow) {
+          return [];
+        }
+        return [[
+          workflow,
+          {
+            profile: normalizeEditorOptionalString(workflowValue.profile),
+            policyPreset: normalizeEditorOptionalString(workflowValue.policyPreset),
+            workflowVariant: normalizeEditorOptionalString(workflowValue.workflowVariant)
+          }
+        ]];
+      })
+    )
+  });
+
+  return yaml.dump(compactYamlValue(document) ?? document, { lineWidth: -1, noRefs: true });
+}
+
+function renderVisualizerConfigDocument(
+  root: string,
+  input: { workflow?: string; target: ConfigDocumentTarget; state: unknown }
+): VisualizerConfigRenderResult {
+  const resolvedDocument = resolveEditableConfigDocument(root, input.workflow, input.target);
+  assertWritableConfigPath(resolvedDocument.relativePath);
+
+  const draft = (() => {
+    switch (input.target) {
+      case "request":
+        if (!input.workflow) {
+          throw new Error("Workflow is required for request editing.");
+        }
+        return renderRequestDocumentFromState(root, input.workflow, input.state);
+      case "workflow-control":
+        if (!input.workflow) {
+          throw new Error("Workflow is required for workflow-control editing.");
+        }
+        return renderWorkflowControlDocumentFromState(root, input.workflow, input.state);
+      case "policy-presets":
+        return renderPolicyPresetDocumentFromState(input.state);
+      case "defaults":
+        return renderDefaultsDocumentFromState(input.state);
+    }
+
+    const unsupportedTarget: never = input.target;
+    throw new Error(`Unsupported configure target: ${unsupportedTarget}`);
+  })();
+
+  return {
+    path: resolvedDocument.relativePath,
+    draft
+  };
+}
+
+function resolveRequestMetaSelection(
+  rawMeta: unknown,
+  defaultsForWorkflow: { profile?: string; policyPreset?: string; workflowVariant?: string } | undefined
+): RequestMeta {
+  const metaRecord = isRecord(rawMeta) ? rawMeta : {};
+  return requestMetaSchema.parse({
+    profile: metaRecord.profile ?? defaultsForWorkflow?.profile ?? "default",
+    policyPreset: metaRecord.policyPreset ?? defaultsForWorkflow?.policyPreset,
+    workflowVariant: metaRecord.workflowVariant ?? defaultsForWorkflow?.workflowVariant ?? "standard",
+    agentBindings: metaRecord.agentBindings ?? {}
+  });
+}
+
+function requestDefinitionForWorkflow(workflowName: string): {
+  requestPath?: string;
+  missingRequestError?: string;
+  parse: (value: unknown) => unknown;
+} {
+  switch (workflowName) {
+    case "planning-discovery":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validatePlanningRequestCompleteness(planningRequestSchema.parse(value))
+      };
+    case "architecture-design-review":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => designRequestSchema.parse(value)
+      };
+    case "implementation-proposal":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => implementationRequestSchema.parse(value)
+      };
+    case "qa-review":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => qaRequestSchema.parse(value)
+      };
+    case "security-review":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => securityRequestSchema.parse(value)
+      };
+    case "pipeline-evidence-review":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validatePipelineRequestCompleteness(pipelineRequestSchema.parse(value))
+      };
+    case "release-readiness":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validateReleaseRequestCompleteness(releaseRequestSchema.parse(value))
+      };
+    case "deployment-gate-review":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validateDeploymentRequestCompleteness(deploymentRequestSchema.parse(value))
+      };
+    case "promotion-approval":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validatePromotionRequestCompleteness(promotionRequestSchema.parse(value))
+      };
+    case "incident-handoff":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validateIncidentRequestCompleteness(incidentRequestSchema.parse(value))
+      };
+    case "maintenance-triage":
+      return {
+        requestPath: workflowRequestPaths[workflowName],
+        missingRequestError: workflowMissingRequestErrors[workflowName],
+        parse: (value) => validateMaintenanceRequestCompleteness(maintenanceRequestSchema.parse(value))
+      };
+    default:
+      return {
+        parse: (value) => value
+      };
+  }
+}
+
+function permissionEffectRank(effect: "allow" | "approval_required" | "deny"): number {
+  if (effect === "allow") return 0;
+  if (effect === "approval_required") return 1;
+  return 2;
+}
+
+function executionModeRank(mode: "inspect" | "suggest" | "apply"): number {
+  if (mode === "inspect") return 0;
+  if (mode === "suggest") return 1;
+  return 2;
+}
+
+function validatePolicyPresetNarrowing(basePolicy: ReturnType<typeof resolvePolicy>, presetName: string, preset: PolicyPresetDocument["presets"][string]): string[] {
+  const errors: string[] = [];
+
+  if (preset.defaults?.executionMode && executionModeRank(preset.defaults.executionMode) > executionModeRank(basePolicy.defaults.executionMode)) {
+    errors.push(`Policy preset ${presetName} widens execution mode from ${basePolicy.defaults.executionMode} to ${preset.defaults.executionMode}.`);
+  }
+  if (preset.defaults?.modelAccess === true && basePolicy.defaults.modelAccess === false) {
+    errors.push(`Policy preset ${presetName} enables model access even though the base policy disables it.`);
+  }
+  if (preset.defaults?.network && permissionEffectRank(preset.defaults.network) < permissionEffectRank(basePolicy.defaults.network)) {
+    errors.push(`Policy preset ${presetName} widens network access from ${basePolicy.defaults.network} to ${preset.defaults.network}.`);
+  }
+  if (preset.defaults?.writes && permissionEffectRank(preset.defaults.writes) < permissionEffectRank(basePolicy.defaults.writes)) {
+    errors.push(`Policy preset ${presetName} widens write access from ${basePolicy.defaults.writes} to ${preset.defaults.writes}.`);
+  }
+  if (preset.paths?.allowedRead) {
+    errors.push(`Policy preset ${presetName} may not override allowed read paths in v1.`);
+  }
+  if (preset.paths?.allowedWrite) {
+    errors.push(`Policy preset ${presetName} may not override allowed write paths in v1.`);
+  }
+  if (preset.plugins?.allowedTiers && preset.plugins.allowedTiers.some((tier) => !basePolicy.plugins.allowedTiers.includes(tier))) {
+    errors.push(`Policy preset ${presetName} widens allowed plugin tiers.`);
+  }
+  if (preset.plugins?.allowedSources && preset.plugins.allowedSources.some((source) => !basePolicy.plugins.allowedSources.includes(source))) {
+    errors.push(`Policy preset ${presetName} widens allowed plugin sources.`);
+  }
+  if (preset.plugins?.requireReviewed === false && basePolicy.plugins.requireReviewed) {
+    errors.push(`Policy preset ${presetName} disables reviewed-plugin enforcement from the base policy.`);
+  }
+
+  for (const [toolName, toolConfig] of Object.entries(preset.tools ?? {})) {
+    const baseTool = basePolicy.tools[toolName];
+    if (!baseTool) {
+      errors.push(`Policy preset ${presetName} references unknown tool policy ${toolName}.`);
+      continue;
+    }
+    if (permissionEffectRank(toolConfig.effect) < permissionEffectRank(baseTool.effect)) {
+      errors.push(`Policy preset ${presetName} widens tool access for ${toolName}.`);
+    }
+  }
+
+  return errors;
+}
+
+function applyPolicyPreset(basePolicy: ReturnType<typeof resolvePolicy>, presetName: string | undefined, document: PolicyPresetDocument): ReturnType<typeof resolvePolicy> {
+  if (!presetName || presetName === "default") {
+    return basePolicy;
+  }
+
+  const preset = document.presets[presetName];
+  if (!preset) {
+    throw new Error(`Unknown policy preset: ${presetName}`);
+  }
+
+  const validationErrors = validatePolicyPresetNarrowing(basePolicy, presetName, preset);
+  if (validationErrors.length > 0) {
+    throw new Error(validationErrors.join(" "));
+  }
+
+  return {
+    ...basePolicy,
+    defaults: {
+      executionMode: preset.defaults?.executionMode ?? basePolicy.defaults.executionMode,
+      modelAccess: preset.defaults?.modelAccess ?? basePolicy.defaults.modelAccess,
+      network: preset.defaults?.network ?? basePolicy.defaults.network,
+      writes: preset.defaults?.writes ?? basePolicy.defaults.writes
+    },
+    paths: {
+      allowedRead: basePolicy.paths.allowedRead,
+      allowedWrite: basePolicy.paths.allowedWrite,
+      blocked: [...new Set([...basePolicy.paths.blocked, ...(preset.paths?.blocked ?? [])])]
+    },
+    plugins: {
+      allowedTiers: preset.plugins?.allowedTiers ?? basePolicy.plugins.allowedTiers,
+      allowedSources: preset.plugins?.allowedSources ?? basePolicy.plugins.allowedSources,
+      requireReviewed: preset.plugins?.requireReviewed ?? basePolicy.plugins.requireReviewed
+    },
+    tools: {
+      ...basePolicy.tools,
+      ...(preset.tools ?? {})
+    }
+  };
+}
+
+function validateWorkflowControlDefinition(
+  workflow: WorkflowDefinition,
+  control: WorkflowControlDefinition,
+  presets: PolicyPresetDocument,
+  defaultsForWorkflow: { profile?: string; policyPreset?: string; workflowVariant?: string } | undefined
+): string[] {
+  const errors: string[] = [];
+  const knownNodeIds = new Set(workflow.nodes.map((node) => node.id));
+  const knownFieldPaths = new Set((workflowFieldMetadata[workflow.name] ?? []).map((field) => field.path));
+
+  for (const field of control.fieldMetadata) {
+    if (!knownFieldPaths.has(field.path)) {
+      errors.push(`Workflow ${workflow.name} field metadata references unknown request field '${field.path}'.`);
+    }
+  }
+
+  for (const [profileName, profile] of Object.entries(control.profiles)) {
+    for (const presetName of profile.allowedPolicyPresets) {
+      if (!(presetName in presets.presets)) {
+        errors.push(`Workflow ${workflow.name} profile '${profileName}' references unknown policy preset '${presetName}'.`);
+      }
+    }
+    for (const variantName of profile.allowedWorkflowVariants) {
+      if (!(variantName in control.workflowVariants)) {
+        errors.push(`Workflow ${workflow.name} profile '${profileName}' references unknown workflow variant '${variantName}'.`);
+      }
+    }
+  }
+
+  for (const presetName of control.allowedPolicyPresets) {
+    if (!(presetName in presets.presets)) {
+      errors.push(`Workflow ${workflow.name} references unknown allowed policy preset '${presetName}'.`);
+    }
+  }
+
+  for (const [variantName, variant] of Object.entries(control.workflowVariants)) {
+    for (const nodeId of variant.disabledNodes) {
+      if (!knownNodeIds.has(nodeId)) {
+        errors.push(`Workflow ${workflow.name} variant '${variantName}' disables unknown node '${nodeId}'.`);
+      }
+    }
+    for (const nodeId of Object.keys(variant.nodeAgentOverrides)) {
+      if (!knownNodeIds.has(nodeId)) {
+        errors.push(`Workflow ${workflow.name} variant '${variantName}' overrides unknown node '${nodeId}'.`);
+      }
+    }
+  }
+
+  for (const [bindingName, binding] of Object.entries(control.agentBindings)) {
+    if (binding.defaultAgent && !binding.allowedAgents.includes(binding.defaultAgent)) {
+      errors.push(`Workflow ${workflow.name} binding '${bindingName}' has default agent '${binding.defaultAgent}' outside its allowed agents.`);
+    }
+    for (const nodeId of binding.nodeIds) {
+      if (!knownNodeIds.has(nodeId)) {
+        errors.push(`Workflow ${workflow.name} binding '${bindingName}' references unknown node '${nodeId}'.`);
+      }
+    }
+  }
+
+  if (defaultsForWorkflow?.profile && !(defaultsForWorkflow.profile in control.profiles)) {
+    errors.push(`Workflow ${workflow.name} defaults reference unknown profile '${defaultsForWorkflow.profile}'.`);
+  }
+  if (defaultsForWorkflow?.workflowVariant && !(defaultsForWorkflow.workflowVariant in control.workflowVariants)) {
+    errors.push(`Workflow ${workflow.name} defaults reference unknown workflow variant '${defaultsForWorkflow.workflowVariant}'.`);
+  }
+  if (defaultsForWorkflow?.policyPreset && !(defaultsForWorkflow.policyPreset in presets.presets)) {
+    errors.push(`Workflow ${workflow.name} defaults reference unknown policy preset '${defaultsForWorkflow.policyPreset}'.`);
+  }
+
+  return errors;
+}
+
+function fingerprintConfigFiles(root: string, relativePaths: readonly string[], overrides: ConfigDocumentOverrides = {}): ResolvedRunConfigurationSnapshot["fingerprints"] {
+  return relativePaths.flatMap((relativePath) => {
+    const absolutePath = join(root, relativePath);
+    if (!(relativePath in overrides) && !existsSync(absolutePath)) {
+      return [];
+    }
+
+    return [
+      {
+        path: relativePath,
+        sha256: sha256(readConfigDocumentContents(root, absolutePath, overrides))
+      }
+    ];
+  });
+}
+
+function resolveWorkflowControls(
+  root: string,
+  workflow: WorkflowDefinition,
+  basePolicy: ReturnType<typeof resolvePolicy>,
+  options?: { allowMissingRequest?: boolean; overrides?: ConfigDocumentOverrides }
+): {
+  workflow: WorkflowDefinition;
+  policy: ReturnType<typeof resolvePolicy>;
+  request: unknown;
+  requestPath?: string;
+  configuration: ResolvedRunConfigurationSnapshot;
+} {
+  const overrides = options?.overrides ?? {};
+  const control = loadWorkflowControlDefinition(root, workflow, overrides);
+  const presets = loadPolicyPresetDocument(root, overrides);
+  const defaults = loadControlPlaneDefaults(root, [workflow], overrides);
+  const requestDefinition = requestDefinitionForWorkflow(workflow.name);
+  const requestPath = requestDefinition.requestPath;
+  const defaultSelection = defaults.workflows[workflow.name];
+  const controlErrors = validateWorkflowControlDefinition(workflow, control, presets, defaultSelection);
+  if (controlErrors.length > 0) {
+    throw new Error(controlErrors.join(" "));
+  }
+
+  let parsedRequest: unknown = {};
+  let metaPresent = false;
+  if (requestPath) {
+    const absoluteRequestPath = join(root, requestPath);
+    if (!(requestPath in overrides) && !existsSync(absoluteRequestPath)) {
+      if (!options?.allowMissingRequest) {
+        throw new Error(requestDefinition.missingRequestError ?? `Missing request for workflow ${workflow.name}`);
+      }
+    } else {
+      const rawRequest = loadYamlDocument(root, absoluteRequestPath, overrides);
+      metaPresent = isRecord(rawRequest) && "meta" in rawRequest;
+      const requestedMeta = isRecord(rawRequest) ? rawRequest.meta : undefined;
+      const selectedMeta = resolveRequestMetaSelection(requestedMeta, defaultSelection);
+      const profile = control.profiles[selectedMeta.profile];
+      if (!profile) {
+        throw new Error(`Unknown request profile '${selectedMeta.profile}' for workflow ${workflow.name}.`);
+      }
+
+      const mergedRequest = deepMerge(profile.requestPatch, rawRequest);
+      const mergedRecord = isRecord(mergedRequest) ? mergedRequest : {};
+      mergedRecord.meta = selectedMeta;
+      parsedRequest = requestDefinition.parse(mergedRecord);
+    }
+  }
+
+  const requestRecord = isRecord(parsedRequest) ? parsedRequest : {};
+  const selectedMeta = resolveRequestMetaSelection(requestRecord.meta, defaultSelection);
+  const selectedProfile = control.profiles[selectedMeta.profile];
+  if (!selectedProfile) {
+    throw new Error(`Unknown request profile '${selectedMeta.profile}' for workflow ${workflow.name}.`);
+  }
+
+  const allowedPresets = new Set([...control.allowedPolicyPresets, ...selectedProfile.allowedPolicyPresets]);
+  if (selectedMeta.policyPreset && allowedPresets.size > 0 && !allowedPresets.has(selectedMeta.policyPreset)) {
+    throw new Error(`Policy preset '${selectedMeta.policyPreset}' is not allowed for workflow ${workflow.name}.`);
+  }
+  const allowedVariants = new Set(["standard", ...selectedProfile.allowedWorkflowVariants]);
+  if (allowedVariants.size > 0 && !allowedVariants.has(selectedMeta.workflowVariant)) {
+    throw new Error(`Workflow variant '${selectedMeta.workflowVariant}' is not allowed for workflow ${workflow.name}.`);
+  }
+  for (const bindingName of Object.keys(selectedMeta.agentBindings)) {
+    if (!(bindingName in control.agentBindings)) {
+      throw new Error(`Unknown agent binding '${bindingName}' for workflow ${workflow.name}.`);
+    }
+  }
+
+  const variant = selectedMeta.workflowVariant === "standard"
+    ? control.workflowVariants.standard ?? { nodeAgentOverrides: {}, disabledNodes: [] }
+    : control.workflowVariants[selectedMeta.workflowVariant];
+  if (!variant) {
+    throw new Error(`Unknown workflow variant '${selectedMeta.workflowVariant}' for workflow ${workflow.name}.`);
+  }
+
+  const variantWorkflow = workflowDefinitionSchema.parse({
+    ...workflow,
+    nodes: workflow.nodes
+      .filter((node) => !variant.disabledNodes.includes(node.id))
+      .map((node) => ({
+        ...node,
+        agent: variant.nodeAgentOverrides[node.id] ?? node.agent
+      }))
+  });
+
+  const boundWorkflow = workflowDefinitionSchema.parse({
+    ...variantWorkflow,
+    nodes: variantWorkflow.nodes.map((node) => {
+      const binding = control.agentBindings[node.id];
+      const selectedAgent = binding && selectedMeta.agentBindings[node.id];
+      if (!binding || !selectedAgent) {
+        return node;
+      }
+      if (!binding.allowedAgents.includes(selectedAgent)) {
+        throw new Error(`Agent '${selectedAgent}' is not allowed for binding '${node.id}' in workflow ${workflow.name}.`);
+      }
+      return {
+        ...node,
+        agent: selectedAgent
+      };
+    })
+  });
+
+  const resolvedPolicy = applyPolicyPreset(basePolicy, selectedMeta.policyPreset, presets);
+  const sourceRefs = [
+    toRelativeRepoPath(root, join(root, ".agentops", "policy.yaml")),
+    toRelativeRepoPath(root, join(root, ".agentops", "workflows", `${workflow.name}.yaml`)),
+    toRelativeRepoPath(root, policyPresetPath(root)),
+    toRelativeRepoPath(root, controlDefaultsPath(root)),
+    toRelativeRepoPath(root, workflowControlPath(root, workflow.name)),
+    ...(requestPath ? [requestPath] : [])
+  ];
+
+  return {
+    workflow: boundWorkflow,
+    policy: resolvedPolicy,
+    request: parsedRequest,
+    requestPath,
+    configuration: resolvedRunConfigurationSnapshotSchema.parse({
+      selectedControls: selectedMeta,
+      sourceRefs,
+      fingerprints: fingerprintConfigFiles(root, sourceRefs, overrides),
+      effective: {
+        workflow: boundWorkflow.name,
+        policyFingerprint: sha256(JSON.stringify(resolvedPolicy)),
+        nodeAgents: Object.fromEntries(
+          boundWorkflow.nodes
+            .filter((node) => node.agent)
+            .map((node) => [node.id, node.agent])
+        ),
+        disabledNodes: variant.disabledNodes,
+        toolEffects: Object.fromEntries(
+          Object.entries(resolvedPolicy.tools).map(([toolName, toolConfig]) => [toolName, toolConfig.effect])
+        )
+      },
+      request: {
+        path: requestPath ?? ".agentops/requests/<none>",
+        metaPresent
+      },
+      execution: {
+        executedNodes: []
+      }
+    })
+  };
 }
 
 function loadEvalFixtureCorpus(): EvalFixtureCorpus {
@@ -2776,6 +4592,8 @@ function ensureInitFiles(root: string): string[] {
     }
   }
 
+  created.push(...ensureControlFiles(root));
+
   return created;
 }
 
@@ -2800,11 +4618,15 @@ function createBlockedPlugin(
   };
 }
 
-async function buildAgentRegistry(root: string, config: AgentForgeConfig, workflowName: string) {
+async function buildAgentRegistry(
+  root: string,
+  config: AgentForgeConfig,
+  workflowName: string,
+  policy: ReturnType<typeof resolvePolicy>,
+  policyEngine = createPolicyEngine(policy, root)
+) {
   const agents = buildBuiltinAgentRegistry();
   const registryClient = new LocalPluginRegistry(root);
-  const policy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
-  const policyEngine = createPolicyEngine(policy, root);
   const blockedPlugins: BlockedPlugin[] = [];
 
   for (const registration of config.plugins.agents) {
@@ -2919,13 +4741,27 @@ export function initProject(
   created: string[];
   preset?: { preset: StartupPresetName; workflow: string; requestPath: string; created: boolean };
 } {
-  const root = findWorkspaceRoot(cwd);
-  const created = ensureInitFiles(root);
-  const preset = options?.preset ? applyStartupPreset(root, options.preset) : undefined;
+  const resolvedRoot = findWorkspaceRoot(cwd);
+  const displayRoot = existsSync(join(cwd, ".git")) && realpathSync(cwd) === realpathSync(resolvedRoot)
+    ? cwd
+    : resolvedRoot;
+  const created = ensureInitFiles(resolvedRoot).map((pathValue) =>
+    pathValue.startsWith(resolvedRoot) ? `${displayRoot}${pathValue.slice(resolvedRoot.length)}` : pathValue
+  );
+  const preset = options?.preset ? applyStartupPreset(resolvedRoot, options.preset) : undefined;
   return {
-    root,
+    root: displayRoot,
     created,
-    ...(preset ? { preset } : {})
+    ...(preset
+      ? {
+          preset: {
+            ...preset,
+            requestPath: preset.requestPath.startsWith(resolvedRoot)
+              ? `${displayRoot}${preset.requestPath.slice(resolvedRoot.length)}`
+              : preset.requestPath
+          }
+        }
+      : {})
   };
 }
 
@@ -2959,6 +4795,200 @@ export function scanProject(cwd = process.cwd()): {
     changedFiles: state.changes.changedFiles,
     recommendations: ["context-collector", "security-audit", "code-review", "test-generation"],
     risks
+  };
+}
+
+function listWorkflowDefinitions(root: string): WorkflowDefinition[] {
+  const workflowsRoot = join(root, ".agentops", "workflows");
+  return readdirSync(workflowsRoot)
+    .filter((entry) => entry.endsWith(".yaml"))
+    .map((entry) => normalizeWorkflow(loadYaml(join(workflowsRoot, entry))));
+}
+
+async function validateControlPlaneAtRoot(root: string, overrides: ConfigDocumentOverrides = {}): Promise<ConfigValidationResult> {
+  const config = loadAgentForgeConfig(root);
+  const basePolicy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+  const errors: string[] = [];
+  const workflows = listWorkflowDefinitions(root);
+
+  const results: ConfigValidationResult["workflows"] = [];
+
+  for (const workflow of workflows) {
+    try {
+      const resolved = resolveWorkflowControls(root, workflow, basePolicy, { allowMissingRequest: true, overrides });
+      const policyEngine = createPolicyEngine(resolved.policy, root);
+      const { agents, blockedPlugins } = await buildAgentRegistry(root, config, workflow.name, resolved.policy, policyEngine);
+      validateWorkflowLifecyclePosture(resolved.workflow, policyEngine);
+      validateWorkflowAgents(resolved.workflow, agents, blockedPlugins);
+      const control = loadWorkflowControlDefinition(root, workflow, overrides);
+      const presets = loadPolicyPresetDocument(root, overrides);
+      results.push({
+        workflow: workflow.name,
+        requestPath: resolved.requestPath ?? "<none>",
+        profileCount: Object.keys(control.profiles).length,
+        variantCount: Object.keys(control.workflowVariants).length,
+        policyPresetCount: Object.keys(presets.presets).length,
+        bindingCount: Object.keys(control.agentBindings).length
+      });
+    } catch (error) {
+      errors.push(`${workflow.name}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  return {
+    root,
+    valid: errors.length === 0,
+    workflows: results,
+    errors
+  };
+}
+
+export async function validateControlPlane(
+  cwd = process.cwd(),
+  options?: { overrides?: ConfigDocumentOverrides }
+): Promise<ConfigValidationResult> {
+  const root = findWorkspaceRoot(cwd);
+  ensureInitFiles(root);
+  return validateControlPlaneAtRoot(root, options?.overrides ?? {});
+}
+
+function createPreviewDiff(current: string, draft: string): string {
+  const currentLines = current.split("\n");
+  const draftLines = draft.split("\n");
+  const max = Math.max(currentLines.length, draftLines.length);
+  const lines: string[] = [];
+
+  for (let index = 0; index < max; index += 1) {
+    const left = currentLines[index];
+    const right = draftLines[index];
+    if (left === right) {
+      continue;
+    }
+    if (left !== undefined) {
+      lines.push(`- ${left}`);
+    }
+    if (right !== undefined) {
+      lines.push(`+ ${right}`);
+    }
+  }
+
+  return lines.length > 0 ? lines.join("\n") : "No textual diff.";
+}
+
+function summarizeResolvedConfiguration(
+  resolved: ReturnType<typeof resolveWorkflowControls>
+): NonNullable<VisualizerConfigPreviewResult["semantic"]> {
+  return {
+    workflow: resolved.workflow.name,
+    selectedProfile: resolved.configuration.selectedControls.profile,
+    selectedPolicyPreset: resolved.configuration.selectedControls.policyPreset,
+    selectedWorkflowVariant: resolved.configuration.selectedControls.workflowVariant,
+    selectedAgentBindings: resolved.configuration.selectedControls.agentBindings,
+    nodeAgents: resolved.configuration.effective.nodeAgents,
+    disabledNodes: resolved.configuration.effective.disabledNodes,
+    policySummary: {
+      executionMode: resolved.policy.defaults.executionMode,
+      modelAccess: resolved.policy.defaults.modelAccess,
+      network: resolved.policy.defaults.network,
+      writes: resolved.policy.defaults.writes,
+      deniedTools: Object.entries(resolved.policy.tools)
+        .filter(([, tool]) => tool.effect === "deny")
+        .map(([toolName]) => toolName)
+        .sort(),
+      approvalTools: Object.entries(resolved.policy.tools)
+        .filter(([, tool]) => tool.effect === "approval_required")
+        .map(([toolName]) => toolName)
+        .sort()
+    }
+  };
+}
+
+async function previewVisualizerConfigDocument(
+  root: string,
+  input: { workflow?: string; target: string; draft: string }
+): Promise<VisualizerConfigPreviewResult> {
+  const target = input.target as ConfigDocumentTarget;
+  const resolvedDocument = resolveEditableConfigDocument(root, input.workflow, target);
+  assertWritableConfigPath(resolvedDocument.relativePath);
+  const currentContents = existsSync(resolvedDocument.path) ? readFileSync(resolvedDocument.path, "utf8") : "";
+  const overrides: ConfigDocumentOverrides = {
+    [resolvedDocument.relativePath]: input.draft
+  };
+  const validation = await validateControlPlaneAtRoot(root, overrides);
+  const previewHash = sha256(`${resolvedDocument.relativePath}\n${currentContents}\n---\n${input.draft}`);
+  let semantic: VisualizerConfigPreviewResult["semantic"] | undefined;
+
+  if (input.workflow && validation.valid) {
+    const baseWorkflow = listWorkflowDefinitions(root).find((candidate) => candidate.name === input.workflow);
+    if (!baseWorkflow) {
+      throw new Error(`Unknown workflow '${input.workflow}'.`);
+    }
+    const basePolicy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+    semantic = summarizeResolvedConfiguration(
+      resolveWorkflowControls(root, baseWorkflow, basePolicy, {
+        allowMissingRequest: true,
+        overrides
+      })
+    );
+  }
+
+  return {
+    path: resolvedDocument.relativePath,
+    previewHash,
+    diff: createPreviewDiff(currentContents, input.draft),
+    summary: `Preview generated for ${resolvedDocument.relativePath}. ${validation.valid ? "Validation passed." : "Validation failed."}`,
+    semantic,
+    validation: {
+      valid: validation.valid,
+      errors: validation.errors
+    }
+  };
+}
+
+async function saveVisualizerConfigDocument(
+  root: string,
+  input: { workflow?: string; target: string; draft: string; previewHash: string; approval: string }
+): Promise<VisualizerConfigSaveResult> {
+  if (input.approval !== "approve-write") {
+    throw new Error("Saving config requires approval token 'approve-write'.");
+  }
+
+  const target = input.target as ConfigDocumentTarget;
+  const resolvedDocument = resolveEditableConfigDocument(root, input.workflow, target);
+  assertWritableConfigPath(resolvedDocument.relativePath);
+  const preview = await previewVisualizerConfigDocument(root, {
+    workflow: input.workflow,
+    target,
+    draft: input.draft
+  });
+  if (preview.previewHash !== input.previewHash) {
+    throw new Error("Preview hash mismatch. Generate a fresh preview before saving.");
+  }
+  if (preview.validation && !preview.validation.valid) {
+    throw new Error(preview.validation.errors.join(" "));
+  }
+
+  writeFileSync(resolvedDocument.path, input.draft, "utf8");
+  return {
+    path: resolvedDocument.relativePath,
+    validation: preview.validation
+  };
+}
+
+function createVisualizerConfigEditor(root: string): VisualizerConfigEditor {
+  const config = loadAgentForgeConfig(root);
+  const editingEnabled = config.visualizer.experimentalConfigEditing;
+
+  return {
+    editingEnabled,
+    loadEditorModel: ({ workflow, target }) => loadVisualizerConfigEditorModel(root, { workflow, target }, editingEnabled),
+    renderDocument: ({ workflow, target, state }) => renderVisualizerConfigDocument(root, { workflow, target, state }),
+    previewDocument: editingEnabled
+      ? async (input) => await previewVisualizerConfigDocument(root, input)
+      : undefined,
+    saveDocument: editingEnabled
+      ? async (input) => await saveVisualizerConfigDocument(root, input)
+      : undefined
   };
 }
 
@@ -3176,11 +5206,15 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
   const root = findWorkspaceRoot(cwd);
   ensureInitFiles(root);
   const config = loadAgentForgeConfig(root);
-  const workflow = normalizeWorkflow(loadYaml(join(root, ".agentops", "workflows", `${workflowName}.yaml`)));
-  const { agents, blockedPlugins, policy, policyEngine } = await buildAgentRegistry(root, config, workflowName);
+  const basePolicy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
+  const baseWorkflow = normalizeWorkflow(loadYaml(join(root, ".agentops", "workflows", `${workflowName}.yaml`)));
+  const resolved = resolveWorkflowControls(root, baseWorkflow, basePolicy);
+  const policyEngine = createPolicyEngine(resolved.policy, root);
+  const workflow = resolved.workflow;
+  const { agents, blockedPlugins, policy } = await buildAgentRegistry(root, config, workflowName, resolved.policy, policyEngine);
   validateWorkflowLifecyclePosture(workflow, policyEngine);
   validateWorkflowAgents(workflow, agents, blockedPlugins);
-  const workflowInputs = prepareWorkflowInputs(workflow, root, policyEngine);
+  const workflowInputs = prepareWorkflowInputs(workflow, root, policyEngine, resolved.request);
 
   const state = createWorkflowState({
     cwd: root,
@@ -3191,6 +5225,7 @@ export async function runLocalWorkflow(workflowName: string, cwd = process.cwd()
   });
   state.blockedPlugins = blockedPlugins;
   state.workflowInputs = workflowInputs;
+  state.configuration = resolved.configuration;
 
   const runsRoot = join(root, config.runtime.runsPath);
   const outputDir = join(runsRoot, state.runId);
@@ -3983,12 +6018,14 @@ export async function launchVisualizer(options: VisualizerLaunchOptions = {}, cw
   const runsRoot = resolveVisualizerRunsRoot(workspaceRoot, options.runsRoot);
   const benchmarkLedgerPath = resolveVisualizerBenchmarkLedgerPath(workspaceRoot, options.benchmarkLedgerPath);
   const summary = readVisualizerSummary(workspaceRoot, options.runsRoot);
+  const configEditor = createVisualizerConfigEditor(workspaceRoot);
   const server = await startVisualizerServer({
     workspaceRoot,
     runsRoot: options.runsRoot,
     benchmarkLedgerPath: options.benchmarkLedgerPath,
     host: options.host,
-    port: options.port
+    port: options.port,
+    configEditor
   });
 
   if (options.open) {

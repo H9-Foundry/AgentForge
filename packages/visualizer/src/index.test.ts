@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,10 +12,11 @@ import {
   loadBenchmarkIndexView,
   loadBenchmarkLedgerView,
   loadOutcomesDashboardView,
+  loadRunComparisonView,
   loadRunDetailView,
   loadRunsIndexView
 } from "./data.js";
-import { renderBenchmarksPage, renderOutcomesDashboardPage, renderRunDetailPage, renderRunsIndexPage } from "./html.js";
+import { renderBenchmarksPage, renderConfigurePage, renderOutcomesDashboardPage, renderRunComparePage, renderRunDetailPage, renderRunsIndexPage } from "./html.js";
 import { createVisualizerServer } from "./index.js";
 
 function cloneFixture<T>(value: T): T {
@@ -39,6 +40,7 @@ function writeBundleFixture(
     findings?: unknown[];
     blockedPlugins?: unknown[];
     usage?: Record<string, unknown>;
+    configuration?: Record<string, unknown>;
   }
 ): void {
   const runRoot = join(root, ".agentops", "runs", runId);
@@ -76,6 +78,7 @@ function writeBundleFixture(
         proposedActions: [],
         blockedPlugins: options?.blockedPlugins ?? [],
         lifecycleArtifacts,
+        configuration: options?.configuration,
         artifactPaths: {
           json: `.agentops/runs/${runId}/bundle.json`,
           markdown: `.agentops/runs/${runId}/summary.md`
@@ -124,7 +127,43 @@ describe("visualizer data loading", () => {
   it("loads valid bundles, filters runs, and skips malformed bundles", () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-planning", [cloneFixture(schemaFixtures.planningArtifact)], {
-      workflow: "planning-discovery"
+      workflow: "planning-discovery",
+      configuration: {
+        selectedControls: {
+          profile: "default",
+          policyPreset: "strict-readonly",
+          workflowVariant: "standard",
+          agentBindings: {
+            planning: "planning-analyst"
+          }
+        },
+        sourceRefs: [".agentops/requests/planning.yaml"],
+        fingerprints: [{ path: ".agentops/requests/planning.yaml", sha256: "abc123" }],
+        effective: {
+          workflow: "planning-discovery",
+          policyFingerprint: "policy123",
+          nodeAgents: {
+            intake: "planning-intake",
+            discovery: "context-collector",
+            planning: "planning-analyst"
+          },
+          disabledNodes: [],
+          toolEffects: {
+            "filesystem.read-file": "allow"
+          }
+        },
+        request: {
+          path: ".agentops/requests/planning.yaml",
+          metaPresent: true
+        },
+        execution: {
+          executedNodes: [
+            { nodeId: "intake", kind: "deterministic", agent: "planning-intake" },
+            { nodeId: "discovery", kind: "deterministic", agent: "context-collector" },
+            { nodeId: "planning", kind: "reasoning", agent: "planning-analyst" }
+          ]
+        }
+      }
     });
     writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)], {
       workflow: "release-readiness",
@@ -144,6 +183,69 @@ describe("visualizer data loading", () => {
     expect(listAvailableWorkflows(loadRunsIndexView(root).runs)).toEqual(["planning-discovery", "release-readiness"]);
     expect(listAvailableStatuses(loadRunsIndexView(root).runs)).toEqual(["partial", "success"]);
     expect(listAvailableArtifactKinds(loadRunsIndexView(root).runs)).toEqual(["planning-brief", "release-report"]);
+  });
+
+  it("surfaces resolved configuration snapshots and compare views", () => {
+    const root = createWorkspace();
+    writeBundleFixture(root, "run-left", [cloneFixture(schemaFixtures.planningArtifact)], {
+      workflow: "planning-discovery",
+      configuration: {
+        selectedControls: {
+          profile: "default",
+          policyPreset: "default",
+          workflowVariant: "standard",
+          agentBindings: {}
+        },
+        sourceRefs: [".agentops/requests/planning.yaml"],
+        fingerprints: [{ path: ".agentops/requests/planning.yaml", sha256: "aaa" }],
+        effective: {
+          workflow: "planning-discovery",
+          policyFingerprint: "policy-left",
+          nodeAgents: { planning: "planning-analyst" },
+          disabledNodes: [],
+          toolEffects: {}
+        },
+        request: { path: ".agentops/requests/planning.yaml", metaPresent: false },
+        execution: { executedNodes: [{ nodeId: "planning", kind: "reasoning", agent: "planning-analyst" }] }
+      }
+    });
+    writeBundleFixture(root, "run-right", [cloneFixture(schemaFixtures.planningArtifact)], {
+      workflow: "planning-discovery",
+      entries: [{ id: "run-right-planning", nodeId: "planning", nodeName: "planning-analyst", kind: "reasoning", status: "success", summary: "done", blockedActions: ["blocked"] }],
+      configuration: {
+        selectedControls: {
+          profile: "default",
+          policyPreset: "strict-readonly",
+          workflowVariant: "standard",
+          agentBindings: {
+            planning: "planning-analyst"
+          }
+        },
+        sourceRefs: [".agentops/requests/planning.yaml"],
+        fingerprints: [{ path: ".agentops/requests/planning.yaml", sha256: "bbb" }],
+        effective: {
+          workflow: "planning-discovery",
+          policyFingerprint: "policy-right",
+          nodeAgents: { planning: "planning-analyst" },
+          disabledNodes: [],
+          toolEffects: {}
+        },
+        request: { path: ".agentops/requests/planning.yaml", metaPresent: true },
+        execution: { executedNodes: [{ nodeId: "planning", kind: "reasoning", agent: "planning-analyst" }] }
+      }
+    });
+
+    const detail = loadRunDetailView(root, "run-right");
+    const comparison = loadRunComparisonView(root, "run-left", "run-right");
+    const outcomes = loadOutcomesDashboardView(root);
+
+    expect(detail?.configuration?.policyPreset).toBe("strict-readonly");
+    expect(detail?.configuration?.executedNodes[0]?.nodeId).toBe("planning");
+    expect(comparison?.controlChanges.some((change) => change.field === "policyPreset")).toBe(true);
+    expect(outcomes.configurationHotspots.some((hotspot) => hotspot.dimension === "policyPreset" && hotspot.value === "strict-readonly")).toBe(true);
+    expect(renderRunComparePage(comparison, "run-left", "run-right")).toContain("Input And Control Changes");
+    expect(renderOutcomesDashboardPage(outcomes)).toContain("Configuration Hotspots");
+    expect(renderRunDetailPage(detail!)).toContain("Resolved Configuration");
   });
 
   it("renders known artifact details and benchmark summaries", () => {
@@ -601,6 +703,8 @@ describe("visualizer html rendering", () => {
     expect(runsHtml).toContain("AgentForge Visualizer");
     expect(runsHtml).toContain("run-qa");
     expect(runsHtml).toContain("Outcomes");
+    expect(runsHtml).toContain("Practitioner drill-down");
+    expect(runsHtml).toContain("action=\"/runs\"");
     expect(runsHtml).toContain("decisionImpact");
     expect(detailHtml).toContain("Lifecycle Artifacts");
     expect(detailHtml).toContain("qa-report");
@@ -612,8 +716,10 @@ describe("visualizer html rendering", () => {
     expect(detailHtml).toContain("id=\"decision-impact\"");
     expect(detailHtml).toContain("id=\"workflow-chain\"");
     expect(benchmarkHtml).toContain("Benchmark Dashboard");
+    expect(benchmarkHtml).toContain("Deterministic eval evidence only");
     expect(benchmarkHtml).toContain("Detected 1 deterministic regression");
     expect(outcomesHtml).toContain("Decision Outcomes");
+    expect(outcomesHtml).toContain("Start here after your first run");
     expect(outcomesHtml).toContain("Release Benchmark");
     expect(outcomesHtml).toContain("Evidence Hygiene");
     expect(outcomesHtml).toContain("Workflow Chain Coverage");
@@ -622,7 +728,7 @@ describe("visualizer html rendering", () => {
     expect(outcomesHtml).toContain("metric-provenance");
   });
 
-  it("serves outcomes as the canonical route and keeps value as an alias", async () => {
+  it("serves outcomes as the canonical route, redirects root, and keeps value as an alias", async () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-release", [cloneFixture(schemaFixtures.releaseArtifact)], {
       workflow: "release-readiness"
@@ -636,6 +742,7 @@ describe("visualizer html rendering", () => {
     const port = typeof address === "object" && address ? address.port : 0;
     const serverUrl = `http://127.0.0.1:${port}`;
     try {
+      const rootResponse = await fetch(`${serverUrl}/`, { redirect: "manual" });
       const outcomesResponse = await fetch(`${serverUrl}/outcomes`);
       const outcomesHtml = await outcomesResponse.text();
 
@@ -645,6 +752,8 @@ describe("visualizer html rendering", () => {
       const exportJson = await fetch(`${serverUrl}/api/outcomes/export.json`);
       const exportMarkdown = await fetch(`${serverUrl}/outcomes/export.md`);
 
+      expect(rootResponse.status).toBe(302);
+      expect(rootResponse.headers.get("location")).toBe("/outcomes");
       expect(outcomesResponse.status).toBe(200);
       expect(outcomesHtml).toContain("Outcomes");
       expect(valueResponse.status).toBe(302);
@@ -654,6 +763,270 @@ describe("visualizer html rendering", () => {
       expect(await exportJson.text()).toContain("\"schemaVersion\"");
       expect(exportMarkdown.status).toBe(200);
       expect(await exportMarkdown.text()).toContain("# AgentForge Outcomes Export");
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
+  it("keeps configure read-only when no editor hooks are wired and only saves through injected editor hooks", async () => {
+    const root = createWorkspace();
+    mkdirSync(join(root, ".agentops", "workflows"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    mkdirSync(join(root, ".agentops", "control"), { recursive: true });
+    writeFileSync(join(root, ".agentops", "workflows", "planning-discovery.yaml"), "version: 1\nname: planning-discovery\ntrigger: manual\nnodes: []\n");
+    writeFileSync(join(root, ".agentops", "requests", "planning.yaml"), "problemStatement: Test request\n");
+    writeFileSync(join(root, ".agentops", "control", "planning-discovery.yaml"), "version: 1\nworkflow: planning-discovery\nprofiles:\n  default:\n    requestPatch: {}\n");
+    writeFileSync(join(root, ".agentops", "control", "policy-presets.yaml"), "version: 1\npresets:\n  default:\n    description: Base\n");
+    writeFileSync(join(root, ".agentops", "control", "defaults.yaml"), "version: 1\nworkflows:\n  planning-discovery:\n    profile: default\n");
+    writeBundleFixture(root, "run-left", [cloneFixture(schemaFixtures.planningArtifact)], { workflow: "planning-discovery" });
+    writeBundleFixture(root, "run-right", [cloneFixture(schemaFixtures.planningArtifact)], { workflow: "planning-discovery" });
+
+    const disabledServer = createVisualizerServer({ workspaceRoot: root });
+    await new Promise<void>((resolve) => {
+      disabledServer.listen(0, "127.0.0.1", () => resolve());
+    });
+    const disabledAddress = disabledServer.address();
+    const disabledPort = typeof disabledAddress === "object" && disabledAddress ? disabledAddress.port : 0;
+    const disabledServerUrl = `http://127.0.0.1:${disabledPort}`;
+
+    try {
+      const configurePage = await fetch(`${disabledServerUrl}/configure?workflow=planning-discovery&target=request`);
+      const editorModel = await fetch(`${disabledServerUrl}/api/config/editor?workflow=planning-discovery&target=request`);
+      const preview = await fetch(`${disabledServerUrl}/api/config/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: "problemStatement: Updated request\n"
+        })
+      });
+      const save = await fetch(`${disabledServerUrl}/api/config/save`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: "problemStatement: Updated request\n",
+          previewHash: "ignored",
+          approval: "approve-write"
+        })
+      });
+
+      expect(configurePage.status).toBe(200);
+      expect(await configurePage.text()).toContain("Structured Editor");
+      expect(editorModel.status).toBe(501);
+      expect(await fetch(`${disabledServerUrl}/runs`).then((response) => response.text())).toContain("Practitioner drill-down");
+      expect(preview.status).toBe(403);
+      expect(save.status).toBe(403);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        disabledServer.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+
+    const server = createVisualizerServer({
+      workspaceRoot: root,
+      configEditor: {
+        editingEnabled: true,
+        loadEditorModel: ({ workflow, target }) => ({
+          workflow,
+          target: target as "request",
+          path: join(root, ".agentops", "requests", "planning.yaml"),
+          relativePath: ".agentops/requests/planning.yaml",
+          editingEnabled: true,
+          rawDocument: "problemStatement: Test request\n",
+          title: "Workflow Request",
+          intro: "Set request fields and execution selectors without hand-authoring YAML.",
+          nextStep: "Preview the effective run summary before saving the canonical YAML.",
+          request: {
+            selectedProfile: "default",
+            selectedPolicyPreset: "",
+            selectedWorkflowVariant: "standard",
+            profileOptions: [{ label: "Default", value: "default" }],
+            policyPresetOptions: [{ label: "Strict Readonly", value: "strict-readonly" }],
+            workflowVariantOptions: [{ label: "Standard", value: "standard" }],
+            profileRules: [{ profile: "default", allowedPolicyPresets: ["strict-readonly"], allowedWorkflowVariants: ["standard"] }],
+            fields: [
+              {
+                key: "problemStatement",
+                label: "Problem Statement",
+                input: "textarea",
+                required: true,
+                value: "Test request"
+              },
+              {
+                key: "goals",
+                label: "Goals",
+                input: "string-array",
+                required: true,
+                value: ["Produce a plan"]
+              }
+            ],
+            agentBindings: [
+              {
+                key: "planning",
+                label: "Planning",
+                nodeIds: ["planning"],
+                selectedAgent: "planning-analyst",
+                options: [{ label: "Planning Analyst", value: "planning-analyst" }]
+              }
+            ]
+          }
+        }),
+        renderDocument: ({ workflow, target, state }) => {
+          const requestState = state as {
+            meta?: { profile?: string; policyPreset?: string; workflowVariant?: string; agentBindings?: Record<string, string> };
+            fields?: Array<{ key: string; value: unknown }>;
+          };
+          const problemStatement = requestState.fields?.find((field) => field.key === "problemStatement")?.value;
+          return {
+            path: `.agentops/requests/${workflow === "planning-discovery" && target === "request" ? "planning" : "unknown"}.yaml`,
+            draft: [
+              "meta:",
+              `  profile: ${requestState.meta?.profile ?? "default"}`,
+              `  policyPreset: ${requestState.meta?.policyPreset ?? "strict-readonly"}`,
+              `  workflowVariant: ${requestState.meta?.workflowVariant ?? "standard"}`,
+              "problemStatement: " + String(problemStatement ?? "Test request")
+            ].join("\n")
+          };
+        },
+        previewDocument: ({ workflow, target, draft }) => ({
+          path: `.agentops/requests/${workflow === "planning-discovery" && target === "request" ? "planning" : "unknown"}.yaml`,
+          previewHash: "preview-hash",
+          diff: `+ ${draft.trim()}`,
+          summary: "Preview ready.",
+          semantic: {
+            workflow,
+            selectedProfile: "default",
+            selectedPolicyPreset: "default",
+            selectedWorkflowVariant: "standard",
+            selectedAgentBindings: {},
+            nodeAgents: { planning: "planning-analyst" },
+            disabledNodes: [],
+            policySummary: {
+              executionMode: "inspect",
+              modelAccess: false,
+              network: "deny",
+              writes: "deny",
+              deniedTools: ["filesystem.write-file"],
+              approvalTools: []
+            }
+          },
+          validation: {
+            valid: true,
+            errors: []
+          }
+        }),
+        saveDocument: ({ draft }) => {
+          writeFileSync(join(root, ".agentops", "requests", "planning.yaml"), draft, "utf8");
+          return {
+            path: ".agentops/requests/planning.yaml",
+            validation: {
+              valid: true,
+              errors: []
+            }
+          };
+        }
+      }
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+    });
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const serverUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      const configurePage = await fetch(`${serverUrl}/configure?workflow=planning-discovery&target=request`);
+      const comparePage = await fetch(`${serverUrl}/runs/compare?left=run-left&right=run-right`);
+      const current = await fetch(`${serverUrl}/api/config/current?workflow=planning-discovery&target=request`);
+      const editorModel = await fetch(`${serverUrl}/api/config/editor?workflow=planning-discovery&target=request`);
+      const render = await fetch(`${serverUrl}/api/config/render`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          state: {
+            meta: {
+              profile: "default",
+              policyPreset: "strict-readonly",
+              workflowVariant: "standard",
+              agentBindings: {
+                planning: "planning-analyst"
+              }
+            },
+            fields: [
+              {
+                key: "problemStatement",
+                label: "Problem Statement",
+                input: "textarea",
+                required: true,
+                value: "Updated request"
+              },
+              {
+                key: "goals",
+                label: "Goals",
+                input: "string-array",
+                required: true,
+                value: ["Produce a plan"]
+              }
+            ]
+          }
+        })
+      });
+      const preview = await fetch(`${serverUrl}/api/config/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: (await render.clone().json() as { draft: string }).draft
+        })
+      });
+      const previewJson = await preview.json() as { previewHash: string; diff: string };
+      const save = await fetch(`${serverUrl}/api/config/save`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: (await render.json() as { draft: string }).draft,
+          previewHash: previewJson.previewHash,
+          approval: "approve-write"
+        })
+      });
+
+      expect(configurePage.status).toBe(200);
+      const configureHtml = await configurePage.text();
+      expect(configureHtml).toContain("agentforge config validate");
+      expect(configureHtml).toContain("Structured Editor");
+      expect(configureHtml).toContain("View YAML (Advanced)");
+      expect(comparePage.status).toBe(200);
+      expect(await comparePage.text()).toContain("Secondary analysis step");
+      expect(current.status).toBe(200);
+      expect(await current.text()).toContain("Test request");
+      expect(editorModel.status).toBe(200);
+      expect(await editorModel.text()).toContain("\"target\": \"request\"");
+      expect(render.status).toBe(200);
+      expect(previewJson.diff).toContain("Updated request");
+      expect(save.status).toBe(200);
+      expect(readFileSync(join(root, ".agentops", "requests", "planning.yaml"), "utf8")).toContain("Updated request");
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {

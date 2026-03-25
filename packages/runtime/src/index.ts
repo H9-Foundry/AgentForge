@@ -244,6 +244,12 @@ export async function runWorkflow(deps: WorkflowRunDependencies): Promise<{ stat
   };
 
   for (const node of deps.workflow.nodes) {
+    state.configuration?.execution.executedNodes.push({
+      nodeId: node.id,
+      kind: node.kind,
+      ...(node.agent ? { agent: node.agent } : {})
+    });
+
     if (node.kind === "report") {
       state.auditTrail.push(
         createAuditEntry({

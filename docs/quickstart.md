@@ -111,6 +111,20 @@ That command keeps the normal local-first init behavior and also writes `.agento
 - `.agentops/runs/<run-id>/summary.md`
   - human-readable summary of workflow status and the audit trail
 
+If you want the guided local review surface instead of reading raw files, launch:
+
+```bash
+npx @h9-foundry/agentforge-cli visualizer --open
+```
+
+Use the visualizer in this order:
+
+1. `/outcomes` for evaluator-first value, risk, and evidence review
+2. `/runs` for drill-down into a specific run
+3. `/runs/compare` after you have two concrete runs worth comparing
+4. `/benchmarks` only for deterministic eval comparison output
+5. `/configure` when you want supported browser-based config authoring; it defaults to a structured editor, keeps raw YAML behind an Advanced toggle, and still treats repo YAML plus `agentforge config validate` as canonical
+
 For a small clean repository, a successful run should report:
 
 - workflow `pr-review`

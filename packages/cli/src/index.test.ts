@@ -23,7 +23,8 @@ import {
   recordBenchmarkLedgerEntry,
   runLocalEval,
   runLocalWorkflow,
-  scanProject
+  scanProject,
+  validateControlPlane
 } from "./index.js";
 
 function createGitFixture(prefix: string, repositoryUrl = "https://github.com/H9-Foundry/fixture.git"): string {
@@ -334,6 +335,51 @@ describe("cli smoke flows", () => {
 
     const secondRequest = yaml.load(readFileSync(requestPath, "utf8")) as Record<string, unknown>;
     expect(secondRequest.problemStatement).toBe("Keep my custom request");
+  });
+
+  it("creates governed control-plane starter files during init", () => {
+    const root = createGitFixture("agentops-cli-control-plane-");
+
+    const result = initProject(root, { preset: "planning-discovery" });
+
+    expect(result.created).toContain(join(root, ".agentops", "control", "policy-presets.yaml"));
+    expect(result.created).toContain(join(root, ".agentops", "control", "defaults.yaml"));
+    expect(existsSync(join(root, ".agentops", "control", "planning-discovery.yaml"))).toBe(true);
+    expect(existsSync(join(root, ".agentops", "control", "pr-review.yaml"))).toBe(true);
+  });
+
+  it("records resolved control-plane configuration in workflow bundles and validates the config surface", async () => {
+    const root = createGitFixture("agentops-cli-config-validate-");
+    initProject(root, { preset: "planning-discovery" });
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      yaml.dump({
+        meta: {
+          profile: "default",
+          policyPreset: "strict-readonly",
+          workflowVariant: "standard",
+          agentBindings: {
+            planning: "planning-analyst"
+          }
+        },
+        problemStatement: "Plan the next runtime hardening slice",
+        goals: ["Produce a planning brief"],
+        constraints: ["Keep the default path read-only"],
+        pathHints: ["packages/runtime"]
+      }),
+      "utf8"
+    );
+
+    const validation = await validateControlPlane(root);
+    expect(validation.valid).toBe(true);
+
+    const run = await runLocalWorkflow("planning-discovery", root);
+    const bundle = JSON.parse(readFileSync(run.jsonPath, "utf8")) as { configuration?: { selectedControls?: { policyPreset?: string }; effective?: { policyFingerprint?: string }; execution?: { executedNodes?: Array<{ nodeId: string }> } } };
+
+    expect(bundle.configuration?.selectedControls?.policyPreset).toBe("strict-readonly");
+    expect(bundle.configuration?.effective?.policyFingerprint).toBeTruthy();
+    expect(bundle.configuration?.execution?.executedNodes?.map((node) => node.nodeId)).toEqual(["intake", "discovery", "planning", "report"]);
   });
 
   it("builds a repo-fit onboarding profile and applies the recommended starter preset", () => {
@@ -3471,6 +3517,480 @@ describe("cli smoke flows", () => {
       const response = await fetch(`${launched.serverUrl}/outcomes`);
       expect(response.status).toBe(200);
       expect(await response.text()).toContain("Outcomes");
+    } finally {
+      await launched.close();
+    }
+  });
+
+  it("resolves structured GUI-edited requests the same as direct YAML edits with configure enabled by default", async () => {
+    const guiRoot = createGitFixture("agentops-cli-visualizer-config-");
+    initProject(guiRoot, { preset: "planning-discovery" });
+
+    const editedRequest = [
+      "meta:",
+      "  profile: default",
+      "  policyPreset: strict-readonly",
+      "  workflowVariant: standard",
+      "  agentBindings:",
+      "    planning: planning-analyst",
+      "problemStatement: Plan the guarded visualizer editing slice",
+      "goals:",
+      "  - Produce one planning brief",
+      "constraints:",
+      "  - Keep the runtime read-only by default",
+      "pathHints:",
+      "  - packages/runtime"
+    ].join("\n");
+
+    const launched = await launchVisualizer({ port: 0 }, guiRoot);
+    try {
+      const editor = await fetch(`${launched.serverUrl}/api/config/editor?workflow=planning-discovery&target=request`);
+      const editorJson = await editor.json() as {
+        request?: {
+          fields: Array<{ key: string; label: string; input: string; required: boolean; value: unknown }>;
+        };
+      };
+      const requestFields = editorJson.request?.fields ?? [];
+      const render = await fetch(`${launched.serverUrl}/api/config/render`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          state: {
+            meta: {
+              profile: "default",
+              policyPreset: "strict-readonly",
+              workflowVariant: "standard",
+              agentBindings: {
+                planning: "planning-analyst"
+              }
+            },
+            fields: requestFields.map((field) => {
+              if (field.key === "problemStatement") {
+                return { ...field, value: "Plan the guarded visualizer editing slice" };
+              }
+              if (field.key === "goals") {
+                return { ...field, value: ["Produce one planning brief"] };
+              }
+              if (field.key === "constraints") {
+                return { ...field, value: ["Keep the runtime read-only by default"] };
+              }
+              if (field.key === "pathHints") {
+                return { ...field, value: ["packages/runtime"] };
+              }
+              return field;
+            })
+          }
+        })
+      });
+      const renderJson = await render.json() as {
+        draft: string;
+      };
+      const preview = await fetch(`${launched.serverUrl}/api/config/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: renderJson.draft
+        })
+      });
+      const previewJson = await preview.json() as {
+        previewHash: string;
+        validation?: { valid: boolean; errors: string[] };
+        semantic?: { selectedPolicyPreset?: string };
+      };
+
+      expect(editor.status).toBe(200);
+      expect(render.status).toBe(200);
+      expect(renderJson.draft).toContain("policyPreset: strict-readonly");
+      expect(renderJson.draft).toContain("problemStatement: Plan the guarded visualizer editing slice");
+      expect(preview.status).toBe(200);
+      expect(previewJson.validation?.valid).toBe(true);
+      expect(previewJson.semantic?.selectedPolicyPreset).toBe("strict-readonly");
+
+      const save = await fetch(`${launched.serverUrl}/api/config/save`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: renderJson.draft,
+          previewHash: previewJson.previewHash,
+          approval: "approve-write"
+        })
+      });
+
+      expect(save.status).toBe(200);
+    } finally {
+      await launched.close();
+    }
+
+    const guiRun = await runLocalWorkflow("planning-discovery", guiRoot);
+    const guiBundle = readJson<{ configuration?: { selectedControls?: unknown; effective?: unknown } }>(guiRun.jsonPath);
+
+    const directRoot = createGitFixture("agentops-cli-direct-config-");
+    initProject(directRoot, { preset: "planning-discovery" });
+    writeFileSync(join(directRoot, ".agentops", "requests", "planning.yaml"), `${editedRequest}\n`, "utf8");
+
+    const directRun = await runLocalWorkflow("planning-discovery", directRoot);
+    const directBundle = readJson<{ configuration?: { selectedControls?: unknown; effective?: unknown } }>(directRun.jsonPath);
+
+    expect(guiBundle.configuration?.selectedControls).toEqual(directBundle.configuration?.selectedControls);
+    expect(guiBundle.configuration?.effective).toMatchObject({
+      workflow: (directBundle.configuration?.effective as Record<string, unknown>)?.workflow,
+      nodeAgents: (directBundle.configuration?.effective as Record<string, unknown>)?.nodeAgents,
+      disabledNodes: (directBundle.configuration?.effective as Record<string, unknown>)?.disabledNodes,
+      toolEffects: (directBundle.configuration?.effective as Record<string, unknown>)?.toolEffects
+    });
+  });
+
+  it("supports the full guarded configure flow for all stable targets", async () => {
+    const root = createGitFixture("agentops-cli-visualizer-editor-models-");
+    initProject(root, { preset: "planning-discovery" });
+
+    const launched = await launchVisualizer({ port: 0 }, root);
+    try {
+      async function renderPreviewAndSave(input: {
+        workflow?: string;
+        target: "request" | "workflow-control" | "policy-presets" | "defaults";
+        state: unknown;
+      }): Promise<{ draft: string; preview: { previewHash: string; semantic?: Record<string, unknown>; validation?: { valid: boolean; errors: string[] } } }> {
+        const render = await fetch(`${launched.serverUrl}/api/config/render`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input)
+        });
+        const renderJson = await render.json() as { draft: string };
+        const preview = await fetch(`${launched.serverUrl}/api/config/preview`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            workflow: input.workflow,
+            target: input.target,
+            draft: renderJson.draft
+          })
+        });
+        const previewJson = await preview.json() as {
+          previewHash: string;
+          semantic?: Record<string, unknown>;
+          validation?: { valid: boolean; errors: string[] };
+        };
+        const save = await fetch(`${launched.serverUrl}/api/config/save`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            workflow: input.workflow,
+            target: input.target,
+            draft: renderJson.draft,
+            previewHash: previewJson.previewHash,
+            approval: "approve-write"
+          })
+        });
+
+        expect(render.status).toBe(200);
+        expect(preview.status).toBe(200);
+        expect(previewJson.validation?.valid).not.toBe(false);
+        expect(save.status).toBe(200);
+
+        return {
+          draft: renderJson.draft,
+          preview: previewJson
+        };
+      }
+
+      const presetsEditor = await fetch(`${launched.serverUrl}/api/config/editor?target=policy-presets`);
+      const presetsEditorJson = await presetsEditor.json() as {
+        policyPresets?: {
+          presets: Array<Record<string, unknown>>;
+        };
+      };
+      const policyPresetsState = {
+        presets: [
+          ...(presetsEditorJson.policyPresets?.presets ?? []),
+          {
+            name: "read-only-audit",
+            description: "Add an explicitly named read-only preset for structured configure testing.",
+            defaults: {
+              executionMode: "inspect",
+              modelAccess: false,
+              network: "deny",
+              writes: "deny"
+            },
+            blockedPaths: [],
+            pluginAllowedTiers: [],
+            pluginAllowedSources: [],
+            tools: []
+          }
+        ]
+      };
+      const presetsSaved = await renderPreviewAndSave({
+        target: "policy-presets",
+        state: policyPresetsState
+      });
+
+      expect(presetsEditor.status).toBe(200);
+      expect(presetsSaved.draft).toContain("read-only-audit");
+      expect(readFileSync(join(root, ".agentops", "control", "policy-presets.yaml"), "utf8")).toContain("read-only-audit");
+
+      const controlEditor = await fetch(`${launched.serverUrl}/api/config/editor?workflow=planning-discovery&target=workflow-control`);
+      const controlEditorJson = await controlEditor.json() as {
+        workflowControl?: {
+          profiles: Array<Record<string, unknown>>;
+          fieldMetadata: Array<Record<string, unknown>>;
+          workflowVariants: Array<Record<string, unknown>>;
+          allowedPolicyPresets: string[];
+          agentBindings: Array<Record<string, unknown>>;
+        };
+      };
+      const controlState = {
+        profiles: (controlEditorJson.workflowControl?.profiles ?? []).map((profile) => {
+          if (profile.name !== "default") {
+            return profile;
+          }
+          const allowedPolicyPresets = Array.isArray(profile.allowedPolicyPresets) ? profile.allowedPolicyPresets as string[] : [];
+          const allowedWorkflowVariants = Array.isArray(profile.allowedWorkflowVariants) ? profile.allowedWorkflowVariants as string[] : [];
+          return {
+            ...profile,
+            allowedPolicyPresets: [...new Set([...allowedPolicyPresets, "read-only-audit"])],
+            allowedWorkflowVariants: [...new Set([...allowedWorkflowVariants, "focused"])]
+          };
+        }),
+        fieldMetadata: controlEditorJson.workflowControl?.fieldMetadata ?? [],
+        workflowVariants: [
+          ...(controlEditorJson.workflowControl?.workflowVariants ?? []),
+          {
+            name: "focused",
+            description: "Keep the standard planning flow but expose an alternate named variant for stable configure testing.",
+            disabledNodes: [],
+            nodeAgentOverrides: []
+          }
+        ],
+        allowedPolicyPresets: [...new Set([...(controlEditorJson.workflowControl?.allowedPolicyPresets ?? []), "read-only-audit"])],
+        agentBindings: controlEditorJson.workflowControl?.agentBindings ?? []
+      };
+      const controlSaved = await renderPreviewAndSave({
+        workflow: "planning-discovery",
+        target: "workflow-control",
+        state: controlState
+      });
+
+      expect(controlEditor.status).toBe(200);
+      expect(controlSaved.draft).toContain("workflow: planning-discovery");
+      expect(controlSaved.draft).toContain("read-only-audit");
+      expect(controlSaved.draft).toContain("focused");
+      expect(readFileSync(join(root, ".agentops", "control", "planning-discovery.yaml"), "utf8")).toContain("focused");
+
+      const refreshedRequestEditor = await fetch(`${launched.serverUrl}/api/config/editor?workflow=planning-discovery&target=request`);
+      const refreshedRequestEditorJson = await refreshedRequestEditor.json() as {
+        request?: {
+          fields: Array<{ key: string; input: string; label: string; required: boolean; value: unknown }>;
+          policyPresetOptions: Array<{ value: string }>;
+          workflowVariantOptions: Array<{ value: string }>;
+        };
+      };
+
+      expect(refreshedRequestEditor.status).toBe(200);
+      expect(refreshedRequestEditorJson.request?.policyPresetOptions.map((option) => option.value)).toContain("read-only-audit");
+      expect(refreshedRequestEditorJson.request?.workflowVariantOptions.map((option) => option.value)).toContain("focused");
+
+      const requestSaved = await renderPreviewAndSave({
+        workflow: "planning-discovery",
+        target: "request",
+        state: {
+          meta: {
+            profile: "default",
+            policyPreset: "read-only-audit",
+            workflowVariant: "focused",
+            agentBindings: {
+              planning: "planning-analyst"
+            }
+          },
+          fields: (refreshedRequestEditorJson.request?.fields ?? []).map((field) => {
+            if (field.key === "problemStatement") {
+              return { ...field, value: "Render request from stable structured configure" };
+            }
+            if (field.key === "goals") {
+              return { ...field, value: ["Ship the stable configure editor"] };
+            }
+            if (field.key === "constraints") {
+              return { ...field, value: ["Keep YAML canonical and browser saves guarded"] };
+            }
+            return field;
+          })
+        }
+      });
+
+      expect(requestSaved.draft).toContain("policyPreset: read-only-audit");
+      expect(requestSaved.draft).toContain("workflowVariant: focused");
+      expect(requestSaved.preview.semantic?.selectedPolicyPreset).toBe("read-only-audit");
+      expect(requestSaved.preview.semantic?.selectedWorkflowVariant).toBe("focused");
+      expect((requestSaved.preview.semantic?.policySummary as Record<string, unknown> | undefined)?.writes).toBe("deny");
+      expect(readFileSync(join(root, ".agentops", "requests", "planning.yaml"), "utf8")).toContain("Render request from stable structured configure");
+
+      const defaultsEditor = await fetch(`${launched.serverUrl}/api/config/editor?target=defaults`);
+      const defaultsEditorJson = await defaultsEditor.json() as {
+        defaults?: {
+          workflows: Array<Record<string, unknown>>;
+        };
+      };
+      const defaultsSaved = await renderPreviewAndSave({
+        target: "defaults",
+        state: {
+          workflows: (defaultsEditorJson.defaults?.workflows ?? []).map((workflow) =>
+            workflow.workflow === "planning-discovery"
+              ? {
+                  ...workflow,
+                  profile: "default",
+                  policyPreset: "read-only-audit",
+                  workflowVariant: "focused"
+                }
+              : workflow
+          )
+        }
+      });
+
+      expect(defaultsEditor.status).toBe(200);
+      expect(defaultsSaved.draft).toContain("read-only-audit");
+      expect(defaultsSaved.draft).toContain("focused");
+      expect(readFileSync(join(root, ".agentops", "control", "defaults.yaml"), "utf8")).toContain("read-only-audit");
+    } finally {
+      await launched.close();
+    }
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Exercise defaults from saved configure state",
+        "goals:",
+        "  - Verify stable defaults",
+        "constraints:",
+        "  - Keep the workflow local-first",
+        "pathHints:",
+        "  - packages/cli"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const configuredRun = await runLocalWorkflow("planning-discovery", root);
+    const configuredBundle = readJson<{
+      configuration?: {
+        selectedControls?: {
+          policyPreset?: string;
+          workflowVariant?: string;
+        };
+      };
+    }>(configuredRun.jsonPath);
+
+    expect(configuredBundle.configuration?.selectedControls?.policyPreset).toBe("read-only-audit");
+    expect(configuredBundle.configuration?.selectedControls?.workflowVariant).toBe("focused");
+  });
+
+  it("respects the explicit disable override for browser config editing", async () => {
+    const root = createGitFixture("agentops-cli-visualizer-disabled-");
+    initProject(root, { preset: "planning-discovery" });
+
+    const configPath = join(root, ".agentops", "agentops.yaml");
+    const config = yaml.load(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    writeFileSync(
+      configPath,
+      yaml.dump({
+        ...config,
+        visualizer: {
+          experimental_config_editing: false
+        }
+      }),
+      "utf8"
+    );
+
+    const launched = await launchVisualizer({ port: 0 }, root);
+    try {
+      const configurePage = await fetch(`${launched.serverUrl}/configure?workflow=planning-discovery&target=request`);
+      const editor = await fetch(`${launched.serverUrl}/api/config/editor?workflow=planning-discovery&target=request`);
+      const preview = await fetch(`${launched.serverUrl}/api/config/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: "problemStatement: Disabled configure\n"
+        })
+      });
+      const save = await fetch(`${launched.serverUrl}/api/config/save`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: "problemStatement: Disabled configure\n",
+          previewHash: "ignored",
+          approval: "approve-write"
+        })
+      });
+
+      expect(configurePage.status).toBe(200);
+      expect(await configurePage.text()).toContain("Editing disabled");
+      expect(editor.status).toBe(200);
+      expect(preview.status).toBe(403);
+      expect(save.status).toBe(403);
+    } finally {
+      await launched.close();
+    }
+  });
+
+  it("rejects invalid or unsafe visualizer config saves before writing", async () => {
+    const root = createGitFixture("agentops-cli-visualizer-guardrails-");
+    initProject(root, { preset: "planning-discovery" });
+
+    const requestPath = join(root, ".agentops", "requests", "planning.yaml");
+    const originalRequest = readFileSync(requestPath, "utf8");
+    const invalidDraft = "meta:\n  profile: default\n";
+
+    const launched = await launchVisualizer({ port: 0 }, root);
+    try {
+      const preview = await fetch(`${launched.serverUrl}/api/config/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: invalidDraft
+        })
+      });
+      const previewJson = await preview.json() as {
+        previewHash: string;
+        validation?: { valid: boolean; errors: string[] };
+      };
+
+      expect(preview.status).toBe(200);
+      expect(previewJson.validation?.valid).toBe(false);
+      expect(previewJson.validation?.errors.some((error) => error.includes("planning-discovery"))).toBe(true);
+
+      const invalidSave = await fetch(`${launched.serverUrl}/api/config/save`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "planning-discovery",
+          target: "request",
+          draft: invalidDraft,
+          previewHash: previewJson.previewHash,
+          approval: "approve-write"
+        })
+      });
+      const pathTraversal = await fetch(`${launched.serverUrl}/api/config/preview`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workflow: "../escape",
+          target: "request",
+          draft: "problemStatement: escape\n"
+        })
+      });
+
+      expect(invalidSave.status).toBe(400);
+      expect(pathTraversal.status).toBe(400);
+      expect(readFileSync(requestPath, "utf8")).toBe(originalRequest);
     } finally {
       await launched.close();
     }
