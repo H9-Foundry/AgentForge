@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-shared-types",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "description": "Shared TypeScript types inferred from the AgentForge schema contracts.",
   "license": "MIT",
   "author": "H9 Foundry",

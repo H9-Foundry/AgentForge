@@ -1,5 +1,16 @@
 # @h9-foundry/agentforge-sdk
 
+## 0.12.3
+
+### Patch Changes
+
+- 20f5d35: Add the repo-fit onboarding contract for existing repositories.
+
+  This release adds `.agentops/repo-fit.yaml` as the canonical repository-fit contract, extends `agentforge onboard` to infer and write that contract, surfaces repo-fit editing in `/configure?target=repo-fit`, persists repo-fit provenance into run configuration snapshots, and expands advisory repo-fit findings across QA, security, release, pipeline, deployment, promotion, incident, and maintenance workflows.
+
+- Updated dependencies [20f5d35]
+  - @h9-foundry/agentforge-shared-types@0.12.3
+
 ## 0.12.2
 
 ### Patch Changes
