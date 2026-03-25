@@ -114,7 +114,7 @@ If you want the fuller published-CLI walkthrough, use [docs/quickstart.md](docs/
 
 Available in the published CLI:
 
-- `agentforge visualizer --open` now launches the official local read-only visualizer for `.agentops/runs`, including runs, `/outcomes`, run detail, and benchmark views
+- `agentforge visualizer --open` now launches the official local visualizer for `.agentops/runs`, landing on `/outcomes` first, then supporting `/runs` drill-down, `/runs/compare`, and benchmark views
 - `agentforge visualizer export --format json|markdown` now exports a normalized outcomes snapshot for CI artifacts or team review without introducing a hosted dependency
 - provider-backed runs now persist measured token usage in `.agentops/runs/.../bundle.json`, with local cost estimation when a provider/model entry exists in the runtime pricing registry
 - `agentforge eval benchmark-ledger --json`, `agentforge eval benchmark-record ... --prefill-run <run-id>`, and `agentforge eval benchmark-wizard ...` support the local benchmark ledger that powers adjudicated `/outcomes` overlays, including release speed/quality/token-spend comparisons
@@ -126,6 +126,17 @@ Available on `main` before the next npm release:
 - `agentforge onboard` and `agentforge setup` provide the guided repo-fit onboarding path
 - `agentforge benchmark` provides one high-level entrypoint for live task benchmarking and deterministic eval comparisons
 - onboarding now positions `/outcomes` as the primary value dashboard and `/benchmarks` as the deterministic eval comparison dashboard
+
+## Visualizer Journey
+
+The evaluator-first visualizer flow is:
+
+1. launch `agentforge visualizer --open`
+2. start at `/outcomes` to judge value, risk, and evidence first
+3. move into `/runs` when you need one-run drill-down
+4. use `/runs/compare` only after you have two concrete runs to compare
+5. use `/benchmarks` only for deterministic `eval compare` evidence
+6. use `/configure` when you want supported browser-based config authoring over repo YAML; it defaults to a structured form editor with Advanced YAML behind a toggle, while direct repo YAML plus `agentforge config validate` remains the canonical configuration path
 
 ## What Success Looks Like
 
@@ -327,6 +338,8 @@ agentforge visualizer export --format markdown
 ```
 
 Use the first command for local inspection and the second command when you want a shareable outcomes snapshot without standing up a hosted dashboard. If you are developing AgentForge itself, the contributor/source-build path remains documented in [docs/VISUALIZER.md](docs/VISUALIZER.md).
+
+Direct repo YAML remains the canonical way to edit workflow requests and control documents. The visualizer `/configure` surface is now supported by default, uses a structured editor for requests, workflow controls, policy presets, and defaults, and keeps raw YAML behind an Advanced toggle for expert review and debugging. If a repository needs to disable browser editing temporarily for compatibility, `.agentops/agentops.yaml` can set `visualizer.experimental_config_editing: false` for one release cycle while keeping the same CLI-backed validation and save gates.
 
 ### Planning To Design Evaluator Path
 

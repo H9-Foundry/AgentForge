@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
-import { auditBundleSchema, benchmarkArtifactSchema, benchmarkLedgerDocumentSchema, lifecycleArtifactSchema } from "@h9-foundry/agentforge-schemas";
+import { auditBundleSchema, benchmarkArtifactSchema, benchmarkLedgerDocumentSchema, lifecycleArtifactSchema, runComparisonDocumentSchema } from "@h9-foundry/agentforge-schemas";
 import type {
   AuditBundle,
   AuditEntry,
@@ -11,7 +11,9 @@ import type {
   BlockedPlugin,
   Finding,
   LifecycleArtifact,
-  ProviderUsageAggregate
+  ProviderUsageAggregate,
+  ResolvedRunConfigurationSnapshot,
+  RunComparisonDocument
 } from "@h9-foundry/agentforge-shared-types";
 
 type RunStatus = AuditBundle["status"];
@@ -62,6 +64,10 @@ export interface RunListItemView {
   evidenceStatuses: Array<{ category: string; status: "present" | "missing" | "partial" }>;
   workflowStage?: string;
   hasOverride: boolean;
+  configurationProfile?: string;
+  configurationPolicyPreset?: string;
+  configurationWorkflowVariant?: string;
+  configurationAgentBindings: string[];
 }
 
 export interface InvalidRunView {
@@ -116,10 +122,36 @@ export interface RunDetailView extends RunListItemView {
   summaryMarkdown: string;
   rawBundleJson: string;
   usage?: ProviderUsageAggregate;
+  configuration?: RunConfigurationSummaryView;
   decisionImpact: DecisionImpactView;
   riskSummary: RiskSummaryView;
   evidenceCompleteness: EvidenceCompletenessView[];
   workflowChain: WorkflowChainView;
+}
+
+export interface RunConfigurationSummaryView {
+  profile: string;
+  policyPreset?: string;
+  workflowVariant: string;
+  agentBindings: string[];
+  policyFingerprint: string;
+  sourceRefs: string[];
+  nodeAgents: Array<{ nodeId: string; agent: string }>;
+  executedNodes: Array<{ nodeId: string; kind: string; agent?: string }>;
+}
+
+export interface ConfigurationHotspotView {
+  dimension: "profile" | "policyPreset" | "workflowVariant" | "agentBinding";
+  value: string;
+  runs: number;
+  changedDecisions: number;
+  blockedActions: number;
+  workflows: string[];
+}
+
+export interface RunComparisonView extends RunComparisonDocument {
+  left?: RunDetailView;
+  right?: RunDetailView;
 }
 
 export interface BenchmarkComparedRunView {
@@ -341,6 +373,7 @@ export interface OutcomesDashboardView {
   evidence: WorkflowEvidenceSummaryRowView[];
   friction: FrictionDashboardView;
   workflowChains: WorkflowChainSummaryView[];
+  configurationHotspots: ConfigurationHotspotView[];
   runCount: number;
   filteredPanel?: string;
   filters: OutcomesFilters;
@@ -376,6 +409,7 @@ export interface OutcomesExportDocument {
   evidence: WorkflowEvidenceSummaryRowView[];
   friction: FrictionDashboardView;
   workflowChains: WorkflowChainSummaryView[];
+  configurationHotspots: ConfigurationHotspotView[];
   summaries: OutcomesDashboardView["summaries"];
 }
 
@@ -744,11 +778,37 @@ function sortRunsNewestFirst(left: LoadedRun, right: LoadedRun): number {
   return right.runId.localeCompare(left.runId);
 }
 
+function toRunConfigurationSummary(configuration: ResolvedRunConfigurationSnapshot | undefined): RunConfigurationSummaryView | undefined {
+  if (!configuration) {
+    return undefined;
+  }
+
+  return {
+    profile: configuration.selectedControls.profile,
+    policyPreset: configuration.selectedControls.policyPreset,
+    workflowVariant: configuration.selectedControls.workflowVariant,
+    agentBindings: Object.entries(configuration.selectedControls.agentBindings)
+      .map(([role, agent]) => `${role}=${agent}`)
+      .sort(),
+    policyFingerprint: configuration.effective.policyFingerprint,
+    sourceRefs: [...configuration.sourceRefs],
+    nodeAgents: Object.entries(configuration.effective.nodeAgents)
+      .map(([nodeId, agent]) => ({ nodeId, agent }))
+      .sort((left, right) => left.nodeId.localeCompare(right.nodeId)),
+    executedNodes: configuration.execution.executedNodes.map((node) => ({
+      nodeId: node.nodeId,
+      kind: node.kind,
+      ...(node.agent ? { agent: node.agent } : {})
+    }))
+  };
+}
+
 function toRunListItemView(run: LoadedRun, ledgerEntries: readonly BenchmarkLedgerEntry[] = []): RunListItemView {
   const entries = run.bundle?.entries ?? [];
   const findings = run.bundle?.findings ?? [];
   const blockedPlugins = run.bundle?.blockedPlugins ?? [];
   const artifactKinds = run.artifactViews.map((artifact) => artifact.artifactKind);
+  const configuration = toRunConfigurationSummary(run.bundle?.configuration);
   const base: RunListItemView = {
     runId: run.runId,
     workflow: run.rawBundle.workflow,
@@ -765,7 +825,11 @@ function toRunListItemView(run: LoadedRun, ledgerEntries: readonly BenchmarkLedg
     invalidArtifactCount: run.invalidArtifactCount,
     riskKinds: [],
     evidenceStatuses: [],
-    hasOverride: false
+    hasOverride: false,
+    configurationProfile: configuration?.profile,
+    configurationPolicyPreset: configuration?.policyPreset,
+    configurationWorkflowVariant: configuration?.workflowVariant,
+    configurationAgentBindings: configuration?.agentBindings ?? []
   };
   const decisionImpact = inferDecisionImpact(base, findings, run.artifactViews, ledgerEntries);
   const evidenceCompleteness = buildEvidenceCompleteness(base.workflow, run.artifactViews);
@@ -903,10 +967,70 @@ export function loadRunDetailView(
     summaryMarkdown: run.summaryMarkdown,
     rawBundleJson: run.rawBundleJson,
     usage: run.bundle?.usage,
+    configuration: toRunConfigurationSummary(run.bundle?.configuration),
     decisionImpact,
     riskSummary,
     evidenceCompleteness,
     workflowChain
+  };
+}
+
+export function loadRunComparisonView(
+  workspaceRoot: string,
+  leftRunId: string,
+  rightRunId: string,
+  runsRoot = resolveRunsRoot(workspaceRoot),
+  benchmarkLedgerPath?: string
+): RunComparisonView | undefined {
+  const left = loadRunDetailView(workspaceRoot, leftRunId, runsRoot, benchmarkLedgerPath);
+  const right = loadRunDetailView(workspaceRoot, rightRunId, runsRoot, benchmarkLedgerPath);
+  if (!left || !right) {
+    return undefined;
+  }
+
+  const leftConfiguration = left.configuration;
+  const rightConfiguration = right.configuration;
+  const controlChanges = [
+    { field: "profile", left: leftConfiguration?.profile, right: rightConfiguration?.profile },
+    { field: "policyPreset", left: leftConfiguration?.policyPreset, right: rightConfiguration?.policyPreset },
+    { field: "workflowVariant", left: leftConfiguration?.workflowVariant, right: rightConfiguration?.workflowVariant },
+    { field: "agentBindings", left: leftConfiguration?.agentBindings, right: rightConfiguration?.agentBindings },
+    { field: "policyFingerprint", left: leftConfiguration?.policyFingerprint, right: rightConfiguration?.policyFingerprint }
+  ].filter((change) => JSON.stringify(change.left) !== JSON.stringify(change.right));
+
+  const leftNodeAgents = new Map((leftConfiguration?.nodeAgents ?? []).map((entry) => [entry.nodeId, entry.agent]));
+  const rightNodeAgents = new Map((rightConfiguration?.nodeAgents ?? []).map((entry) => [entry.nodeId, entry.agent]));
+  const nodeChanges = [...new Set([...leftNodeAgents.keys(), ...rightNodeAgents.keys()])]
+    .map((nodeId) => ({
+      nodeId,
+      leftAgent: leftNodeAgents.get(nodeId),
+      rightAgent: rightNodeAgents.get(nodeId)
+    }))
+    .filter((change) => change.leftAgent !== change.rightAgent);
+
+  return {
+    ...runComparisonDocumentSchema.parse({
+      leftRunId,
+      rightRunId,
+      controlChanges,
+      executionChanges: {
+        workflowChanged: left.workflow !== right.workflow,
+        profileChanged: leftConfiguration?.profile !== rightConfiguration?.profile,
+        policyPresetChanged: leftConfiguration?.policyPreset !== rightConfiguration?.policyPreset,
+        workflowVariantChanged: leftConfiguration?.workflowVariant !== rightConfiguration?.workflowVariant,
+        agentBindingChanged: JSON.stringify(leftConfiguration?.agentBindings ?? []) !== JSON.stringify(rightConfiguration?.agentBindings ?? []),
+        nodeChanges
+      },
+      outcomeChanges: {
+        findingsDelta: right.findings - left.findings,
+        blockedActionsDelta: right.blockedActions - left.blockedActions,
+        artifactKindsAdded: right.artifactKinds.filter((kind) => !left.artifactKinds.includes(kind)),
+        artifactKindsRemoved: left.artifactKinds.filter((kind) => !right.artifactKinds.includes(kind)),
+        changedDecision: left.decisionImpact.kind !== right.decisionImpact.kind || left.decisionImpact.changedDecision !== right.decisionImpact.changedDecision
+      }
+    }),
+    left,
+    right
   };
 }
 
@@ -1686,6 +1810,59 @@ function aggregateWorkflowChainSummary(runs: readonly RunDetailView[]): Workflow
   }).filter((stage) => stage.runCount > 0);
 }
 
+function aggregateConfigurationHotspots(runs: readonly RunDetailView[]): ConfigurationHotspotView[] {
+  const grouped = new Map<string, ConfigurationHotspotView>();
+
+  const addEntry = (
+    dimension: ConfigurationHotspotView["dimension"],
+    value: string,
+    run: RunDetailView
+  ): void => {
+    const key = `${dimension}:${value}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.runs += 1;
+      existing.changedDecisions += run.decisionImpact.changedDecision ? 1 : 0;
+      existing.blockedActions += run.blockedActions;
+      if (!existing.workflows.includes(run.workflow)) {
+        existing.workflows.push(run.workflow);
+        existing.workflows.sort();
+      }
+      return;
+    }
+
+    grouped.set(key, {
+      dimension,
+      value,
+      runs: 1,
+      changedDecisions: run.decisionImpact.changedDecision ? 1 : 0,
+      blockedActions: run.blockedActions,
+      workflows: [run.workflow]
+    });
+  };
+
+  for (const run of runs) {
+    if (!run.configuration) {
+      continue;
+    }
+
+    addEntry("profile", run.configuration.profile, run);
+    addEntry("policyPreset", run.configuration.policyPreset ?? "default", run);
+    addEntry("workflowVariant", run.configuration.workflowVariant, run);
+    for (const binding of run.configuration.agentBindings) {
+      addEntry("agentBinding", binding, run);
+    }
+  }
+
+  return [...grouped.values()].sort(
+    (left, right) =>
+      right.changedDecisions - left.changedDecisions
+      || right.blockedActions - left.blockedActions
+      || right.runs - left.runs
+      || left.value.localeCompare(right.value)
+  );
+}
+
 function buildLeadershipRuns(runs: readonly RunDetailView[]): RunDetailView[] {
   const runsById = new Map(runs.map((run) => [run.runId, run]));
   const grouped = new Map<string, RunDetailView>();
@@ -2157,6 +2334,7 @@ export function loadOutcomesDashboardView(
 
   const friction = aggregateFriction(runs, ledger);
   const workflowChains = aggregateWorkflowChainSummary(runs);
+  const configurationHotspots = aggregateConfigurationHotspots(runs);
   const releaseBenchmark = aggregateReleaseBenchmark(ledger);
   const leadershipRuns = buildLeadershipRuns(runs);
   const topEvidenceGap = evidence[0]?.frequentMissing[0];
@@ -2189,6 +2367,7 @@ export function loadOutcomesDashboardView(
     evidence,
     friction,
     workflowChains,
+    configurationHotspots,
     runCount: runs.length,
     filteredPanel: filters.panel,
     filters,
@@ -2345,6 +2524,7 @@ export function createOutcomesExportDocument(
     evidence: view.evidence,
     friction: view.friction,
     workflowChains: view.workflowChains,
+    configurationHotspots: view.configurationHotspots,
     summaries: view.summaries
   };
 }

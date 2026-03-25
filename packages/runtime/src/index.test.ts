@@ -66,6 +66,29 @@ const state: WorkflowStateEnvelope = {
   lifecycleArtifacts: [],
   blockedPlugins: [],
   workflowInputs: {},
+  configuration: {
+    selectedControls: {
+      profile: "default",
+      workflowVariant: "standard",
+      agentBindings: {}
+    },
+    sourceRefs: [".agentops/workflows/pr-review.yaml"],
+    fingerprints: [{ path: ".agentops/workflows/pr-review.yaml", sha256: "abc123" }],
+    effective: {
+      workflow: "pr-review",
+      policyFingerprint: "policy123",
+      nodeAgents: { context: "noop" },
+      disabledNodes: [],
+      toolEffects: {}
+    },
+    request: {
+      path: ".agentops/requests/<none>",
+      metaPresent: false
+    },
+    execution: {
+      executedNodes: []
+    }
+  },
   agentResults: {},
   auditTrail: []
 };
@@ -130,6 +153,8 @@ describe("runtime", () => {
     expect(result.bundle.components.some((component) => component.kind === "agent" && component.name === "noop")).toBe(true);
     expect(result.state.lifecycleArtifacts).toHaveLength(0);
     expect(result.bundle.lifecycleArtifacts).toHaveLength(0);
+    expect(result.bundle.configuration?.selectedControls.profile).toBe("default");
+    expect(result.bundle.configuration?.execution.executedNodes.map((node) => node.nodeId)).toEqual(["context", "report"]);
   });
 
   it("does not execute approval-gated tools", async () => {

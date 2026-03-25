@@ -21,6 +21,7 @@ import {
   runLocalWorkflow,
   scanProject,
   startupPresetNames,
+  validateControlPlane,
   verifyReleaseArtifacts
 } from "./index.js";
 
@@ -376,6 +377,35 @@ program
     console.log(`Changed files: ${scan.changedFiles.length}`);
     console.log(`Recommended agents: ${scan.recommendations.join(", ")}`);
     console.log(`Risks: ${scan.risks.length > 0 ? scan.risks.join(", ") : "none detected"}`);
+  });
+
+const config = program.command("config").description("Inspect and validate the governed AgentForge control plane.");
+
+config
+  .command("validate")
+  .description("Validate .agentops/control documents, request meta selections, policy preset narrowing, and agent bindings.")
+  .option("--json", "Print machine-readable JSON output.")
+  .action(async (options: { json?: boolean }) => {
+    const result = await validateControlPlane(process.cwd());
+    if (options.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log(`Root: ${result.root}`);
+      console.log(`Valid: ${result.valid ? "yes" : "no"}`);
+      for (const workflow of result.workflows) {
+        console.log(
+          `- ${workflow.workflow}: request=${workflow.requestPath}, profiles=${workflow.profileCount}, variants=${workflow.variantCount}, policy-presets=${workflow.policyPresetCount}, bindings=${workflow.bindingCount}`
+        );
+      }
+      if (result.errors.length > 0) {
+        console.log("Errors:");
+        for (const error of result.errors) {
+          console.log(`- ${error}`);
+        }
+      }
+    }
+
+    process.exitCode = result.valid ? 0 : 1;
   });
 
 program
