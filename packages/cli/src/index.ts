@@ -8,7 +8,7 @@ import process from "node:process";
 import yaml from "js-yaml";
 
 import { buildAuditBundle, createAuditEntry, renderAuditBundleMarkdown } from "@h9-foundry/agentforge-audit";
-import { createWorkflowState, findWorkspaceRoot } from "@h9-foundry/agentforge-context-engine";
+import { createWorkflowState, detectLanguages, findWorkspaceRoot } from "@h9-foundry/agentforge-context-engine";
 import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@h9-foundry/agentforge-policy-engine";
 import { runWorkflow } from "@h9-foundry/agentforge-runtime";
 import {
@@ -54,6 +54,7 @@ import {
   policyPresetDocumentSchema,
   promotionRequestSchema,
   qaRequestSchema,
+  repoFitContractSchema,
   requestMetaSchema,
   releaseRequestSchema,
   resolvedRunConfigurationSnapshotSchema,
@@ -99,6 +100,7 @@ import type {
   PromotionRequest,
   ProviderUsageAggregate,
   QaRequest,
+  RepoFitContract,
   RequestMeta,
   ResolvedRunConfigurationSnapshot,
   ReleaseRequest,
@@ -129,6 +131,119 @@ export type StartupPresetName = (typeof startupPresetNames)[number];
 const controlDirName = "control";
 const policyPresetsFileName = "policy-presets.yaml";
 const controlDefaultsFileName = "defaults.yaml";
+const repoFitFileName = "repo-fit.yaml";
+
+const repoFitProfileIds = ["none", "agentforge-ts-monorepo", "agentforge-ts-package", "agentforge-python-service", "agentforge-rust-crate"] as const;
+type RepoFitProfileId = (typeof repoFitProfileIds)[number];
+type RepoFitStarterAdoption = "none" | "partial" | "full";
+
+interface RepoFitStarterProfileCatalogEntry {
+  id: Exclude<RepoFitProfileId, "none">;
+  label: string;
+  architectureStyle: string;
+  sourceRoots: string[];
+  packageRoots: string[];
+  coding: string[];
+  designPatterns: string[];
+  testingConventions: string[];
+  releaseConventions: string[];
+  securityConventions: string[];
+  documentationConventions: string[];
+  operationsConventions: string[];
+  validationCommands: string[];
+  evidenceSources: string[];
+  recommendedWorkflowFamilies: OnboardingWorkflowFamily[];
+}
+
+const repoFitStarterProfiles: Record<Exclude<RepoFitProfileId, "none">, RepoFitStarterProfileCatalogEntry> = {
+  "agentforge-ts-monorepo": {
+    id: "agentforge-ts-monorepo",
+    label: "AgentForge TypeScript Monorepo",
+    architectureStyle: "typescript-monorepo",
+    sourceRoots: ["packages", "apps", "services"],
+    packageRoots: ["packages", "apps", "services"],
+    coding: ["Prefer strict TypeScript and explicit public package boundaries.", "Keep ESM module surfaces stable and small."],
+    designPatterns: ["Package-first architecture with explicit manifests, schemas, and runtime boundaries.", "Prefer deterministic workflow surfaces and typed contracts over implicit conventions."],
+    testingConventions: ["Run focused package tests before broad integration suites.", "Keep default validation local and credential-free."],
+    releaseConventions: ["Treat package verification and packed tarball checks as release gates."],
+    securityConventions: ["Keep writes approval-gated and policy-aware across package boundaries."],
+    documentationConventions: ["Version public package behavior in repo docs alongside code changes."],
+    operationsConventions: ["Prefer local-first evidence and explicit promotion gates over hosted automation defaults."],
+    validationCommands: ["pnpm build:packages", "pnpm test"],
+    evidenceSources: [".github/workflows", "docs/release-runbook.md"],
+    recommendedWorkflowFamilies: ["review/planning", "qa/security", "release/pipeline/deployment", "maintenance/incident"]
+  },
+  "agentforge-ts-package": {
+    id: "agentforge-ts-package",
+    label: "AgentForge TypeScript Package",
+    architectureStyle: "typescript-package",
+    sourceRoots: ["src", "tests"],
+    packageRoots: [],
+    coding: ["Prefer strict TypeScript and stable package entrypoints.", "Keep implementation and tests close to the shipped surface."],
+    designPatterns: ["Treat src as the canonical implementation root with explicit exported interfaces.", "Use typed request and artifact contracts for workflow inputs and outputs."],
+    testingConventions: ["Use package-script lint, test, and build checks before release."],
+    releaseConventions: ["Publish only after packed tarball verification matches intended docs and entrypoints."],
+    securityConventions: ["Keep policy defaults read-first and approval-gated for writes."],
+    documentationConventions: ["Keep package README and repo docs aligned with the published CLI/package surface."],
+    operationsConventions: ["Prefer simple local CI/release evidence over hosted state."],
+    validationCommands: ["npm test", "npm run build"],
+    evidenceSources: ["package.json", ".github/workflows"],
+    recommendedWorkflowFamilies: ["review/planning", "qa/security"]
+  },
+  "agentforge-python-service": {
+    id: "agentforge-python-service",
+    label: "AgentForge Python Service",
+    architectureStyle: "python-service",
+    sourceRoots: ["src", "service", "app", "tests"],
+    packageRoots: [],
+    coding: ["Prefer explicit service boundaries and dependency declarations.", "Keep validation and operational evidence repo-local when possible."],
+    designPatterns: ["Treat service entrypoints, config, and tests as first-class architecture surfaces.", "Use bounded workflow inputs tied to repo evidence rather than ad hoc prompts."],
+    testingConventions: ["Keep lint, unit, and integration validation explicitly scripted."],
+    releaseConventions: ["Capture deployment and rollback evidence in repo docs or CI config."],
+    securityConventions: ["Prefer explicit security review inputs and bounded evidence normalization."],
+    documentationConventions: ["Keep service runbooks and incident docs in repo."],
+    operationsConventions: ["Model deploy and incident surfaces explicitly before adding automation."],
+    validationCommands: ["pytest"],
+    evidenceSources: ["pyproject.toml", "requirements.txt", "docs/deployment.md"],
+    recommendedWorkflowFamilies: ["review/planning", "qa/security", "release/pipeline/deployment", "maintenance/incident"]
+  },
+  "agentforge-rust-crate": {
+    id: "agentforge-rust-crate",
+    label: "AgentForge Rust Crate",
+    architectureStyle: "rust-crate",
+    sourceRoots: ["src", "tests", "benches"],
+    packageRoots: [],
+    coding: ["Prefer explicit crate boundaries and stable public APIs.", "Keep validation deterministic and cargo-driven by default."],
+    designPatterns: ["Use crate/module boundaries as the architecture contract.", "Keep implementation and testing expectations explicit in repo scripts or docs."],
+    testingConventions: ["Use cargo test/build/check as the default validation surface."],
+    releaseConventions: ["Treat Cargo metadata and release docs as the source of packaging truth."],
+    securityConventions: ["Preserve explicit review around unsafe or sensitive runtime surfaces."],
+    documentationConventions: ["Keep crate-level docs and release notes in repo."],
+    operationsConventions: ["Prefer explicit artifact and deployment evidence for release workflows."],
+    validationCommands: ["cargo test", "cargo build"],
+    evidenceSources: ["Cargo.toml", ".github/workflows"],
+    recommendedWorkflowFamilies: ["review/planning", "qa/security"]
+  }
+};
+
+interface RepoFitWizardAnswers {
+  architectureStyle?: string;
+  sourceRoots?: string[];
+  packageRoots?: string[];
+  ownershipBoundaries?: string[];
+  pathConventions?: string[];
+  validationCommands?: string[];
+  evidenceSources?: string[];
+  codingConventions?: string[];
+  designPatterns?: string[];
+  testingConventions?: string[];
+  releaseConventions?: string[];
+  securityConventions?: string[];
+  documentationConventions?: string[];
+  operationsConventions?: string[];
+  selectedProfileId?: RepoFitProfileId;
+  adoption?: RepoFitStarterAdoption;
+}
 
 const workflowRequestPaths: Record<string, string> = {
   "planning-discovery": ".agentops/requests/planning.yaml",
@@ -303,7 +418,7 @@ const workflowFieldMetadata: Record<string, WorkflowFieldDescriptor[]> = {
   ]
 };
 
-type ConfigDocumentTarget = "request" | "workflow-control" | "policy-presets" | "defaults";
+type ConfigDocumentTarget = "request" | "workflow-control" | "policy-presets" | "defaults" | "repo-fit";
 type ConfigDocumentOverrides = Record<string, string>;
 type RequestEditorFieldState = Record<string, unknown>;
 
@@ -1433,6 +1548,10 @@ function prepareWorkflowInputs(
 ): Record<string, unknown> {
   const requestsDir = join(root, ".agentops", "requests");
   ensureDirectory(requestsDir);
+  const repoFitInputs = {
+    repoFitContract: loadRepoFitContract(root),
+    repoFitPath: `.agentops/${repoFitFileName}`
+  };
 
   if (workflow.name === "planning-discovery") {
     const requestPath = ".agentops/requests/planning.yaml";
@@ -1449,7 +1568,8 @@ function prepareWorkflowInputs(
       planningRequest,
       planningScmRefs,
       planningGithubRefs,
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1465,7 +1585,8 @@ function prepareWorkflowInputs(
     return {
       designRequest: designRequest satisfies DesignRequest,
       planningBrief,
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1481,7 +1602,8 @@ function prepareWorkflowInputs(
     return {
       implementationRequest: implementationRequest satisfies ImplementationRequest,
       designRecord,
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1508,7 +1630,8 @@ function prepareWorkflowInputs(
       qaIssueRefs: referencedSourceRefs.issueRefs,
       qaScmRefs: referencedSourceRefs.scmRefs,
       qaGithubRefs: referencedSourceRefs.githubRefs,
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1546,7 +1669,8 @@ function prepareWorkflowInputs(
       securityIssueRefs: referencedSourceRefs.issueRefs,
       securityScmRefs: referencedSourceRefs.scmRefs,
       securityGithubRefs: referencedSourceRefs.githubRefs,
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1604,7 +1728,8 @@ function prepareWorkflowInputs(
       pipelineIssueRefs: [...pipelineRefs.issueRefs],
       pipelineScmRefs: [...pipelineRefs.scmRefMap.values()],
       pipelineGithubRefs: [...pipelineRefs.githubRefMap.values()],
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1662,7 +1787,8 @@ function prepareWorkflowInputs(
       releaseIssueRefs: [...releaseIssueRefs],
       releaseScmRefs: [...releaseScmRefMap.values()],
       releaseGithubRefs: [...releaseGithubRefMap.values()],
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1726,7 +1852,8 @@ function prepareWorkflowInputs(
       deploymentIssueRefs: [...deploymentRefs.issueRefs],
       deploymentScmRefs: [...deploymentRefs.scmRefMap.values()],
       deploymentGithubRefs: [...deploymentRefs.githubRefMap.values()],
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1790,7 +1917,8 @@ function prepareWorkflowInputs(
       promotionIssueRefs: [...promotionRefs.issueRefs],
       promotionScmRefs: [...promotionRefs.scmRefMap.values()],
       promotionGithubRefs: [...promotionRefs.githubRefMap.values()],
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1842,7 +1970,8 @@ function prepareWorkflowInputs(
       incidentIssueRefs: [...incidentIssueRefs],
       incidentScmRefs: [...incidentScmRefMap.values()],
       incidentGithubRefs: [...incidentGithubRefMap.values()],
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
@@ -1901,11 +2030,12 @@ function prepareWorkflowInputs(
       maintenanceIssueRefs: [...maintenanceIssueRefs],
       maintenanceScmRefs: [...maintenanceScmRefMap.values()],
       maintenanceGithubRefs: [...maintenanceGithubRefMap.values()],
-      requestFile: requestPath
+      requestFile: requestPath,
+      ...repoFitInputs
     };
   }
 
-  return {};
+  return { ...repoFitInputs };
 }
 
 function normalizeWorkflow(input: unknown): WorkflowDefinition {
@@ -2165,6 +2295,16 @@ export interface OnboardingReleaseProfile {
   recommendedEvidenceSources: string[];
 }
 
+export interface OnboardingRepoFitInference {
+  contractPath: string;
+  contract: RepoFitContract;
+  inferredFields: string[];
+  confirmedFields: string[];
+  unresolvedFields: string[];
+  recommendedProfileId?: Exclude<RepoFitProfileId, "none">;
+  selectedProfileId?: RepoFitProfileId;
+}
+
 export interface OnboardingProfile {
   root: string;
   repoName: string;
@@ -2181,6 +2321,7 @@ export interface OnboardingProfile {
   recommendedBenchmarkTaskType: string;
   recommendedBenchmarkTaskId: string;
   releaseProfile: OnboardingReleaseProfile;
+  repoFit: OnboardingRepoFitInference;
 }
 
 export interface OnboardingResult {
@@ -2188,6 +2329,7 @@ export interface OnboardingResult {
   created: string[];
   preset?: { preset: StartupPresetName; workflow: string; requestPath: string; created: boolean };
   profile: OnboardingProfile;
+  repoFit: OnboardingRepoFitInference;
   nextSteps: {
     firstWorkflowCommand: string;
     firstBenchmarkCommand: string;
@@ -2512,6 +2654,12 @@ function assertSafeWorkflowSlug(workflow: string | undefined): string | undefine
 
 function resolveEditableConfigDocument(root: string, workflow: string | undefined, target: ConfigDocumentTarget): { path: string; relativePath: string } {
   const safeWorkflow = assertSafeWorkflowSlug(workflow);
+  if (target === "repo-fit") {
+    return {
+      path: repoFitContractPath(root),
+      relativePath: toRelativeRepoPath(root, repoFitContractPath(root))
+    };
+  }
   if (target === "policy-presets") {
     return {
       path: policyPresetPath(root),
@@ -2552,8 +2700,8 @@ function resolveEditableConfigDocument(root: string, workflow: string | undefine
 }
 
 function assertWritableConfigPath(relativePath: string): void {
-  if (!/^\.agentops\/(requests|control)\/[^/]+\.yaml$/.test(relativePath)) {
-    throw new Error(`Config edits are only allowed for .agentops/requests/*.yaml and .agentops/control/*.yaml. Received ${relativePath}.`);
+  if (!/^\.agentops\/(requests|control)\/[^/]+\.yaml$/.test(relativePath) && relativePath !== `.agentops/${repoFitFileName}`) {
+    throw new Error(`Config edits are only allowed for .agentops/requests/*.yaml, .agentops/control/*.yaml, and .agentops/${repoFitFileName}. Received ${relativePath}.`);
   }
 }
 
@@ -2654,6 +2802,50 @@ function createDefaultWorkflowControl(workflow: WorkflowDefinition): WorkflowCon
   });
 }
 
+function createDefaultRepoFitContract(root: string): RepoFitContract {
+  return repoFitContractSchema.parse({
+    version: 1,
+    repoName: root.split("/").at(-1) ?? "repo",
+    structure: {
+      architectureStyle: detectArchitectureStyle(root, []),
+      sourceRoots: detectRepoSourceRoots(root),
+      packageRoots: detectRepoPackageRoots(root),
+      ownershipBoundaries: inferRepoOwnershipBoundaries(detectRepoPackageRoots(root), detectRepoSourceRoots(root)),
+      pathConventions: detectPathConventions(root)
+    },
+    expectations: {
+      validationCommands: [],
+      evidenceSources: []
+    },
+    conventions: {
+      coding: [],
+      designPatterns: []
+    },
+    starterProfile: {
+      recommendedProfileId: recommendRepoFitProfile(root, detectLanguages(root)),
+      adoption: "none",
+      comparisonNotes: []
+    },
+    provenance: {
+      inferred: [
+        "structure.architectureStyle",
+        "structure.sourceRoots",
+        "structure.packageRoots",
+        "structure.ownershipBoundaries",
+        "structure.pathConventions",
+        "starterProfile.recommendedProfileId"
+      ],
+      confirmed: [],
+      unresolved: [
+        "expectations.validationCommands",
+        "expectations.evidenceSources",
+        "conventions.coding",
+        "conventions.designPatterns"
+      ]
+    }
+  });
+}
+
 function ensureControlFiles(root: string): string[] {
   const created: string[] = [];
   const controlDir = join(root, ".agentops", controlDirName);
@@ -2694,6 +2886,15 @@ function loadControlPlaneDefaults(root: string, workflows: readonly WorkflowDefi
   }
 
   return controlPlaneDefaultsSchema.parse(loadYamlDocument(root, defaultsPathValue, overrides));
+}
+
+function loadRepoFitContract(root: string, overrides: ConfigDocumentOverrides = {}): RepoFitContract {
+  const pathValue = repoFitContractPath(root);
+  if (!existsSync(pathValue) && !(toRelativeRepoPath(root, pathValue) in overrides)) {
+    return createDefaultRepoFitContract(root);
+  }
+
+  return repoFitContractSchema.parse(loadYamlDocument(root, pathValue, overrides));
 }
 
 function loadPolicyPresetDocument(root: string, overrides: ConfigDocumentOverrides = {}): PolicyPresetDocument {
@@ -3025,6 +3226,12 @@ function createEditorIntro(target: ConfigDocumentTarget): { title: string; intro
         intro: "Choose the default profile, preset, and workflow variant for each workflow family.",
         nextStep: "Preview the resulting selections, then save the defaults document."
       };
+    case "repo-fit":
+      return {
+        title: "Repo-Fit Contract",
+        intro: "Capture the repository structure, conventions, evidence surfaces, and optional AgentForge starter profile without hand-authoring YAML.",
+        nextStep: "Review the inferred repo-fit contract, confirm the missing sections, then save the canonical repo-fit YAML."
+      };
   }
 }
 
@@ -3270,6 +3477,64 @@ function buildDefaultsEditorModel(root: string, editingEnabled: boolean): Visual
   };
 }
 
+function buildRepoFitEditorModel(root: string, editingEnabled: boolean): VisualizerConfigEditorModel {
+  const { resolvedDocument, rawDocument, parsedDocument, loadError } = parseConfigDocumentForEditor(root, undefined, "repo-fit");
+  const contract = (() => {
+    try {
+      return repoFitContractSchema.parse(parsedDocument);
+    } catch {
+      return createDefaultRepoFitContract(root);
+    }
+  })();
+  const recommendedProfileId = contract.starterProfile.recommendedProfileId ?? recommendRepoFitProfile(root, detectLanguages(root));
+  const profileOptions = [
+    { label: "None", value: "none" },
+    ...Object.values(repoFitStarterProfiles).map((profile) => ({ label: profile.label, value: profile.id }))
+  ];
+  const adoptionOptions = toEditorOptions(["none", "partial", "full"]);
+
+  return {
+    target: "repo-fit",
+    path: resolvedDocument.path,
+    relativePath: resolvedDocument.relativePath,
+    editingEnabled,
+    rawDocument,
+    loadError,
+    ...createEditorIntro("repo-fit"),
+    repoFit: {
+      recommendedProfileId,
+      selectedProfileId: contract.starterProfile.selectedProfileId,
+      adoption: contract.starterProfile.adoption,
+      profileOptions,
+      adoptionOptions,
+      structureFields: [
+        createFieldModel({ path: "architectureStyle", label: "Architecture Style", input: "text", helpText: "How this repository is organized at a high level." }, contract.structure.architectureStyle ?? ""),
+        createFieldModel({ path: "sourceRoots", label: "Source Roots", input: "path-array", helpText: "Primary implementation roots such as src, packages, apps, or services." }, contract.structure.sourceRoots),
+        createFieldModel({ path: "packageRoots", label: "Package Roots", input: "path-array", helpText: "Top-level package or service boundaries when the repo is a workspace or monorepo." }, contract.structure.packageRoots),
+        createFieldModel({ path: "ownershipBoundaries", label: "Ownership Boundaries", input: "string-array", helpText: "Statements that describe package, module, or team boundaries." }, contract.structure.ownershipBoundaries),
+        createFieldModel({ path: "pathConventions", label: "Path Conventions", input: "string-array", helpText: "Repo-relative layout conventions such as tests/, docs/, or .github/workflows/." }, contract.structure.pathConventions)
+      ],
+      expectationFields: [
+        createFieldModel({ path: "validationCommands", label: "Validation Commands", input: "string-array", helpText: "The canonical package-script or tool commands expected before merge or release." }, contract.expectations.validationCommands),
+        createFieldModel({ path: "evidenceSources", label: "Evidence Sources", input: "string-array", helpText: "CI, docs, or artifact sources that workflows should treat as evidence surfaces." }, contract.expectations.evidenceSources),
+        createFieldModel({ path: "testingConventions", label: "Testing Conventions", input: "string-array" }, contract.expectations.testingConventions),
+        createFieldModel({ path: "releaseConventions", label: "Release Conventions", input: "string-array" }, contract.expectations.releaseConventions),
+        createFieldModel({ path: "securityConventions", label: "Security Conventions", input: "string-array" }, contract.expectations.securityConventions),
+        createFieldModel({ path: "documentationConventions", label: "Documentation Conventions", input: "string-array" }, contract.expectations.documentationConventions),
+        createFieldModel({ path: "operationsConventions", label: "Operations Conventions", input: "string-array" }, contract.expectations.operationsConventions)
+      ],
+      conventionFields: [
+        createFieldModel({ path: "coding", label: "Coding Conventions", input: "string-array", helpText: "Preferred code-style and implementation-shape guidance for the repo." }, contract.conventions.coding),
+        createFieldModel({ path: "designPatterns", label: "Design Patterns", input: "string-array", helpText: "Architecture and design patterns this repo prefers or rejects." }, contract.conventions.designPatterns)
+      ],
+      comparisonNotes: contract.starterProfile.comparisonNotes,
+      inferredFields: contract.provenance.inferred,
+      confirmedFields: contract.provenance.confirmed,
+      unresolvedFields: contract.provenance.unresolved
+    }
+  };
+}
+
 function loadVisualizerConfigEditorModel(
   root: string,
   input: { workflow?: string; target: ConfigDocumentTarget },
@@ -3290,6 +3555,8 @@ function loadVisualizerConfigEditorModel(
       return buildPolicyPresetsEditorModel(root, editingEnabled);
     case "defaults":
       return buildDefaultsEditorModel(root, editingEnabled);
+    case "repo-fit":
+      return buildRepoFitEditorModel(root, editingEnabled);
   }
 
   const unsupportedTarget: never = input.target;
@@ -3557,6 +3824,130 @@ function renderDefaultsDocumentFromState(state: unknown): string {
   return yaml.dump(compactYamlValue(document) ?? document, { lineWidth: -1, noRefs: true });
 }
 
+function renderRepoFitDocumentFromState(root: string, state: unknown): string {
+  const existing = loadRepoFitContract(root);
+  const stateRecord = isRecord(state) ? state : {};
+  const starterProfile = isRecord(stateRecord.starterProfile) ? stateRecord.starterProfile : {};
+  const selectedProfileId = normalizeEditorOptionalString(starterProfile.selectedProfileId) as RepoFitProfileId | undefined;
+  const adoption = (normalizeEditorOptionalString(starterProfile.adoption) as RepoFitStarterAdoption | undefined) ?? "none";
+  const recommendedProfileId = (normalizeEditorOptionalString(starterProfile.recommendedProfileId) as RepoFitProfileId | undefined)
+    ?? recommendRepoFitProfile(root, detectLanguages(root));
+
+  const asFields = (value: unknown): VisualizerConfigFieldModel[] => Array.isArray(value) ? value as VisualizerConfigFieldModel[] : [];
+  const structureFields = requestFieldsFromState(asFields(stateRecord.structureFields));
+  const expectationFields = requestFieldsFromState(asFields(stateRecord.expectationFields));
+  const conventionFields = requestFieldsFromState(asFields(stateRecord.conventionFields));
+
+  const document = repoFitContractSchema.parse({
+    version: 1,
+    repoName: existing.repoName,
+    structure: {
+      architectureStyle: normalizeEditorOptionalString(structureFields.architectureStyle),
+      sourceRoots: normalizeStringArray(structureFields.sourceRoots),
+      packageRoots: normalizeStringArray(structureFields.packageRoots),
+      ownershipBoundaries: normalizeStringArray(structureFields.ownershipBoundaries),
+      pathConventions: normalizeStringArray(structureFields.pathConventions)
+    },
+    expectations: {
+      validationCommands: normalizeStringArray(expectationFields.validationCommands),
+      evidenceSources: normalizeStringArray(expectationFields.evidenceSources),
+      testingConventions: normalizeStringArray(expectationFields.testingConventions),
+      releaseConventions: normalizeStringArray(expectationFields.releaseConventions),
+      securityConventions: normalizeStringArray(expectationFields.securityConventions),
+      documentationConventions: normalizeStringArray(expectationFields.documentationConventions),
+      operationsConventions: normalizeStringArray(expectationFields.operationsConventions)
+    },
+    conventions: {
+      coding: normalizeStringArray(conventionFields.coding),
+      designPatterns: normalizeStringArray(conventionFields.designPatterns)
+    },
+    starterProfile: {
+      recommendedProfileId,
+      selectedProfileId: selectedProfileId && selectedProfileId !== "none" ? selectedProfileId : undefined,
+      adoption,
+      comparisonNotes: []
+    },
+    provenance: {
+      inferred: [],
+      confirmed: [],
+      unresolved: []
+    }
+  });
+
+  const allFieldPaths = [
+    "structure.architectureStyle",
+    "structure.sourceRoots",
+    "structure.packageRoots",
+    "structure.ownershipBoundaries",
+    "structure.pathConventions",
+    "expectations.validationCommands",
+    "expectations.evidenceSources",
+    "expectations.testingConventions",
+    "expectations.releaseConventions",
+    "expectations.securityConventions",
+    "expectations.documentationConventions",
+    "expectations.operationsConventions",
+    "conventions.coding",
+    "conventions.designPatterns",
+    "starterProfile.selectedProfileId",
+    "starterProfile.adoption"
+  ];
+
+  const confirmed = allFieldPaths.filter((pathValue) => {
+    switch (pathValue) {
+      case "structure.architectureStyle":
+        return Boolean(document.structure.architectureStyle);
+      case "structure.sourceRoots":
+        return document.structure.sourceRoots.length > 0;
+      case "structure.packageRoots":
+        return document.structure.packageRoots.length > 0;
+      case "structure.ownershipBoundaries":
+        return document.structure.ownershipBoundaries.length > 0;
+      case "structure.pathConventions":
+        return document.structure.pathConventions.length > 0;
+      case "expectations.validationCommands":
+        return document.expectations.validationCommands.length > 0;
+      case "expectations.evidenceSources":
+        return document.expectations.evidenceSources.length > 0;
+      case "expectations.testingConventions":
+        return document.expectations.testingConventions.length > 0;
+      case "expectations.releaseConventions":
+        return document.expectations.releaseConventions.length > 0;
+      case "expectations.securityConventions":
+        return document.expectations.securityConventions.length > 0;
+      case "expectations.documentationConventions":
+        return document.expectations.documentationConventions.length > 0;
+      case "expectations.operationsConventions":
+        return document.expectations.operationsConventions.length > 0;
+      case "conventions.coding":
+        return document.conventions.coding.length > 0;
+      case "conventions.designPatterns":
+        return document.conventions.designPatterns.length > 0;
+      case "starterProfile.selectedProfileId":
+        return Boolean(document.starterProfile.selectedProfileId);
+      case "starterProfile.adoption":
+        return document.starterProfile.adoption !== "none";
+      default:
+        return false;
+    }
+  });
+
+  const finalized = repoFitContractSchema.parse({
+    ...document,
+    starterProfile: {
+      ...document.starterProfile,
+      comparisonNotes: compareRepoFitWithStarterProfile(document, normalizeRepoFitProfileId(document.starterProfile.selectedProfileId))
+    },
+    provenance: {
+      inferred: existing.provenance.inferred.filter((entry) => !confirmed.includes(entry)),
+      confirmed,
+      unresolved: allFieldPaths.filter((entry) => !confirmed.includes(entry) && !existing.provenance.inferred.includes(entry))
+    }
+  });
+
+  return yaml.dump(compactYamlValue(finalized) ?? finalized, { lineWidth: -1, noRefs: true });
+}
+
 function renderVisualizerConfigDocument(
   root: string,
   input: { workflow?: string; target: ConfigDocumentTarget; state: unknown }
@@ -3580,6 +3971,8 @@ function renderVisualizerConfigDocument(
         return renderPolicyPresetDocumentFromState(input.state);
       case "defaults":
         return renderDefaultsDocumentFromState(input.state);
+      case "repo-fit":
+        return renderRepoFitDocumentFromState(root, input.state);
     }
 
     const unsupportedTarget: never = input.target;
@@ -3882,6 +4275,7 @@ function resolveWorkflowControls(
   configuration: ResolvedRunConfigurationSnapshot;
 } {
   const overrides = options?.overrides ?? {};
+  const repoFit = loadRepoFitContract(root, overrides);
   const control = loadWorkflowControlDefinition(root, workflow, overrides);
   const presets = loadPolicyPresetDocument(root, overrides);
   const defaults = loadControlPlaneDefaults(root, [workflow], overrides);
@@ -3976,6 +4370,7 @@ function resolveWorkflowControls(
 
   const resolvedPolicy = applyPolicyPreset(basePolicy, selectedMeta.policyPreset, presets);
   const sourceRefs = [
+    toRelativeRepoPath(root, repoFitContractPath(root)),
     toRelativeRepoPath(root, join(root, ".agentops", "policy.yaml")),
     toRelativeRepoPath(root, join(root, ".agentops", "workflows", `${workflow.name}.yaml`)),
     toRelativeRepoPath(root, policyPresetPath(root)),
@@ -4009,6 +4404,17 @@ function resolveWorkflowControls(
       request: {
         path: requestPath ?? ".agentops/requests/<none>",
         metaPresent
+      },
+      repoFit: {
+        path: toRelativeRepoPath(root, repoFitContractPath(root)),
+        recommendedProfileId: repoFit.starterProfile.recommendedProfileId,
+        selectedProfileId: repoFit.starterProfile.selectedProfileId,
+        adoption: repoFit.starterProfile.adoption,
+        inferredFields: repoFit.provenance.inferred,
+        confirmedFields: repoFit.provenance.confirmed,
+        unresolvedFields: repoFit.provenance.unresolved,
+        sourceRoots: repoFit.structure.sourceRoots,
+        packageRoots: repoFit.structure.packageRoots
       },
       execution: {
         executedNodes: []
@@ -4532,6 +4938,10 @@ function ensureInitFiles(root: string): string[] {
       contents: agentforgeConfigTemplate.replace("REPO_NAME", root.split("/").at(-1) ?? "repo")
     },
     {
+      path: repoFitContractPath(root),
+      contents: yaml.dump(createDefaultRepoFitContract(root), { lineWidth: -1, noRefs: true })
+    },
+    {
       path: join(configDir, "policy.yaml"),
       contents: policyTemplate
     },
@@ -4810,6 +5220,12 @@ async function validateControlPlaneAtRoot(root: string, overrides: ConfigDocumen
   const basePolicy = resolvePolicy(loadPolicyDocument(join(root, ".agentops", "policy.yaml")), process.env.CI ? "ci" : "local");
   const errors: string[] = [];
   const workflows = listWorkflowDefinitions(root);
+
+  try {
+    loadRepoFitContract(root, overrides);
+  } catch (error) {
+    errors.push(`repo-fit: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   const results: ConfigValidationResult["workflows"] = [];
 
@@ -5143,6 +5559,251 @@ function inferRecommendedPreset(workflow: string): StartupPresetName[] {
   return workflow === "planning-discovery" ? ["planning-discovery"] : [];
 }
 
+function repoFitContractPath(root: string): string {
+  return join(root, ".agentops", repoFitFileName);
+}
+
+function listTopLevelDirectories(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((entry) => !entry.startsWith(".git"))
+    .sort();
+}
+
+function detectRepoSourceRoots(root: string): string[] {
+  const candidates = ["packages", "apps", "services", "libs", "src", "tests", "test", "docs", "infra", "scripts"];
+  return candidates.filter((candidate) => existsSync(join(root, candidate)));
+}
+
+function detectRepoPackageRoots(root: string): string[] {
+  const candidates = ["packages", "apps", "services", "libs"];
+  return candidates.filter((candidate) => existsSync(join(root, candidate)));
+}
+
+function detectArchitectureStyle(root: string, languages: readonly string[]): string {
+  if (existsSync(join(root, "pnpm-workspace.yaml")) || detectRepoPackageRoots(root).length > 0) {
+    return "monorepo";
+  }
+  if (languages.includes("python")) {
+    return "service-repo";
+  }
+  if (languages.includes("rust")) {
+    return "crate";
+  }
+  if (languages.includes("typescript") || languages.includes("javascript")) {
+    return existsSync(join(root, "src")) ? "package-repo" : "application-repo";
+  }
+  return "unspecified";
+}
+
+function detectPathConventions(root: string): string[] {
+  const conventions: string[] = [];
+  if (existsSync(join(root, "src"))) {
+    conventions.push("Primary implementation sources live under src/.");
+  }
+  if (existsSync(join(root, "packages"))) {
+    conventions.push("Workspace packages live under packages/.");
+  }
+  if (existsSync(join(root, "apps"))) {
+    conventions.push("Application entrypoints live under apps/.");
+  }
+  if (existsSync(join(root, "tests")) || existsSync(join(root, "test"))) {
+    conventions.push("Repository-level tests live under tests/ or test/.");
+  }
+  if (existsSync(join(root, "docs"))) {
+    conventions.push("Documentation and runbooks live under docs/.");
+  }
+  if (existsSync(join(root, ".github", "workflows"))) {
+    conventions.push("CI and release automation is tracked in .github/workflows/.");
+  }
+  return conventions;
+}
+
+function inferRepoOwnershipBoundaries(packageRoots: readonly string[], sourceRoots: readonly string[]): string[] {
+  return [
+    ...packageRoots.map((rootName) => `${rootName}/ acts as a top-level package or service boundary.`),
+    ...sourceRoots.filter((rootName) => rootName === "src" || rootName === "tests" || rootName === "docs").map((rootName) =>
+      `${rootName}/ is a canonical repository surface and should remain intentionally structured.`
+    )
+  ];
+}
+
+function recommendRepoFitProfile(root: string, languages: readonly string[]): Exclude<RepoFitProfileId, "none"> | undefined {
+  if (existsSync(join(root, "pnpm-workspace.yaml")) || existsSync(join(root, "packages"))) {
+    return "agentforge-ts-monorepo";
+  }
+  if (languages.includes("python")) {
+    return "agentforge-python-service";
+  }
+  if (languages.includes("rust")) {
+    return "agentforge-rust-crate";
+  }
+  if (languages.includes("typescript") || languages.includes("javascript")) {
+    return "agentforge-ts-package";
+  }
+  return undefined;
+}
+
+function defaultProfileSelection(profileId?: RepoFitProfileId, adoption: RepoFitStarterAdoption = "none"): RepoFitContract["starterProfile"] {
+  if (!profileId || profileId === "none") {
+    return {
+      adoption: "none",
+      comparisonNotes: []
+    };
+  }
+
+  return {
+    recommendedProfileId: profileId,
+    selectedProfileId: profileId,
+    adoption,
+    comparisonNotes: []
+  };
+}
+
+function compareRepoFitWithStarterProfile(
+  contract: RepoFitContract,
+  starterProfileId: RepoFitProfileId | undefined
+): string[] {
+  if (!starterProfileId || starterProfileId === "none") {
+    return [];
+  }
+
+  const starter = repoFitStarterProfiles[starterProfileId];
+  const notes: string[] = [];
+  if (!starter) {
+    return notes;
+  }
+
+  const missingSourceRoots = starter.sourceRoots.filter((rootName) => !contract.structure.sourceRoots.includes(rootName));
+  if (missingSourceRoots.length > 0) {
+    notes.push(`Starter profile ${starter.label} expects source roots such as ${missingSourceRoots.join(", ")}.`);
+  }
+
+  const missingValidation = starter.validationCommands.filter((command) => !contract.expectations.validationCommands.includes(command));
+  if (missingValidation.length > 0) {
+    notes.push(`Starter profile ${starter.label} typically validates with ${missingValidation.join(", ")}.`);
+  }
+
+  const missingPatterns = starter.designPatterns.filter((pattern) => !contract.conventions.designPatterns.includes(pattern));
+  if (missingPatterns.length > 0) {
+    notes.push(`Starter profile ${starter.label} suggests patterns such as ${missingPatterns.slice(0, 2).join("; ")}.`);
+  }
+
+  return notes;
+}
+
+function normalizeRepoFitProfileId(value: string | undefined): RepoFitProfileId | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return repoFitProfileIds.includes(value as RepoFitProfileId) ? (value as RepoFitProfileId) : undefined;
+}
+
+function createRepoFitContract(
+  profile: Omit<OnboardingProfile, "repoFit">,
+  answers: RepoFitWizardAnswers = {}
+): OnboardingRepoFitInference {
+  const sourceRoots = answers.sourceRoots ?? detectRepoSourceRoots(profile.root);
+  const packageRoots = answers.packageRoots ?? detectRepoPackageRoots(profile.root);
+  const recommendedProfileId = recommendRepoFitProfile(profile.root, profile.languages);
+  const selectedProfileId = answers.selectedProfileId ?? recommendedProfileId;
+  const starterProfile = selectedProfileId && selectedProfileId !== "none"
+    ? repoFitStarterProfiles[selectedProfileId]
+    : (recommendedProfileId ? repoFitStarterProfiles[recommendedProfileId] : undefined);
+
+  const inferredContract = repoFitContractSchema.parse({
+    version: 1,
+    repoName: profile.repoName,
+    structure: {
+      architectureStyle: answers.architectureStyle ?? detectArchitectureStyle(profile.root, profile.languages),
+      sourceRoots,
+      packageRoots,
+      ownershipBoundaries: answers.ownershipBoundaries ?? inferRepoOwnershipBoundaries(packageRoots, sourceRoots),
+      pathConventions: answers.pathConventions ?? detectPathConventions(profile.root)
+    },
+    expectations: {
+      validationCommands: answers.validationCommands ?? profile.recommendedValidationExpectations,
+      evidenceSources: answers.evidenceSources ?? profile.recommendedEvidenceExpectations,
+      testingConventions: answers.testingConventions ?? (starterProfile?.testingConventions ?? []),
+      releaseConventions: answers.releaseConventions ?? (starterProfile?.releaseConventions ?? []),
+      securityConventions: answers.securityConventions ?? (starterProfile?.securityConventions ?? []),
+      documentationConventions: answers.documentationConventions ?? (starterProfile?.documentationConventions ?? []),
+      operationsConventions: answers.operationsConventions ?? (starterProfile?.operationsConventions ?? [])
+    },
+    conventions: {
+      coding: answers.codingConventions ?? (starterProfile?.coding ?? []),
+      designPatterns: answers.designPatterns ?? (starterProfile?.designPatterns ?? [])
+    },
+    starterProfile: defaultProfileSelection(
+      selectedProfileId ?? recommendedProfileId,
+      answers.adoption ?? (selectedProfileId && selectedProfileId !== "none" ? "partial" : "none")
+    ),
+    provenance: {
+      inferred: [],
+      confirmed: [],
+      unresolved: []
+    }
+  });
+
+  const inferredFields: string[] = [];
+  const confirmedFields: string[] = [];
+  const unresolvedFields: string[] = [];
+
+  const classifyField = (pathValue: string, answerProvided: boolean, present: boolean) => {
+    if (answerProvided) {
+      confirmedFields.push(pathValue);
+      return;
+    }
+    if (present) {
+      inferredFields.push(pathValue);
+      return;
+    }
+    unresolvedFields.push(pathValue);
+  };
+
+  classifyField("structure.architectureStyle", Boolean(answers.architectureStyle), Boolean(inferredContract.structure.architectureStyle));
+  classifyField("structure.sourceRoots", Boolean(answers.sourceRoots), inferredContract.structure.sourceRoots.length > 0);
+  classifyField("structure.packageRoots", Boolean(answers.packageRoots), inferredContract.structure.packageRoots.length > 0);
+  classifyField("structure.ownershipBoundaries", Boolean(answers.ownershipBoundaries), inferredContract.structure.ownershipBoundaries.length > 0);
+  classifyField("structure.pathConventions", Boolean(answers.pathConventions), inferredContract.structure.pathConventions.length > 0);
+  classifyField("expectations.validationCommands", Boolean(answers.validationCommands), inferredContract.expectations.validationCommands.length > 0);
+  classifyField("expectations.evidenceSources", Boolean(answers.evidenceSources), inferredContract.expectations.evidenceSources.length > 0);
+  classifyField("expectations.testingConventions", Boolean(answers.testingConventions), inferredContract.expectations.testingConventions.length > 0);
+  classifyField("expectations.releaseConventions", Boolean(answers.releaseConventions), inferredContract.expectations.releaseConventions.length > 0);
+  classifyField("expectations.securityConventions", Boolean(answers.securityConventions), inferredContract.expectations.securityConventions.length > 0);
+  classifyField("expectations.documentationConventions", Boolean(answers.documentationConventions), inferredContract.expectations.documentationConventions.length > 0);
+  classifyField("expectations.operationsConventions", Boolean(answers.operationsConventions), inferredContract.expectations.operationsConventions.length > 0);
+  classifyField("conventions.coding", Boolean(answers.codingConventions), inferredContract.conventions.coding.length > 0);
+  classifyField("conventions.designPatterns", Boolean(answers.designPatterns), inferredContract.conventions.designPatterns.length > 0);
+  classifyField("starterProfile.selectedProfileId", Boolean(answers.selectedProfileId), Boolean(inferredContract.starterProfile.selectedProfileId));
+  classifyField("starterProfile.adoption", Boolean(answers.adoption), inferredContract.starterProfile.adoption !== "none");
+
+  const finalizedContract = repoFitContractSchema.parse({
+    ...inferredContract,
+    starterProfile: {
+      ...inferredContract.starterProfile,
+      recommendedProfileId,
+      comparisonNotes: compareRepoFitWithStarterProfile(inferredContract, normalizeRepoFitProfileId(inferredContract.starterProfile.selectedProfileId))
+    },
+    provenance: {
+      inferred: inferredFields,
+      confirmed: confirmedFields,
+      unresolved: unresolvedFields
+    }
+  });
+
+  return {
+    contractPath: `.agentops/${repoFitFileName}`,
+    contract: finalizedContract,
+    inferredFields,
+    confirmedFields,
+    unresolvedFields,
+    recommendedProfileId,
+    selectedProfileId: normalizeRepoFitProfileId(finalizedContract.starterProfile.selectedProfileId)
+  };
+}
+
 function buildRepoFitProfile(root: string): OnboardingProfile {
   const scan = scanProject(root);
   const repoName = root.split("/").at(-1) ?? "repo";
@@ -5153,8 +5814,7 @@ function buildRepoFitProfile(root: string): OnboardingProfile {
   const recommendedStarterPresets = inferRecommendedPreset(recommendedFirstWorkflow);
   const recommendedBenchmarkCategory = releaseProfile.relevant ? "release" : "general";
   const recommendedBenchmarkTaskType = releaseProfile.relevant ? "release/deployment" : "feature/refactor";
-
-  return {
+  const baseProfile: Omit<OnboardingProfile, "repoFit"> = {
     root,
     repoName,
     packageManager: scan.packageManager,
@@ -5171,6 +5831,11 @@ function buildRepoFitProfile(root: string): OnboardingProfile {
     recommendedBenchmarkTaskId: `${repoName}-pilot-1`,
     releaseProfile
   };
+
+  return {
+    ...baseProfile,
+    repoFit: createRepoFitContract(baseProfile)
+  };
 }
 
 export function analyzeOnboardingProfile(cwd = process.cwd()): OnboardingProfile {
@@ -5181,18 +5846,41 @@ export function analyzeOnboardingProfile(cwd = process.cwd()): OnboardingProfile
 
 export function onboardProject(
   cwd = process.cwd(),
-  options?: { applyRecommendedPreset?: boolean }
+  options?: { applyRecommendedPreset?: boolean; repoFitAnswers?: RepoFitWizardAnswers }
 ): OnboardingResult {
   const root = findWorkspaceRoot(cwd);
-  const profile = buildRepoFitProfile(root);
+  const initialProfile = buildRepoFitProfile(root);
+  const repoFit = createRepoFitContract({
+    root: initialProfile.root,
+    repoName: initialProfile.repoName,
+    packageManager: initialProfile.packageManager,
+    languages: initialProfile.languages,
+    validationCommands: initialProfile.validationCommands,
+    workflowFamilies: initialProfile.workflowFamilies,
+    recommendedStarterPresets: initialProfile.recommendedStarterPresets,
+    recommendedValidationExpectations: initialProfile.recommendedValidationExpectations,
+    recommendedEvidenceExpectations: initialProfile.recommendedEvidenceExpectations,
+    recommendedFirstWorkflow: initialProfile.recommendedFirstWorkflow,
+    recommendedBenchmarkMode: initialProfile.recommendedBenchmarkMode,
+    recommendedBenchmarkCategory: initialProfile.recommendedBenchmarkCategory,
+    recommendedBenchmarkTaskType: initialProfile.recommendedBenchmarkTaskType,
+    recommendedBenchmarkTaskId: initialProfile.recommendedBenchmarkTaskId,
+    releaseProfile: initialProfile.releaseProfile
+  }, options?.repoFitAnswers);
+  const profile: OnboardingProfile = {
+    ...initialProfile,
+    repoFit
+  };
   const presetToApply = options?.applyRecommendedPreset === false ? undefined : profile.recommendedStarterPresets[0];
   const initResult = initProject(root, presetToApply ? { preset: presetToApply } : undefined);
+  writeYamlFile(repoFitContractPath(root), repoFit.contract);
 
   return {
     root: initResult.root,
     created: initResult.created,
     preset: initResult.preset,
     profile,
+    repoFit,
     nextSteps: {
       firstWorkflowCommand: `agentforge run ${profile.recommendedFirstWorkflow} --json`,
       firstBenchmarkCommand: `agentforge benchmark --mode ${profile.recommendedBenchmarkMode}`,

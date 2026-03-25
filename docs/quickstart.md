@@ -10,23 +10,30 @@ Published CLI wording rule:
 
 For internal evaluation and release signoff of user-facing surfaces, use the CLI-first rule in [docs/CLI_FIRST_DOGFOODING.md](CLI_FIRST_DOGFOODING.md).
 
-## Preferred Guided Setup On `main`
+## Preferred Guided Setup
+
+The published CLI already includes `agentforge onboard` for guided setup. The current `main` slice extends that path with a canonical repo-fit contract and `/configure?target=repo-fit` refinement.
 
 On `main`, the preferred first-run path is `agentforge onboard`. It is the guided repo-fit setup path that:
 
 - initializes `.agentops`
 - detects likely validation commands and release evidence
 - recommends the workflow families that fit the repository
+- writes a canonical `.agentops/repo-fit.yaml` contract with inferred repo structure and conventions
 - offers an optional handoff into benchmarking
 
 The intended product journey is:
 
 1. onboarding configures repo fit
-2. benchmarking optionally proves process value
-3. `/outcomes` is the primary live-task value dashboard
-4. `/benchmarks` remains the deterministic eval comparison dashboard
+2. inspect `.agentops/repo-fit.yaml`
+3. optionally refine the inferred contract in `/configure?target=repo-fit`
+4. run the first workflow or benchmark
+5. `/outcomes` is the primary live-task value dashboard
+6. `/benchmarks` remains the deterministic eval comparison dashboard
 
-Until the next npm release includes `onboard`, use the published `init` path below for zero-install evaluation.
+After onboarding, use `/configure?target=repo-fit` if you want to refine the inferred repository structure, evidence surfaces, coding conventions, or optional AgentForge starter-profile adoption without hand-authoring YAML. The saved file is still `.agentops/repo-fit.yaml`.
+
+In the latest published npm release, `agentforge onboard` is already available, but the full repo-fit contract flow described above is still on `main`. Until that release lands, use the published `init` path below for zero-install evaluation, or use `main` when you specifically want to validate repo-fit onboarding.
 
 ## Fastest Evaluator Path
 
@@ -124,6 +131,7 @@ Use the visualizer in this order:
 3. `/runs/compare` after you have two concrete runs worth comparing
 4. `/benchmarks` only for deterministic eval comparison output
 5. `/configure` when you want supported browser-based config authoring; it defaults to a structured editor, keeps raw YAML behind an Advanced toggle, and still treats repo YAML plus `agentforge config validate` as canonical
+6. `/configure?target=repo-fit` when you want to review or refine the repo-structure contract that onboarding inferred
 
 For a small clean repository, a successful run should report:
 

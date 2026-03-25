@@ -135,6 +135,10 @@ export interface RunConfigurationSummaryView {
   workflowVariant: string;
   agentBindings: string[];
   policyFingerprint: string;
+  repoFitPath?: string;
+  repoFitRecommendedProfile?: string;
+  repoFitSelectedProfile?: string;
+  repoFitAdoption?: string;
   sourceRefs: string[];
   nodeAgents: Array<{ nodeId: string; agent: string }>;
   executedNodes: Array<{ nodeId: string; kind: string; agent?: string }>;
@@ -791,6 +795,10 @@ function toRunConfigurationSummary(configuration: ResolvedRunConfigurationSnapsh
       .map(([role, agent]) => `${role}=${agent}`)
       .sort(),
     policyFingerprint: configuration.effective.policyFingerprint,
+    repoFitPath: configuration.repoFit?.path,
+    repoFitRecommendedProfile: configuration.repoFit?.recommendedProfileId,
+    repoFitSelectedProfile: configuration.repoFit?.selectedProfileId,
+    repoFitAdoption: configuration.repoFit?.adoption,
     sourceRefs: [...configuration.sourceRefs],
     nodeAgents: Object.entries(configuration.effective.nodeAgents)
       .map(([nodeId, agent]) => ({ nodeId, agent }))
@@ -995,7 +1003,9 @@ export function loadRunComparisonView(
     { field: "policyPreset", left: leftConfiguration?.policyPreset, right: rightConfiguration?.policyPreset },
     { field: "workflowVariant", left: leftConfiguration?.workflowVariant, right: rightConfiguration?.workflowVariant },
     { field: "agentBindings", left: leftConfiguration?.agentBindings, right: rightConfiguration?.agentBindings },
-    { field: "policyFingerprint", left: leftConfiguration?.policyFingerprint, right: rightConfiguration?.policyFingerprint }
+    { field: "policyFingerprint", left: leftConfiguration?.policyFingerprint, right: rightConfiguration?.policyFingerprint },
+    { field: "repoFitProfile", left: leftConfiguration?.repoFitSelectedProfile, right: rightConfiguration?.repoFitSelectedProfile },
+    { field: "repoFitAdoption", left: leftConfiguration?.repoFitAdoption, right: rightConfiguration?.repoFitAdoption }
   ].filter((change) => JSON.stringify(change.left) !== JSON.stringify(change.right));
 
   const leftNodeAgents = new Map((leftConfiguration?.nodeAgents ?? []).map((entry) => [entry.nodeId, entry.agent]));

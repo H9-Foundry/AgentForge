@@ -82,7 +82,7 @@ export interface VisualizerConfigSaveResult {
   validation?: VisualizerConfigValidationSummary;
 }
 
-export type VisualizerConfigTarget = "request" | "workflow-control" | "policy-presets" | "defaults";
+export type VisualizerConfigTarget = "request" | "workflow-control" | "policy-presets" | "defaults" | "repo-fit";
 export type VisualizerConfigFieldInput = "text" | "textarea" | "string-array" | "path-array" | "select" | "name-version-array" | "json";
 
 export interface VisualizerConfigOption {
@@ -158,6 +158,21 @@ export interface VisualizerConfigWorkflowDefaultEditorModel {
   workflowVariantOptions: VisualizerConfigOption[];
 }
 
+export interface VisualizerConfigRepoFitEditorModel {
+  recommendedProfileId?: string;
+  selectedProfileId?: string;
+  adoption: string;
+  profileOptions: VisualizerConfigOption[];
+  adoptionOptions: VisualizerConfigOption[];
+  structureFields: VisualizerConfigFieldModel[];
+  expectationFields: VisualizerConfigFieldModel[];
+  conventionFields: VisualizerConfigFieldModel[];
+  comparisonNotes: string[];
+  inferredFields: string[];
+  confirmedFields: string[];
+  unresolvedFields: string[];
+}
+
 export interface VisualizerConfigEditorModel {
   workflow?: string;
   target: VisualizerConfigTarget;
@@ -214,6 +229,7 @@ export interface VisualizerConfigEditorModel {
   defaults?: {
     workflows: VisualizerConfigWorkflowDefaultEditorModel[];
   };
+  repoFit?: VisualizerConfigRepoFitEditorModel;
 }
 
 export interface VisualizerConfigRenderResult {
@@ -317,6 +333,12 @@ function assertSafeWorkflowName(workflow: string | undefined): string | undefine
 
 function resolveConfigPath(workspaceRoot: string, workflow: string | undefined, target: string): { path: string; relativePath: string } {
   const safeWorkflow = assertSafeWorkflowName(workflow);
+  if (target === "repo-fit") {
+    return {
+      path: join(workspaceRoot, ".agentops", "repo-fit.yaml"),
+      relativePath: ".agentops/repo-fit.yaml"
+    };
+  }
   if (target === "policy-presets") {
     return {
       path: join(workspaceRoot, ".agentops", "control", "policy-presets.yaml"),

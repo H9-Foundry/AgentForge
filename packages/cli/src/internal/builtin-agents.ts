@@ -55,6 +55,7 @@ import type {
   DeploymentGateArtifact,
   DeploymentGateEvidenceNormalization,
   DeploymentRequest,
+  Finding,
   GenericCiEvidenceExport,
   GithubActionsEvidence,
   GithubActionsEvidenceNormalization,
@@ -86,6 +87,7 @@ import type {
   ReleaseCiEvidenceSummary,
   ReleaseEvidenceNormalization,
   ReleaseRequest,
+  RepoFitContract,
   ScmReference,
   SecurityArtifact,
   SecurityEvidenceNormalization,
@@ -235,6 +237,22 @@ function buildValidationCommand(
   scriptName: string,
   packageName?: string
 ): string {
+  if (packageManager === "npm") {
+    if (packageName) {
+      return `npm --workspace ${packageName} run ${scriptName}`;
+    }
+
+    return `npm run ${scriptName}`;
+  }
+
+  if (packageManager === "yarn") {
+    if (packageName) {
+      return `yarn workspace ${packageName} ${scriptName}`;
+    }
+
+    return `yarn ${scriptName}`;
+  }
+
   if (packageName) {
     return `${packageManager} --filter ${packageName} ${scriptName}`;
   }
@@ -1180,6 +1198,144 @@ function getWorkflowInput<T>(stateSlice: Partial<WorkflowStateEnvelope>, key: st
   return stateSlice.workflowInputs[key] as T | undefined;
 }
 
+function getRepoFitContract(stateSlice: Partial<WorkflowStateEnvelope>): RepoFitContract | undefined {
+  return getWorkflowInput<RepoFitContract>(stateSlice, "repoFitContract");
+}
+
+function extractDeclaredPathRoots(contract: RepoFitContract | undefined): string[] {
+  if (!contract) {
+    return [];
+  }
+
+  const extracted = [...contract.structure.pathConventions, ...contract.structure.ownershipBoundaries].flatMap((entry) => {
+    const matches = entry.match(/(?:^|[\s`])((?:\.?[\w-]+(?:\/[\w.-]+)*)\/?)/g) ?? [];
+    return matches
+      .map((match) => match.trim().replace(/^[`]+|[`]+$/g, "").replace(/[.,;:]+$/g, "").replace(/\/+$/g, ""))
+      .filter((value) => value.includes("/"));
+  });
+
+  return [...new Set(extracted)];
+}
+
+function declaredRepoRoots(contract: RepoFitContract | undefined): string[] {
+  if (!contract) {
+    return [];
+  }
+
+  return [...new Set([
+    ...contract.structure.sourceRoots,
+    ...contract.structure.packageRoots,
+    ...extractDeclaredPathRoots(contract)
+  ])].filter((entry) => entry.length > 0);
+}
+
+function isRepoContractPathCandidate(pathValue: string): boolean {
+  return pathValue.length > 0 &&
+    !pathValue.startsWith(".agentops/") &&
+    !pathValue.startsWith("#") &&
+    !pathValue.startsWith("http://") &&
+    !pathValue.startsWith("https://");
+}
+
+function repoPathCoveredByContract(pathValue: string, contract: RepoFitContract | undefined): boolean {
+  const roots = declaredRepoRoots(contract);
+  if (roots.length === 0) {
+    return true;
+  }
+  return roots.some((root) => pathValue === root || pathValue.startsWith(`${root}/`));
+}
+
+function createRepoFitFinding(input: {
+  id: string;
+  title: string;
+  summary: string;
+  severity: Finding["severity"];
+  rationale: string;
+  location?: string;
+  tags: string[];
+}): Finding {
+  return {
+    id: input.id,
+    title: input.title,
+    summary: input.summary,
+    severity: input.severity,
+    rationale: input.rationale,
+    ...(input.location ? { location: input.location } : {}),
+    confidence: 0.76,
+    tags: [...new Set(["repo-fit", ...input.tags])]
+  };
+}
+
+function buildRepoContractMismatchFindings(
+  contract: RepoFitContract | undefined,
+  paths: readonly string[],
+  contextLabel: string
+): Finding[] {
+  if (!contract) {
+    return [];
+  }
+
+  const mismatches = [...new Set(
+    paths
+      .filter((pathValue) => isRepoContractPathCandidate(pathValue))
+      .filter((pathValue) => !repoPathCoveredByContract(pathValue, contract))
+  )];
+  if (mismatches.length === 0) {
+    return [];
+  }
+
+  return [
+    createRepoFitFinding({
+      id: `repo-fit-mismatch-${contextLabel}`,
+      title: "Paths fall outside the declared repo-fit contract",
+      summary: `${contextLabel} references ${mismatches.slice(0, 3).join(", ")}, which are outside the declared repo-fit roots.`,
+      severity: "medium",
+      rationale: "The repo-fit contract should explain which roots and package boundaries are in scope so follow-up work stays aligned with the repository structure.",
+      location: mismatches[0],
+      tags: ["repo-contract-mismatch", contextLabel]
+    })
+  ];
+}
+
+function buildRepoContractCoverageFinding(
+  contract: RepoFitContract | undefined,
+  requirementLabel: string,
+  presentValues: readonly string[],
+  contextLabel: string
+): Finding[] {
+  if (!contract || presentValues.length > 0) {
+    return [];
+  }
+
+  return [
+    createRepoFitFinding({
+      id: `repo-fit-coverage-${contextLabel}-${requirementLabel}`,
+      title: "Repo-fit contract expectations are not reflected in this workflow input",
+      summary: `${contextLabel} does not reference the repo-fit ${requirementLabel}, so downstream recommendations may drift from the repository's declared expectations.`,
+      severity: "low",
+      rationale: "When a repo declares validation or structural expectations, the workflow input should preserve them so analysis stays grounded in repo reality.",
+      tags: ["repo-contract-mismatch", contextLabel]
+    })
+  ];
+}
+
+function buildAgentForgeOpinionFinding(contract: RepoFitContract | undefined, contextLabel: string): Finding[] {
+  if (!contract || !contract.starterProfile.selectedProfileId || contract.starterProfile.adoption === "none" || contract.starterProfile.comparisonNotes.length === 0) {
+    return [];
+  }
+
+  return [
+    createRepoFitFinding({
+      id: `agentforge-opinion-${contextLabel}`,
+      title: "Selected AgentForge starter profile adds opinionated guidance",
+      summary: contract.starterProfile.comparisonNotes[0] ?? `The selected starter profile ${contract.starterProfile.selectedProfileId} adds extra implementation guidance for this repo.`,
+      severity: "low",
+      rationale: "Starter profiles are advisory overlays. They should surface as explicit AgentForge opinions rather than being mistaken for hard repo policy.",
+      tags: ["agentforge-opinion", contextLabel]
+    })
+  ];
+}
+
 function buildLifecycleArtifactEnvelopeBase(
   state: WorkflowStateEnvelope,
   displayName: string,
@@ -1381,6 +1537,7 @@ const planningAnalystAgent: RuntimeAgent = {
     const planningScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "planningScmRefs") ?? [];
     const planningGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "planningGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!planningRequest) {
       throw new Error("planning-discovery requires a validated planning request before planning analysis.");
     }
@@ -1402,6 +1559,11 @@ const planningAnalystAgent: RuntimeAgent = {
     const risks = [
       ...(planningRequest.pathHints.length === 0 ? ["Impact area is broad because no path hints were supplied."] : []),
       ...(planningRequest.assumptions.length === 0 ? ["Planning assumptions were not supplied and may need confirmation."] : [])
+    ];
+    const repoFitFindings = [
+      ...buildRepoContractCoverageFinding(repoFitContract, "source roots and package boundaries", planningRequest.pathHints, "planning"),
+      ...buildRepoContractMismatchFindings(repoFitContract, planningRequest.pathHints, "planning"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "planning")
     ];
     const summary = `Planning brief scoped ${objectives.length} objective(s) for ${state.repo.name}.`;
     const planningBrief = planningArtifactSchema.parse({
@@ -1441,7 +1603,7 @@ const planningAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [planningBrief],
       requestedTools: [],
@@ -2264,6 +2426,7 @@ const maintenanceAnalystAgent: RuntimeAgent = {
     const maintenanceScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "maintenanceScmRefs") ?? [];
     const maintenanceGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "maintenanceGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!maintenanceRequest) {
       throw new Error("maintenance-triage requires validated maintenance inputs before maintenance analysis.");
     }
@@ -2325,6 +2488,11 @@ const maintenanceAnalystAgent: RuntimeAgent = {
         ? ["Security-linked maintenance follow-up should remain prioritized until the linked evidence is resolved."]
         : [])
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, [...evidenceSources, ...affectedPackagesOrDocs], "maintenance"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "maintenance"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "maintenance")
+    ];
     const stalenessSignals = [
       ...(dependencyAlertRefs.length > 0 ? ["Dependency alert follow-up remains pending review."] : []),
       ...(docsTaskRefs.length > 0 ? ["Documentation maintenance follow-up remains pending review."] : []),
@@ -2368,7 +2536,7 @@ const maintenanceAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [maintenanceReport satisfies MaintenanceArtifact],
       requestedTools: [],
@@ -2441,6 +2609,7 @@ const incidentAnalystAgent: RuntimeAgent = {
     const incidentIssueRefs = getWorkflowInput<string[]>(stateSlice, "incidentIssueRefs") ?? [];
     const incidentScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "incidentScmRefs") ?? [];
     const incidentGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "incidentGithubRefs") ?? [];
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!incidentRequest) {
       throw new Error("incident-handoff requires validated incident inputs before incident analysis.");
     }
@@ -2480,6 +2649,11 @@ const incidentAnalystAgent: RuntimeAgent = {
       ...(incidentRequest.releaseReportRefs.length === 0
         ? ["Is there a release-report bundle that should be attached for additional provenance?"]
         : [])
+    ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, evidenceSources, "incident"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "incident"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "incident")
     ];
     const summary = `Incident brief prepared for ${incidentRequest.incidentSummary}.`;
     const incidentBrief = incidentArtifactSchema.parse({
@@ -2525,7 +2699,7 @@ const incidentAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [incidentBrief satisfies IncidentArtifact],
       requestedTools: [],
@@ -2895,6 +3069,7 @@ const releaseAnalystAgent: RuntimeAgent = {
     const releaseScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "releaseScmRefs") ?? [];
     const releaseGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "releaseGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!releaseRequest) {
       throw new Error("release-readiness requires validated release inputs before release analysis.");
     }
@@ -2999,6 +3174,11 @@ const releaseAnalystAgent: RuntimeAgent = {
       ...(securityReportRefs.length > 0 ? ["Validated security report inputs remain available for reviewer inspection."] : []),
       ...ciEvidenceSummary.map((entry) => `${entry.displayLabel} remains available for reviewer inspection.`)
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, allEvidenceRefs, "release"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "release"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "release")
+    ];
     const releaseReport = releaseArtifactSchema.parse({
       ...buildLifecycleArtifactEnvelopeBase(
         state,
@@ -3035,7 +3215,7 @@ const releaseAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [releaseReport satisfies ReleaseArtifact],
       requestedTools: [],
@@ -3300,6 +3480,7 @@ const pipelineAnalystAgent: RuntimeAgent = {
     const pipelineScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "pipelineScmRefs") ?? [];
     const pipelineGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "pipelineGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!pipelineRequest) {
       throw new Error("pipeline-evidence-review requires validated pipeline inputs before analysis.");
     }
@@ -3338,6 +3519,11 @@ const pipelineAnalystAgent: RuntimeAgent = {
         : ["Attach downstream QA, security, or release artifacts before using this pipeline report as a deployment gate input."]),
       ...(pipelineRequest.constraints.length > 0 ? [`Keep follow-up bounded by: ${pipelineRequest.constraints.join("; ")}.`] : [])
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, evidenceSources, "pipeline"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "pipeline"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "pipeline")
+    ];
     const reviewStatus = blockers.length > 0 ? "blocked" : normalizedEvidence?.reviewStatus ?? "ready";
     const summary = `Pipeline report prepared for ${pipelineRequest.pipelineScope}.`;
     const pipelineReport = pipelineArtifactSchema.parse({
@@ -3369,7 +3555,7 @@ const pipelineAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [pipelineReport satisfies PipelineArtifact],
       requestedTools: [],
@@ -3682,6 +3868,7 @@ const deploymentGateAnalystAgent: RuntimeAgent = {
     const deploymentScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "deploymentScmRefs") ?? [];
     const deploymentGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "deploymentGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!deploymentRequest) {
       throw new Error("deployment-gate-review requires validated deployment inputs before analysis.");
     }
@@ -3708,6 +3895,11 @@ const deploymentGateAnalystAgent: RuntimeAgent = {
         (entry) => `Confirm ${entry.displayLabel} remains current for the ${deploymentRequest.targetEnvironment} candidate.`
       ),
       ...(blockers.length === 0 ? ["Obtain explicit maintainer approval before any deploy, publish, or promotion action."] : [])
+    ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, evidenceSources, "deployment"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "deployment"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "deployment")
     ];
     const gateStatus = blockers.length > 0 ? "blocked" : normalizedEvidence?.gateStatus ?? "conditionally_ready";
     const summary = `Deployment gate report prepared for ${deploymentRequest.targetEnvironment}.`;
@@ -3739,7 +3931,7 @@ const deploymentGateAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [deploymentGateReport satisfies DeploymentGateArtifact],
       requestedTools: [],
@@ -4067,6 +4259,7 @@ const promotionApprovalAnalystAgent: RuntimeAgent = {
     const promotionScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "promotionScmRefs") ?? [];
     const promotionGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "promotionGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!promotionRequest) {
       throw new Error("promotion-approval requires validated promotion inputs before analysis.");
     }
@@ -4110,6 +4303,11 @@ const promotionApprovalAnalystAgent: RuntimeAgent = {
             : "Keep release promotion blocked until bounded release and deployment gate evidence is complete."
       }
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, evidenceSources, "promotion"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "promotion"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "promotion")
+    ];
     const summary = `Promotion approval report prepared for ${promotionRequest.targetEnvironment}.`;
     const promotionApprovalReport = promotionApprovalArtifactSchema.parse({
       ...buildLifecycleArtifactEnvelopeBase(
@@ -4143,7 +4341,7 @@ const promotionApprovalAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [promotionApprovalReport satisfies PromotionApprovalArtifact],
       requestedTools: [],
@@ -4319,6 +4517,7 @@ const securityAnalystAgent: RuntimeAgent = {
     const securityScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "securityScmRefs") ?? [];
     const securityGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "securityGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!securityRequest) {
       throw new Error("security-review requires validated security inputs before security analysis.");
     }
@@ -4379,6 +4578,18 @@ const securityAnalystAgent: RuntimeAgent = {
         : []),
       "Use deterministic security evidence normalization outputs before broadening the workflow surface."
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(
+        repoFitContract,
+        [
+          ...(normalizedEvidence?.affectedPackages ?? []),
+          ...evidenceSources
+        ],
+        "security"
+      ),
+      ...buildRepoContractCoverageFinding(repoFitContract, "evidence sources", evidenceSources, "security"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "security")
+    ];
     const summary = `Security report prepared for ${securityRequest.targetRef}.`;
     const securityReport = securityArtifactSchema.parse({
       ...buildLifecycleArtifactEnvelopeBase(
@@ -4422,7 +4633,7 @@ const securityAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [securityReport satisfies SecurityArtifact],
       requestedTools: [],
@@ -4603,6 +4814,7 @@ const qaAnalystAgent: RuntimeAgent = {
     const qaScmRefs = getWorkflowInput<ScmReference[]>(stateSlice, "qaScmRefs") ?? [];
     const qaGithubRefs = getWorkflowInput<GithubReference[]>(stateSlice, "qaGithubRefs") ?? [];
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!qaRequest) {
       throw new Error("qa-review requires validated QA inputs before QA analysis.");
     }
@@ -4688,6 +4900,18 @@ const qaAnalystAgent: RuntimeAgent = {
       ),
       ...(normalizedConstraints.length > 0 ? [`Keep QA follow-up bounded by: ${normalizedConstraints.join("; ")}.`] : [])
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(
+        repoFitContract,
+        [
+          ...(normalizedEvidence?.affectedPackages ?? []),
+          ...evidenceSources
+        ],
+        "qa"
+      ),
+      ...buildRepoContractCoverageFinding(repoFitContract, "validation commands", executedChecks, "qa"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "qa")
+    ];
     const summary = `QA report prepared for ${qaRequest.targetRef}.`;
     const releaseImpactBase =
       qaRequest.releaseContext === "blocking"
@@ -4737,7 +4961,7 @@ const qaAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [qaReport satisfies QaArtifact],
       requestedTools: [],
@@ -4928,6 +5152,7 @@ const implementationPlannerAgent: RuntimeAgent = {
     const implementationRequest = getWorkflowInput<ImplementationRequest>(stateSlice, "implementationRequest");
     const designRecord = getWorkflowInput<DesignArtifact>(stateSlice, "designRecord");
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!implementationRequest || !designRecord) {
       throw new Error("implementation-proposal requires validated implementation inputs before proposal analysis.");
     }
@@ -4987,6 +5212,11 @@ const implementationPlannerAgent: RuntimeAgent = {
         ? ["Do the policy surfaces identified in the design record require a separate approval review?"]
         : [])
     ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, finalAffectedPaths, "implementation"),
+      ...buildRepoContractCoverageFinding(repoFitContract, "validation commands", implementationRequest.validationCommands, "implementation"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "implementation")
+    ];
     const summary = `Implementation proposal prepared for ${implementationRequest.implementationGoal}.`;
     const implementationProposal = implementationArtifactSchema.parse({
       ...buildArtifactEnvelopeBase(
@@ -5017,7 +5247,7 @@ const implementationPlannerAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [implementationProposal satisfies ImplementationArtifact],
       requestedTools: [],
@@ -5081,6 +5311,7 @@ const designAnalystAgent: RuntimeAgent = {
     const designRequest = getWorkflowInput<DesignRequest>(stateSlice, "designRequest");
     const planningBrief = getWorkflowInput<PlanningArtifact>(stateSlice, "planningBrief");
     const requestFile = getWorkflowInput<string>(stateSlice, "requestFile");
+    const repoFitContract = getRepoFitContract(stateSlice);
     if (!designRequest || !planningBrief) {
       throw new Error("architecture-design-review requires validated design inputs before design analysis.");
     }
@@ -5110,6 +5341,10 @@ const designAnalystAgent: RuntimeAgent = {
       "Translate the accepted design into bounded implementation issues before coding begins.",
       "Use the deterministic inventory to drive follow-up schema, policy, or interface validation.",
       "Keep the planning brief and design record linked when implementation and QA workflows land."
+    ];
+    const repoFitFindings = [
+      ...buildRepoContractMismatchFindings(repoFitContract, [...designRequest.pathHints, ...impactedInterfaces], "design"),
+      ...buildAgentForgeOpinionFinding(repoFitContract, "design")
     ];
     const summary = `Design record prepared for ${designRequest.decisionTarget}.`;
     const designRecord = designArtifactSchema.parse({
@@ -5151,7 +5386,7 @@ const designAnalystAgent: RuntimeAgent = {
 
     return agentOutputSchema.parse({
       summary,
-      findings: [],
+      findings: repoFitFindings,
       proposedActions: [],
       lifecycleArtifacts: [designRecord],
       requestedTools: [],

@@ -44,9 +44,11 @@ npx agentforge explain last-run --json
 
 Use the full `npx @h9-foundry/agentforge-cli ...` form when you want the lowest-friction first run or do not want to add the CLI to the repository. Use the installed `npx agentforge ...` form when you want a shorter repeated command inside one repository.
 
-## Preferred Guided Setup On `main`
+## Preferred Guided Setup
 
-On `main`, the preferred guided first-run path is now:
+The published CLI already includes `agentforge onboard` for guided setup. The current `main` slice extends that onboarding path with the repo-fit contract and `/configure?target=repo-fit` refinement flow.
+
+On `main`, the preferred guided first-run path is:
 
 ```bash
 agentforge onboard
@@ -57,14 +59,18 @@ agentforge onboard
 - run a first normal workflow
 - run a first benchmark
 
-Benchmarking stays optional. The intended value path is now:
+The onboarding result now writes a canonical repo-fit contract to `.agentops/repo-fit.yaml`. That file records repository structure, boundaries, evidence expectations, coding and design conventions, and any optional AgentForge starter-profile adoption without rewriting the repo itself.
+
+Benchmarking stays optional. The intended value path is:
 
 1. onboard the repo with `agentforge onboard`
-2. run a first real workflow or benchmark
-3. inspect `/outcomes` for live task value
-4. use `/benchmarks` only for deterministic eval comparisons
+2. inspect `.agentops/repo-fit.yaml`
+3. optionally refine the inferred contract in `/configure?target=repo-fit`
+4. run a first real workflow or benchmark
+5. inspect `/outcomes` for live task value
+6. use `/benchmarks` only for deterministic eval comparisons
 
-Until this onboarding slice reaches the next npm release, keep using `init` as the published-CLI setup command.
+In the latest published npm release, `agentforge onboard` is available but does not yet include the full repo-fit contract flow from `main`. Until that release lands, keep using `init` as the published-CLI setup command when you want the zero-install evaluator path, or use `main` if you want to validate the repo-fit onboarding slice itself.
 
 ## What You Can Do Today
 
@@ -119,11 +125,12 @@ Available in the published CLI:
 - provider-backed runs now persist measured token usage in `.agentops/runs/.../bundle.json`, with local cost estimation when a provider/model entry exists in the runtime pricing registry
 - `agentforge eval benchmark-ledger --json`, `agentforge eval benchmark-record ... --prefill-run <run-id>`, and `agentforge eval benchmark-wizard ...` support the local benchmark ledger that powers adjudicated `/outcomes` overlays, including release speed/quality/token-spend comparisons
 - the next benchmark expansion after the AgentForge-first dogfood phase is the bounded CreateCVs portability phase in [docs/CREATECVS_PORTABILITY_PHASE.md](docs/CREATECVS_PORTABILITY_PHASE.md)
+- the first pre-benchmark portability smoke for that target is recorded in [docs/CREATECVS_PORTABILITY_SMOKE.md](docs/CREATECVS_PORTABILITY_SMOKE.md)
 - see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current launch path and [docs/VISUALIZER_DATA_CONTRACT.md](docs/VISUALIZER_DATA_CONTRACT.md) for the visualizer-facing run/ledger contract
 
 Available on `main` before the next npm release:
 
-- `agentforge onboard` and `agentforge setup` provide the guided repo-fit onboarding path
+- `agentforge onboard` and `agentforge setup` extend the published guided setup path with `.agentops/repo-fit.yaml` and `/configure?target=repo-fit`
 - `agentforge benchmark` provides one high-level entrypoint for live task benchmarking and deterministic eval comparisons
 - onboarding now positions `/outcomes` as the primary value dashboard and `/benchmarks` as the deterministic eval comparison dashboard
 
@@ -137,6 +144,7 @@ The evaluator-first visualizer flow is:
 4. use `/runs/compare` only after you have two concrete runs to compare
 5. use `/benchmarks` only for deterministic `eval compare` evidence
 6. use `/configure` when you want supported browser-based config authoring over repo YAML; it defaults to a structured form editor with Advanced YAML behind a toggle, while direct repo YAML plus `agentforge config validate` remains the canonical configuration path
+7. use `/configure?target=repo-fit` when you want to confirm or refine how AgentForge should interpret the repo’s structure, conventions, and optional opinionated starter profile
 
 ## What Success Looks Like
 
@@ -339,7 +347,7 @@ agentforge visualizer export --format markdown
 
 Use the first command for local inspection and the second command when you want a shareable outcomes snapshot without standing up a hosted dashboard. If you are developing AgentForge itself, the contributor/source-build path remains documented in [docs/VISUALIZER.md](docs/VISUALIZER.md).
 
-Direct repo YAML remains the canonical way to edit workflow requests and control documents. The visualizer `/configure` surface is now supported by default, uses a structured editor for requests, workflow controls, policy presets, and defaults, and keeps raw YAML behind an Advanced toggle for expert review and debugging. If a repository needs to disable browser editing temporarily for compatibility, `.agentops/agentops.yaml` can set `visualizer.experimental_config_editing: false` for one release cycle while keeping the same CLI-backed validation and save gates.
+Direct repo YAML remains the canonical way to edit workflow requests, repo-fit contracts, and control documents. The visualizer `/configure` surface is now supported by default, uses a structured editor for requests, workflow controls, policy presets, defaults, and the repo-fit contract, and keeps raw YAML behind an Advanced toggle for expert review and debugging. If a repository needs to disable browser editing temporarily for compatibility, `.agentops/agentops.yaml` can set `visualizer.experimental_config_editing: false` for one release cycle while keeping the same CLI-backed validation and save gates.
 
 ### Planning To Design Evaluator Path
 

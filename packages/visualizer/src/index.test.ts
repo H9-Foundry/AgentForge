@@ -156,6 +156,17 @@ describe("visualizer data loading", () => {
           path: ".agentops/requests/planning.yaml",
           metaPresent: true
         },
+        repoFit: {
+          path: ".agentops/repo-fit.yaml",
+          recommendedProfileId: "agentforge-ts-monorepo",
+          selectedProfileId: "agentforge-ts-monorepo",
+          adoption: "partial",
+          inferredFields: ["structure.sourceRoots"],
+          confirmedFields: ["expectations.validationCommands"],
+          unresolvedFields: [],
+          sourceRoots: ["packages", "docs"],
+          packageRoots: ["packages"]
+        },
         execution: {
           executedNodes: [
             { nodeId: "intake", kind: "deterministic", agent: "planning-intake" },
@@ -189,6 +200,17 @@ describe("visualizer data loading", () => {
     const root = createWorkspace();
     writeBundleFixture(root, "run-left", [cloneFixture(schemaFixtures.planningArtifact)], {
       workflow: "planning-discovery",
+      findings: [
+        {
+          id: "repo-fit-left",
+          title: "Repo-fit mismatch",
+          summary: "Left run references a path outside the declared source roots.",
+          severity: "medium",
+          rationale: "The repo-fit contract should describe the active source roots.",
+          confidence: 0.8,
+          tags: ["repo-fit", "repo-contract-mismatch", "planning"]
+        }
+      ],
       configuration: {
         selectedControls: {
           profile: "default",
@@ -206,6 +228,17 @@ describe("visualizer data loading", () => {
           toolEffects: {}
         },
         request: { path: ".agentops/requests/planning.yaml", metaPresent: false },
+        repoFit: {
+          path: ".agentops/repo-fit.yaml",
+          recommendedProfileId: "agentforge-ts-monorepo",
+          selectedProfileId: "agentforge-ts-package",
+          adoption: "partial",
+          inferredFields: ["structure.sourceRoots"],
+          confirmedFields: ["conventions.designPatterns"],
+          unresolvedFields: [],
+          sourceRoots: ["src"],
+          packageRoots: []
+        },
         execution: { executedNodes: [{ nodeId: "planning", kind: "reasoning", agent: "planning-analyst" }] }
       }
     });
@@ -231,6 +264,17 @@ describe("visualizer data loading", () => {
           toolEffects: {}
         },
         request: { path: ".agentops/requests/planning.yaml", metaPresent: true },
+        repoFit: {
+          path: ".agentops/repo-fit.yaml",
+          recommendedProfileId: "agentforge-ts-monorepo",
+          selectedProfileId: "agentforge-ts-monorepo",
+          adoption: "full",
+          inferredFields: ["structure.sourceRoots"],
+          confirmedFields: ["conventions.designPatterns"],
+          unresolvedFields: [],
+          sourceRoots: ["packages", "docs"],
+          packageRoots: ["packages"]
+        },
         execution: { executedNodes: [{ nodeId: "planning", kind: "reasoning", agent: "planning-analyst" }] }
       }
     });
@@ -240,12 +284,16 @@ describe("visualizer data loading", () => {
     const outcomes = loadOutcomesDashboardView(root);
 
     expect(detail?.configuration?.policyPreset).toBe("strict-readonly");
+    expect(detail?.configuration?.repoFitSelectedProfile).toBe("agentforge-ts-monorepo");
     expect(detail?.configuration?.executedNodes[0]?.nodeId).toBe("planning");
     expect(comparison?.controlChanges.some((change) => change.field === "policyPreset")).toBe(true);
+    expect(comparison?.controlChanges.some((change) => change.field === "repoFitProfile")).toBe(true);
     expect(outcomes.configurationHotspots.some((hotspot) => hotspot.dimension === "policyPreset" && hotspot.value === "strict-readonly")).toBe(true);
     expect(renderRunComparePage(comparison, "run-left", "run-right")).toContain("Input And Control Changes");
     expect(renderOutcomesDashboardPage(outcomes)).toContain("Configuration Hotspots");
     expect(renderRunDetailPage(detail!)).toContain("Resolved Configuration");
+    expect(renderRunDetailPage(detail!)).toContain("Repo-fit profile");
+    expect(renderRunDetailPage(loadRunDetailView(root, "run-left")!)).toContain("repo-contract-mismatch");
   });
 
   it("renders known artifact details and benchmark summaries", () => {
@@ -786,6 +834,7 @@ describe("visualizer html rendering", () => {
     writeFileSync(join(root, ".agentops", "control", "planning-discovery.yaml"), "version: 1\nworkflow: planning-discovery\nprofiles:\n  default:\n    requestPatch: {}\n");
     writeFileSync(join(root, ".agentops", "control", "policy-presets.yaml"), "version: 1\npresets:\n  default:\n    description: Base\n");
     writeFileSync(join(root, ".agentops", "control", "defaults.yaml"), "version: 1\nworkflows:\n  planning-discovery:\n    profile: default\n");
+    writeFileSync(join(root, ".agentops", "repo-fit.yaml"), "version: 1\nrepoName: fixture\nstructure:\n  architectureStyle: monorepo\n");
     writeBundleFixture(root, "run-left", [cloneFixture(schemaFixtures.planningArtifact)], { workflow: "planning-discovery" });
     writeBundleFixture(root, "run-right", [cloneFixture(schemaFixtures.planningArtifact)], { workflow: "planning-discovery" });
 
@@ -953,8 +1002,10 @@ describe("visualizer html rendering", () => {
 
     try {
       const configurePage = await fetch(`${serverUrl}/configure?workflow=planning-discovery&target=request`);
+      const repoFitConfigurePage = await fetch(`${serverUrl}/configure?target=repo-fit`);
       const comparePage = await fetch(`${serverUrl}/runs/compare?left=run-left&right=run-right`);
       const current = await fetch(`${serverUrl}/api/config/current?workflow=planning-discovery&target=request`);
+      const repoFitCurrent = await fetch(`${serverUrl}/api/config/current?target=repo-fit`);
       const editorModel = await fetch(`${serverUrl}/api/config/editor?workflow=planning-discovery&target=request`);
       const render = await fetch(`${serverUrl}/api/config/render`, {
         method: "POST",
@@ -1017,10 +1068,14 @@ describe("visualizer html rendering", () => {
       expect(configureHtml).toContain("agentforge config validate");
       expect(configureHtml).toContain("Structured Editor");
       expect(configureHtml).toContain("View YAML (Advanced)");
+      expect(configureHtml).toContain("repo-fit");
+      expect(repoFitConfigurePage.status).toBe(200);
       expect(comparePage.status).toBe(200);
       expect(await comparePage.text()).toContain("Secondary analysis step");
       expect(current.status).toBe(200);
       expect(await current.text()).toContain("Test request");
+      expect(repoFitCurrent.status).toBe(200);
+      expect(await repoFitCurrent.text()).toContain("architectureStyle: monorepo");
       expect(editorModel.status).toBe(200);
       expect(await editorModel.text()).toContain("\"target\": \"request\"");
       expect(render.status).toBe(200);

@@ -98,6 +98,39 @@ function createGitFixtureWithoutLockfile(prefix: string): string {
   return root;
 }
 
+function createNpmGitFixture(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  execFileSync("git", ["init"], { cwd: root });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "AgentForge Test"], { cwd: root });
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify(
+      {
+        name: "fixture",
+        repository: {
+          type: "git",
+          url: "https://github.com/H9-Foundry/fixture.git"
+        },
+        scripts: {
+          test: "echo test",
+          lint: "echo lint",
+          typecheck: "echo typecheck",
+          build: "echo build"
+        }
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(join(root, "package-lock.json"), "{\n  \"name\": \"fixture\",\n  \"lockfileVersion\": 3\n}\n");
+  writeFileSync(join(root, "src.ts"), "export const value = 1;\n");
+  execFileSync("git", ["add", "."], { cwd: root });
+  execFileSync("git", ["-c", "commit.gpgsign=false", "commit", "-m", "init"], { cwd: root });
+  writeFileSync(join(root, "src.ts"), "export const value = 2;\n");
+  return root;
+}
+
 function createFixtureRepo(): string {
   return createGitFixture("agentops-cli-");
 }
@@ -113,6 +146,62 @@ function ensureRequestsDir(root: string): void {
 
 function writeYamlFile(filePath: string, value: unknown): void {
   writeFileSync(filePath, yaml.dump(value));
+}
+
+function writeRepoFitContract(
+  root: string,
+  overrides?: Partial<{
+    architectureStyle: string;
+    sourceRoots: string[];
+    packageRoots: string[];
+    validationCommands: string[];
+    evidenceSources: string[];
+    coding: string[];
+    designPatterns: string[];
+    selectedProfileId: string;
+    adoption: "none" | "partial" | "full";
+    comparisonNotes: string[];
+  }>
+): void {
+  writeYamlFile(join(root, ".agentops", "repo-fit.yaml"), {
+    version: 1,
+    repoName: "fixture",
+    structure: {
+      architectureStyle: overrides?.architectureStyle ?? "application-repo",
+      sourceRoots: overrides?.sourceRoots ?? ["src"],
+      packageRoots: overrides?.packageRoots ?? [],
+      ownershipBoundaries: [],
+      pathConventions: []
+    },
+    expectations: {
+      validationCommands: overrides?.validationCommands ?? [],
+      evidenceSources: overrides?.evidenceSources ?? [],
+      testingConventions: [],
+      releaseConventions: [],
+      securityConventions: [],
+      documentationConventions: [],
+      operationsConventions: []
+    },
+    conventions: {
+      coding: overrides?.coding ?? [],
+      designPatterns: overrides?.designPatterns ?? []
+    },
+    starterProfile: {
+      recommendedProfileId: overrides?.selectedProfileId,
+      selectedProfileId: overrides?.selectedProfileId,
+      adoption: overrides?.adoption ?? "none",
+      comparisonNotes:
+        overrides?.comparisonNotes ??
+        (overrides?.selectedProfileId && (overrides?.adoption ?? "none") !== "none"
+          ? [`Use ${overrides.selectedProfileId} as advisory guidance only.`]
+          : [])
+    },
+    provenance: {
+      inferred: [],
+      confirmed: [],
+      unresolved: []
+    }
+  });
 }
 
 function readJson<T>(filePath: string): T {
@@ -396,6 +485,14 @@ describe("cli smoke flows", () => {
     expect(result.profile.validationCommands.map((command) => command.command)).toEqual(
       expect.arrayContaining(["pnpm lint", "pnpm typecheck", "pnpm test"])
     );
+    expect(result.repoFit.contractPath).toBe(".agentops/repo-fit.yaml");
+    expect(result.repoFit.contract.structure.architectureStyle).toBe("application-repo");
+    expect(result.repoFit.contract.structure.sourceRoots).toEqual([]);
+    expect(result.repoFit.contract.expectations.validationCommands).toEqual(
+      expect.arrayContaining(["pnpm lint", "pnpm typecheck", "pnpm test"])
+    );
+    expect(result.repoFit.recommendedProfileId).toBe("agentforge-ts-package");
+    expect(existsSync(join(root, ".agentops", "repo-fit.yaml"))).toBe(true);
     expect(result.preset?.workflow).toBe("planning-discovery");
     expect(existsSync(join(root, ".agentops", "requests", "planning.yaml"))).toBe(true);
   });
@@ -753,6 +850,7 @@ describe("cli smoke flows", () => {
     expect(parsed.profile.recommendedBenchmarkMode).toBe("live");
     expect(parsed.profile.workflowFamilies).toContain("review/planning");
     expect(parsed.nextSteps.firstBenchmarkCommand).toContain("agentforge benchmark --mode live");
+    expect((parsed as { repoFit?: { contractPath?: string; recommendedProfileId?: string } }).repoFit?.contractPath).toBe(".agentops/repo-fit.yaml");
   }, 90_000);
 
   it("routes eval benchmarking through the top-level benchmark command", () => {
@@ -1118,6 +1216,70 @@ describe("cli smoke flows", () => {
     expect(implementationRun.artifactKinds).toContain("implementation-proposal");
   });
 
+  it("allows bounded implementation validation commands in npm repositories", async () => {
+    const root = createNpmGitFixture("agentops-cli-implementation-npm-");
+    initProject(root);
+    expect(scanProject(root).packageManager).toBe("npm");
+    mkdirSync(join(root, ".agentops", "requests"), { recursive: true });
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan the first workflow wedge for an npm repo",
+        "goals:",
+        "  - Produce a planning brief",
+        "constraints:",
+        "  - Keep the workflow local-first"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first design workflow implementation shape",
+        "pathHints:",
+        "  - package.json",
+        "  - src.ts",
+        "alternatives:",
+        "  - single-workflow-pass"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - src.ts",
+        "validationCommands:",
+        "  - npm run lint",
+        "  - npm run typecheck",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    expect(implementationRun.status).toBe("success");
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        artifactKind: string;
+        payload?: {
+          validationPlan?: string[];
+        };
+      }>;
+    }>(implementationRun.jsonPath);
+    const implementationArtifact = bundle.lifecycleArtifacts.find((artifact) => artifact.artifactKind === "implementation-proposal");
+    expect(implementationArtifact?.payload?.validationPlan).toEqual(
+      expect.arrayContaining([
+        "Command `npm run lint` is available but approval-required before execution.",
+        "Command `npm run typecheck` is available but approval-required before execution."
+      ])
+    );
+  });
+
   it("runs qa-review after a valid implementation-proposal handoff", async () => {
     const root = createGitFixture("agentops-qa-");
 
@@ -1195,6 +1357,71 @@ describe("cli smoke flows", () => {
 
     const explanation = explainLastRun(root);
     expect(explanation.artifactKinds).toContain("qa-report");
+  });
+
+  it("emits advisory repo-fit findings during qa-review when validation expectations are missing", async () => {
+    const root = createGitFixture("agentops-qa-repo-fit-");
+    initProject(root);
+    writeRepoFitContract(root, {
+      sourceRoots: ["src"],
+      validationCommands: [],
+      selectedProfileId: "agentforge-ts-package",
+      adoption: "partial"
+    });
+
+    writeFileSync(
+      join(root, ".agentops", "requests", "planning.yaml"),
+      [
+        "problemStatement: Plan a bounded QA workflow handoff",
+        "goals:",
+        "  - Produce a planning brief for repo-fit QA validation",
+        "constraints:",
+        "  - Keep the workflow local-first"
+      ].join("\n")
+    );
+    const planningRun = await runLocalWorkflow("planning-discovery", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "design.yaml"),
+      [
+        `planningBriefRef: .agentops/runs/${planningRun.runId}/bundle.json`,
+        "decisionTarget: Choose the first QA workflow implementation shape",
+        "pathHints:",
+        "  - src.ts"
+      ].join("\n")
+    );
+    const designRun = await runLocalWorkflow("architecture-design-review", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "implementation.yaml"),
+      [
+        `designRecordRef: .agentops/runs/${designRun.runId}/bundle.json`,
+        "implementationGoal: Prepare the next bounded implementation proposal",
+        "approvalMode: proposal-only",
+        "targetPaths:",
+        "  - src.ts",
+        "constraints:",
+        "  - Keep the default path read-only"
+      ].join("\n")
+    );
+    const implementationRun = await runLocalWorkflow("implementation-proposal", root);
+    writeFileSync(
+      join(root, ".agentops", "requests", "qa.yaml"),
+      [
+        `targetRef: .agentops/runs/${implementationRun.runId}/bundle.json`,
+        "focusAreas:",
+        "  - coverage",
+        "constraints:",
+        "  - Keep QA evidence collection read-only",
+        "releaseContext: candidate"
+      ].join("\n")
+    );
+
+    const qaRun = await runLocalWorkflow("qa-review", root);
+    const bundle = readJson<{
+      findings: Array<{ tags?: string[]; title?: string }>;
+    }>(qaRun.jsonPath);
+
+    expect(bundle.findings.some((finding) => (finding.tags ?? []).includes("repo-fit"))).toBe(true);
+    expect(bundle.findings.some((finding) => (finding.tags ?? []).includes("agentforge-opinion"))).toBe(true);
   });
 
   it("ingests local GitHub Actions evidence exports during qa-review", async () => {
@@ -1823,6 +2050,33 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("emits advisory repo-fit findings during security-review when the target falls outside declared repo roots", async () => {
+    const root = createGitFixture("agentops-security-repo-fit-");
+    initProject(root);
+    writeRepoFitContract(root, {
+      sourceRoots: ["packages"],
+      evidenceSources: ["docs/security.md"],
+      selectedProfileId: "agentforge-ts-package",
+      adoption: "partial"
+    });
+
+    writeYamlFile(join(root, ".agentops", "requests", "security.yaml"), {
+      targetRef: "src.ts",
+      evidenceSources: [],
+      focusAreas: ["dependency-risk"],
+      constraints: ["Keep the workflow read-only"],
+      releaseContext: "candidate"
+    });
+
+    const securityRun = await runLocalWorkflow("security-review", root);
+    const bundle = readJson<{
+      findings: Array<{ tags?: string[]; title?: string; summary?: string }>;
+    }>(securityRun.jsonPath);
+
+    expect(bundle.findings.some((finding) => (finding.tags ?? []).includes("repo-contract-mismatch"))).toBe(true);
+    expect(bundle.findings.some((finding) => (finding.tags ?? []).includes("repo-fit"))).toBe(true);
+  });
+
   it("fails release-readiness before reasoning when the request is missing", async () => {
     const root = createFixtureRepo();
     initializeWorkspace(root);
@@ -2115,6 +2369,127 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.payload?.trustStatus).toBe(
       "attestation-verified-trusted-publishing-reviewed-separately"
     );
+  });
+
+  it("emits advisory repo-fit findings during release-readiness when release evidence diverges from declared repo roots", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, "docs", "release-runbook.md"), "# release runbook\n");
+    writeRepoFitContract(root, {
+      sourceRoots: ["src"],
+      evidenceSources: ["docs/release-runbook.md"],
+      selectedProfileId: "agentforge-ts-package",
+      adoption: "partial"
+    });
+
+    const qaBundleDir = join(root, ".agentops", "runs", "run-qa");
+    mkdirSync(qaBundleDir, { recursive: true });
+    writeFileSync(
+      join(qaBundleDir, "bundle.json"),
+      JSON.stringify({
+        version: "1.0.0",
+        runId: "run-qa",
+        workflow: "qa-review",
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        status: "success",
+        policy: {
+          version: 1,
+          environment: "local",
+          resolvedAt: new Date().toISOString(),
+          defaults: schemaFixtures.policyDocument.defaults,
+          paths: schemaFixtures.policyDocument.paths,
+          plugins: schemaFixtures.policyDocument.plugins,
+          tools: schemaFixtures.policyDocument.tools
+        },
+        entries: [],
+        findings: [],
+        proposedActions: [],
+        blockedPlugins: [],
+        lifecycleArtifacts: [schemaFixtures.qaArtifact],
+        artifactPaths: {
+          json: ".agentops/runs/run-qa/bundle.json",
+          markdown: ".agentops/runs/run-qa/summary.md"
+        },
+        provenance: {
+          generatedBy: "agentforge-runtime",
+          schemaVersion: "1.0.0",
+          executionEnvironment: "local",
+          repoRoot: root
+        },
+        redaction: {
+          applied: true,
+          strategyVersion: "1.0.0",
+          categories: ["github-token"]
+        },
+        components: []
+      }, null, 2)
+    );
+    writeFileSync(join(qaBundleDir, "summary.md"), "# qa summary\n");
+
+    const securityBundleDir = join(root, ".agentops", "runs", "run-security");
+    mkdirSync(securityBundleDir, { recursive: true });
+    writeFileSync(
+      join(securityBundleDir, "bundle.json"),
+      JSON.stringify({
+        version: "1.0.0",
+        runId: "run-security",
+        workflow: "security-review",
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        status: "success",
+        policy: {
+          version: 1,
+          environment: "local",
+          resolvedAt: new Date().toISOString(),
+          defaults: schemaFixtures.policyDocument.defaults,
+          paths: schemaFixtures.policyDocument.paths,
+          plugins: schemaFixtures.policyDocument.plugins,
+          tools: schemaFixtures.policyDocument.tools
+        },
+        entries: [],
+        findings: [],
+        proposedActions: [],
+        blockedPlugins: [],
+        lifecycleArtifacts: [schemaFixtures.securityArtifact],
+        artifactPaths: {
+          json: ".agentops/runs/run-security/bundle.json",
+          markdown: ".agentops/runs/run-security/summary.md"
+        },
+        provenance: {
+          generatedBy: "agentforge-runtime",
+          schemaVersion: "1.0.0",
+          executionEnvironment: "local",
+          repoRoot: root
+        },
+        redaction: {
+          applied: true,
+          strategyVersion: "1.0.0",
+          categories: ["github-token"]
+        },
+        components: []
+      }, null, 2)
+    );
+    writeFileSync(join(securityBundleDir, "summary.md"), "# security summary\n");
+
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the candidate for maintainer review",
+      versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      evidenceSources: ["docs/release-runbook.md"],
+      constraints: ["Keep release readiness read-only by default"]
+    });
+
+    const releaseRun = await runLocalWorkflow("release-readiness", root);
+    const bundle = readJson<{
+      findings: Array<{ tags?: string[] }>;
+    }>(releaseRun.jsonPath);
+
+    expect(bundle.findings.some((finding) => (finding.tags ?? []).includes("repo-contract-mismatch"))).toBe(true);
+    expect(bundle.findings.some((finding) => (finding.tags ?? []).includes("repo-fit"))).toBe(true);
   });
 
   it("consumes host-agnostic imported CI evidence during release-readiness", async () => {
@@ -3654,7 +4029,7 @@ describe("cli smoke flows", () => {
     try {
       async function renderPreviewAndSave(input: {
         workflow?: string;
-        target: "request" | "workflow-control" | "policy-presets" | "defaults";
+        target: "request" | "workflow-control" | "policy-presets" | "defaults" | "repo-fit";
         state: unknown;
       }): Promise<{ draft: string; preview: { previewHash: string; semantic?: Record<string, unknown>; validation?: { valid: boolean; errors: string[] } } }> {
         const render = await fetch(`${launched.serverUrl}/api/config/render`, {
@@ -3855,6 +4230,55 @@ describe("cli smoke flows", () => {
       expect(defaultsSaved.draft).toContain("read-only-audit");
       expect(defaultsSaved.draft).toContain("focused");
       expect(readFileSync(join(root, ".agentops", "control", "defaults.yaml"), "utf8")).toContain("read-only-audit");
+
+      const repoFitEditor = await fetch(`${launched.serverUrl}/api/config/editor?target=repo-fit`);
+      const repoFitEditorJson = await repoFitEditor.json() as {
+        repoFit?: {
+          recommendedProfileId?: string;
+          profileOptions: Array<{ value: string }>;
+          structureFields: Array<{ key: string; value: unknown }>;
+          expectationFields: Array<{ key: string; value: unknown }>;
+          conventionFields: Array<{ key: string; value: unknown }>;
+        };
+      };
+      const repoFitSaved = await renderPreviewAndSave({
+        target: "repo-fit",
+        state: {
+          starterProfile: {
+            recommendedProfileId: repoFitEditorJson.repoFit?.recommendedProfileId ?? "agentforge-ts-monorepo",
+            selectedProfileId: "agentforge-ts-monorepo",
+            adoption: "partial"
+          },
+          structureFields: (repoFitEditorJson.repoFit?.structureFields ?? []).map((field) => {
+            if (field.key === "ownershipBoundaries") {
+              return { ...field, value: ["packages/ is the top-level workspace boundary.", "docs/ holds repo guidance and runbooks."] };
+            }
+            return field;
+          }),
+          expectationFields: (repoFitEditorJson.repoFit?.expectationFields ?? []).map((field) => {
+            if (field.key === "validationCommands") {
+              return { ...field, value: ["pnpm build:packages", "pnpm test"] };
+            }
+            if (field.key === "evidenceSources") {
+              return { ...field, value: [".github/workflows", "docs/VISUALIZER.md"] };
+            }
+            return field;
+          }),
+          conventionFields: (repoFitEditorJson.repoFit?.conventionFields ?? []).map((field) => {
+            if (field.key === "designPatterns") {
+              return { ...field, value: ["Package-first architecture with explicit runtime boundaries."] };
+            }
+            return field;
+          })
+        }
+      });
+
+      expect(repoFitEditor.status).toBe(200);
+      expect(repoFitEditorJson.repoFit?.profileOptions.map((option) => option.value)).toContain("agentforge-ts-monorepo");
+      expect(repoFitSaved.draft).toContain("selectedProfileId: agentforge-ts-monorepo");
+      expect(repoFitSaved.draft).toContain("adoption: partial");
+      expect(repoFitSaved.draft).toContain("pnpm build:packages");
+      expect(readFileSync(join(root, ".agentops", "repo-fit.yaml"), "utf8")).toContain("agentforge-ts-monorepo");
     } finally {
       await launched.close();
     }
@@ -3880,11 +4304,17 @@ describe("cli smoke flows", () => {
           policyPreset?: string;
           workflowVariant?: string;
         };
+        repoFit?: {
+          selectedProfileId?: string;
+          adoption?: string;
+        };
       };
     }>(configuredRun.jsonPath);
 
     expect(configuredBundle.configuration?.selectedControls?.policyPreset).toBe("read-only-audit");
     expect(configuredBundle.configuration?.selectedControls?.workflowVariant).toBe("focused");
+    expect(configuredBundle.configuration?.repoFit?.selectedProfileId).toBe("agentforge-ts-monorepo");
+    expect(configuredBundle.configuration?.repoFit?.adoption).toBe("partial");
   });
 
   it("respects the explicit disable override for browser config editing", async () => {
