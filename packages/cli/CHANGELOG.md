@@ -1,5 +1,19 @@
 # @h9-foundry/agentforge-cli
 
+## 0.12.4
+
+### Patch Changes
+
+- 2585758: Fix the published CLI package so global npm installs support direct `agentforge` execution again, and add release verification coverage for PATH-based global-prefix installs.
+  - @h9-foundry/agentforge-schemas@0.12.4
+  - @h9-foundry/agentforge-shared-types@0.12.4
+  - @h9-foundry/agentforge-sdk@0.12.4
+  - @h9-foundry/agentforge-context-engine@0.12.4
+  - @h9-foundry/agentforge-policy-engine@0.12.4
+  - @h9-foundry/agentforge-runtime@0.12.4
+  - @h9-foundry/agentforge-audit@0.12.4
+  - @h9-foundry/agentforge-visualizer@0.12.4
+
 ## 0.12.3
 
 ### Patch Changes
