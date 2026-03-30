@@ -42,7 +42,7 @@ describe("release verification", () => {
     const parsed = JSON.parse(result.stdout) as {
       ready: boolean;
       tarballs: Array<{ tarballPath: string }>;
-      checks: Array<{ status: string }>;
+      checks: Array<{ id: string; status: string }>;
     };
 
     expect(result.status).toBe(0);
@@ -50,6 +50,9 @@ describe("release verification", () => {
     expect(parsed.tarballs).toHaveLength(EXPECTED_PUBLIC_PACKAGES.length);
     expect(parsed.tarballs.every((entry) => existsSync(entry.tarballPath))).toBe(true);
     expect(parsed.checks.every((check) => check.status === "pass")).toBe(true);
+    expect(parsed.checks.some((check) => check.id === "global-cli-install" && check.status === "pass")).toBe(true);
+    expect(parsed.checks.some((check) => check.id === "global-cli-help" && check.status === "pass")).toBe(true);
+    expect(parsed.checks.some((check) => check.id === "global-cli-visualizer-help" && check.status === "pass")).toBe(true);
   }, 180000);
 
   it("exposes the release verify command from the CLI", async () => {

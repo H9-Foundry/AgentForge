@@ -32,6 +32,7 @@ export interface ReleaseVerifyResult {
   targetScope: string;
   tempDir: string;
   consumerProjectDir: string;
+  globalPrefixDir: string;
   tarballs: ReleaseVerifyTarball[];
   checks: ReleaseVerifyEntry[];
   ready: boolean;
@@ -228,6 +229,66 @@ console.log(JSON.stringify({ verified: packages }, null, 2));
   return probePath;
 }
 
+function verifyBundledCliDependencies(
+  cliPackageRoot: string,
+  checks: ReleaseVerifyEntry[],
+  tarballs: ReleaseVerifyTarball[]
+): void {
+  const cliTarball = tarballs.find((tarball) => tarball.packageName === "@h9-foundry/agentforge-cli");
+  if (!cliTarball) {
+    pushCheck(
+      checks,
+      "global-cli-bundled-deps",
+      "global CLI bundled first-party dependencies",
+      "fail",
+      "Unable to locate the CLI tarball metadata during global install verification."
+    );
+    return;
+  }
+
+  const cliManifestPath = join(cliPackageRoot, "package.json");
+  if (!existsSync(cliManifestPath)) {
+    pushCheck(
+      checks,
+      "global-cli-bundled-deps",
+      "global CLI bundled first-party dependencies",
+      "fail",
+      `Expected ${cliManifestPath} to exist after global install verification.`
+    );
+    return;
+  }
+
+  const cliManifest = JSON.parse(readFileSync(cliManifestPath, "utf8")) as {
+    bundleDependencies?: string[];
+  };
+  const bundledDependencies = Array.isArray(cliManifest.bundleDependencies) ? cliManifest.bundleDependencies : [];
+  const sourceCliManifest = JSON.parse(readFileSync(join(cliTarball.packageDir, "package.json"), "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+  const firstPartyDependencies = Object.keys(sourceCliManifest.dependencies ?? {})
+    .filter((packageName) => packageName.startsWith("@h9-foundry/"))
+    .sort();
+
+  const missingDependencies = firstPartyDependencies.filter((packageName) => {
+    if (!bundledDependencies.includes(packageName)) {
+      return true;
+    }
+
+    const packageRoot = join(cliPackageRoot, "node_modules", ...packageName.split("/"));
+    return !existsSync(join(packageRoot, "package.json")) || !existsSync(join(packageRoot, "dist"));
+  });
+
+  pushCheck(
+    checks,
+    "global-cli-bundled-deps",
+    "global CLI bundled first-party dependencies",
+    missingDependencies.length === 0 ? "pass" : "fail",
+    missingDependencies.length === 0
+      ? `Bundled first-party CLI dependencies were installed with package.json and dist assets.`
+      : `Global CLI install is missing bundled first-party packages: ${missingDependencies.join(", ")}`
+  );
+}
+
 export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVerifyOptions = {}): ReleaseVerifyResult {
   const workspaceRoot = findWorkspaceRoot(cwd);
   const env = { ...process.env, ...options.env };
@@ -235,10 +296,12 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
   const tempDir = mkdtempSync(join(tmpdir(), "agentforge-release-verify-"));
   const tarballDir = join(tempDir, "tarballs");
   const consumerProjectDir = join(tempDir, "consumer");
+  const globalPrefixDir = join(tempDir, "global-prefix");
   const checks: ReleaseVerifyEntry[] = [];
 
   mkdirSync(tarballDir, { recursive: true });
   mkdirSync(consumerProjectDir, { recursive: true });
+  mkdirSync(globalPrefixDir, { recursive: true });
   writeFileSync(
     join(consumerProjectDir, "package.json"),
     JSON.stringify(
@@ -271,6 +334,7 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
       targetScope: TARGET_NPM_SCOPE,
       tempDir,
       consumerProjectDir,
+      globalPrefixDir,
       tarballs,
       checks,
       ready: false
@@ -378,6 +442,51 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
           ? "Installed CLI ran release check --json successfully against the workspace."
           : `Installed CLI failed release check --json against the workspace: ${summarizeCommandOutput(cliCheck)}`
       );
+
+      const cliTarball = tarballs.find((tarball) => tarball.packageName === "@h9-foundry/agentforge-cli");
+      if (cliTarball) {
+        const globalInstall = runCommand("npm", ["install", "-g", "--prefix", globalPrefixDir, cliTarball.tarballPath], workspaceRoot, env);
+        pushCheck(
+          checks,
+          "global-cli-install",
+          "global-prefix install of packed CLI",
+          globalInstall.status === 0 ? "pass" : "fail",
+          globalInstall.status === 0
+            ? "Installed the packed CLI through a global-prefix path."
+            : `Failed to install the packed CLI through a global-prefix path: ${summarizeCommandOutput(globalInstall)}`
+        );
+
+        if (globalInstall.status === 0) {
+          const globalCliPackageRoot = join(globalPrefixDir, "lib", "node_modules", "@h9-foundry", "agentforge-cli");
+          verifyBundledCliDependencies(globalCliPackageRoot, checks, tarballs);
+
+          const globalEnv = {
+            ...env,
+            PATH: `${join(globalPrefixDir, "bin")}:${env.PATH ?? ""}`
+          };
+          const globalCliHelp = runCommand("agentforge", ["--help"], workspaceRoot, globalEnv);
+          pushCheck(
+            checks,
+            "global-cli-help",
+            "global CLI help",
+            globalCliHelp.status === 0 ? "pass" : "fail",
+            globalCliHelp.status === 0
+              ? "Global CLI binary rendered --help successfully from PATH."
+              : summarizeCommandOutput(globalCliHelp)
+          );
+
+          const globalCliVisualizerHelp = runCommand("agentforge", ["visualizer", "--help"], workspaceRoot, globalEnv);
+          pushCheck(
+            checks,
+            "global-cli-visualizer-help",
+            "global CLI visualizer help",
+            globalCliVisualizerHelp.status === 0 ? "pass" : "fail",
+            globalCliVisualizerHelp.status === 0
+              ? "Global CLI rendered visualizer --help successfully from PATH."
+              : summarizeCommandOutput(globalCliVisualizerHelp)
+          );
+        }
+      }
     }
   } else {
     pushCheck(
@@ -394,6 +503,7 @@ export function verifyReleaseArtifacts(cwd = process.cwd(), options: ReleaseVeri
     targetScope: TARGET_NPM_SCOPE,
     tempDir,
     consumerProjectDir,
+    globalPrefixDir,
     tarballs,
     checks,
     ready: checks.every((check) => check.status === "pass")

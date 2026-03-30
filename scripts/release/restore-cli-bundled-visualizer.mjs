@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(scriptDir, "..", "..");
 const cliNodeModulesRoot = join(workspaceRoot, "packages", "cli", "node_modules");
-const statePath = join(cliNodeModulesRoot, ".agentforge-visualizer-stage.json");
+const statePath = join(cliNodeModulesRoot, ".agentforge-first-party-stage.json");
 
 if (!existsSync(statePath)) {
   process.exit(0);
