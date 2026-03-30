@@ -41,6 +41,13 @@
     "!dist/**/*.spec.*"
   ],
   "bundleDependencies": [
+    "@h9-foundry/agentforge-audit",
+    "@h9-foundry/agentforge-context-engine",
+    "@h9-foundry/agentforge-policy-engine",
+    "@h9-foundry/agentforge-runtime",
+    "@h9-foundry/agentforge-schemas",
+    "@h9-foundry/agentforge-sdk",
+    "@h9-foundry/agentforge-shared-types",
     "@h9-foundry/agentforge-visualizer"
   ],
   "scripts": {
@@ -60,6 +67,8 @@
     "@h9-foundry/agentforge-visualizer": "workspace:^0.12.3",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
-    "zod": "^4.3.6"
+    "picomatch": "^4.0.4",
+    "zod": "^4.3.6",
+    "zod-to-json-schema": "^3.24.5"
   }
 }
