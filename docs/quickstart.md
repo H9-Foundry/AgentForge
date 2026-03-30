@@ -55,7 +55,22 @@ All examples in this document use `npx @h9-foundry/agentforge-cli ...` as the de
 
 ## Optional Installed CLI Path
 
-If you want a shorter repeated command inside one repository, install the published CLI locally and use `npx agentforge ...` instead of the full package name.
+If you plan to run AgentForge repeatedly, you now have two supported installed paths:
+
+- install globally and use direct `agentforge ...` commands across your machine
+- install locally in one repository and use `npx agentforge ...`
+
+Global install:
+
+```bash
+npm install -g @h9-foundry/agentforge-cli
+agentforge --help
+agentforge init --preset planning-discovery
+agentforge run planning-discovery --json
+agentforge explain last-run --json
+```
+
+Local repository install:
 
 ```bash
 npm install -D @h9-foundry/agentforge-cli
@@ -65,7 +80,7 @@ npx agentforge run planning-discovery --json
 npx agentforge explain last-run --json
 ```
 
-Use the full `npx @h9-foundry/agentforge-cli ...` form for the least-setup first run. Use the installed `npx agentforge ...` form when you want the same published CLI pinned in one repository with shorter commands.
+Use the full `npx @h9-foundry/agentforge-cli ...` form for the least-setup first run. Use direct `agentforge ...` after a global install when you want a machine-wide command. Use the installed `npx agentforge ...` form when you want the same published CLI pinned in one repository with shorter commands.
 
 ## Benchmarking After Setup
 
