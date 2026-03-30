@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-shared-types
 
+## 0.12.4
+
+### Patch Changes
+
+- @h9-foundry/agentforge-schemas@0.12.4
+
 ## 0.12.3
 
 ### Patch Changes
