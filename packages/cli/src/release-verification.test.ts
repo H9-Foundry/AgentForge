@@ -42,7 +42,7 @@ describe("release verification", () => {
     const parsed = JSON.parse(result.stdout) as {
       ready: boolean;
       tarballs: Array<{ tarballPath: string }>;
-      checks: Array<{ status: string }>;
+      checks: Array<{ id: string; status: string }>;
     };
 
     expect(result.status).toBe(0);
