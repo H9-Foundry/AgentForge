@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, relative } from "node:path";
 
 import { getPackageDir, sanitizeManifest, workspaceRoot } from "./package-manifest-utils.mjs";
 
@@ -18,6 +19,19 @@ const bundledPackageNames = [
   "@h9-foundry/agentforge-shared-types",
   "@h9-foundry/agentforge-visualizer"
 ];
+
+function findPackageRoot(resolvedEntryPath) {
+  let current = dirname(resolvedEntryPath);
+
+  while (current !== dirname(current)) {
+    if (existsSync(join(current, "package.json"))) {
+      return current;
+    }
+    current = dirname(current);
+  }
+
+  throw new Error(`Unable to locate package root for ${resolvedEntryPath}.`);
+}
 
 function stagePackage(packageName) {
   const packageDir = getPackageDir(packageName);
@@ -53,6 +67,22 @@ function stagePackage(packageName) {
   };
 
   writeFileSync(join(targetPath, "package.json"), JSON.stringify(sanitizedManifest, null, 2));
+
+  const packageRequire = createRequire(join(packageDir, "package.json"));
+  const externalDependencies = Object.keys(packageManifest.dependencies ?? {}).filter(
+    (dependencyName) => !dependencyName.startsWith("@h9-foundry/")
+  );
+  const targetNodeModulesRoot = join(targetPath, "node_modules");
+
+  for (const dependencyName of externalDependencies) {
+    const dependencyEntry = packageRequire.resolve(dependencyName);
+    const dependencyRoot = findPackageRoot(dependencyEntry);
+    const dependencyTargetPath = join(targetNodeModulesRoot, ...dependencyName.split("/"));
+
+    mkdirSync(join(targetNodeModulesRoot, ...dependencyName.split("/").slice(0, -1)), { recursive: true });
+    rmSync(dependencyTargetPath, { recursive: true, force: true });
+    cpSync(dependencyRoot, dependencyTargetPath, { recursive: true, dereference: true });
+  }
 }
 
 mkdirSync(cliNodeModulesRoot, { recursive: true });

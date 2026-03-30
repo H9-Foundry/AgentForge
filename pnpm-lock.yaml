@@ -260,15 +260,9 @@ importers:
       js-yaml:
         specifier: ^4.1.0
         version: 4.1.1
-      picomatch:
-        specifier: ^4.0.4
-        version: 4.0.4
       zod:
         specifier: ^4.3.6
         version: 4.3.6
-      zod-to-json-schema:
-        specifier: ^3.24.5
-        version: 3.25.1(zod@4.3.6)
 
   packages/context-engine:
     dependencies:
