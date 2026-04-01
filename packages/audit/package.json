@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-audit",
-  "version": "0.12.6",
+  "version": "0.12.7",
   "description": "Audit bundle generation and reporting utilities for AgentForge workflow runs.",
   "license": "MIT",
   "author": "H9 Foundry",

@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.12.7
+
+### Patch Changes
+
+- dcdd428: Fix onboarding so the published CLI suggests a runnable starter workflow in clean external repos, and add regression coverage for release-shaped package-user onboarding guidance.
+
 ## 0.12.6
 
 ## 0.12.5
