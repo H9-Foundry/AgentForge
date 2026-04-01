@@ -437,6 +437,18 @@ describe("cli smoke flows", () => {
     expect(existsSync(join(root, ".agentops", "control", "pr-review.yaml"))).toBe(true);
   });
 
+  it("writes imported CI guidance into the release and pipeline workflow assets during init", () => {
+    const root = createGitFixture("agentops-cli-release-guidance-");
+
+    initProject(root, { preset: "planning-discovery" });
+
+    const releaseWorkflow = readFileSync(join(root, ".agentops", "workflows", "release-readiness.yaml"), "utf8");
+    const pipelineWorkflow = readFileSync(join(root, ".agentops", "workflows", "pipeline-evidence-review.yaml"), "utf8");
+
+    expect(releaseWorkflow).toContain("imported CI evidence is an optional path that improves release completeness signals");
+    expect(pipelineWorkflow).toContain("imported CI evidence is optional but can turn missing CI signals into present, decision-ready evidence");
+  });
+
   it("records resolved control-plane configuration in workflow bundles and validates the config surface", async () => {
     const root = createGitFixture("agentops-cli-config-validate-");
     initProject(root, { preset: "planning-discovery" });

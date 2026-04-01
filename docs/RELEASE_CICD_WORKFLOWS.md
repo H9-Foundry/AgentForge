@@ -51,6 +51,139 @@ Not yet available:
 - publish or deploy orchestration on the default local path
 - broader host-agnostic pipeline orchestration beyond the current local review family
 
+## Package-User Evidence Guidance
+
+For package users evaluating the published CLI in a real repository:
+
+- direct repo evidence is enough to run `release-readiness` and `pipeline-evidence-review`
+- imported CI evidence is optional, but it improves the resulting evidence picture
+- when imported CI evidence is present, release and pipeline reports can move from `CI Evidence (missing)` to `CI Evidence (present)` / `imported-ci-evidence: passed`
+- `qa-review` only shows CI evidence when CI evidence is actually supplied to QA; adding CI evidence to release or pipeline does not backfill QA automatically
+
+This is the current supported package-user story:
+
+- use normal repo surfaces such as `.github/workflows/*`, docs, or prior workflow bundles when you want a minimal local-first run
+- add bounded local CI evidence exports under `.agentops/evidence/*.json` when you want stronger release and pipeline evidence completeness
+- keep imported CI evidence local and explicit; AgentForge does not auto-fetch CI state on the default path
+
+## Concrete Imported-CI Example
+
+The following example matches the proven external package-user path from the standing AI-Gorilla pilot.
+
+Create two bounded local CI evidence files:
+
+```bash
+mkdir -p .agentops/evidence
+cat > .agentops/evidence/github-actions-ci.json <<'EOF'
+{
+  "sourcePath": ".agentops/evidence/github-actions-ci.json",
+  "repository": "your-org/your-repo",
+  "workflowName": "CI",
+  "workflowRunId": 2026040101,
+  "runAttempt": 1,
+  "event": "push",
+  "headBranch": "main",
+  "headSha": "0123456789abcdef0123456789abcdef01234567",
+  "status": "completed",
+  "conclusion": "success",
+  "htmlUrl": "https://github.com/your-org/your-repo/actions/runs/2026040101",
+  "jobs": [
+    {
+      "name": "lint",
+      "status": "completed",
+      "conclusion": "success",
+      "htmlUrl": "https://github.com/your-org/your-repo/actions/runs/2026040101/job/1"
+    },
+    {
+      "name": "build",
+      "status": "completed",
+      "conclusion": "success",
+      "htmlUrl": "https://github.com/your-org/your-repo/actions/runs/2026040101/job/2"
+    }
+  ],
+  "checkRuns": []
+}
+EOF
+
+cat > .agentops/evidence/generic-ci.json <<'EOF'
+{
+  "sourcePath": ".agentops/evidence/generic-ci.json",
+  "providerName": "Staging Health",
+  "host": "staging.example.local",
+  "repository": "your-org/your-repo",
+  "pipelineName": "Staging Health",
+  "pipelineRunId": "staging-health-20260401",
+  "runAttempt": 1,
+  "event": "workflow_dispatch",
+  "branch": "main",
+  "commitSha": "0123456789abcdef0123456789abcdef01234567",
+  "status": "completed",
+  "conclusion": "success",
+  "htmlUrl": "https://staging.example.local/pipelines/staging-health-20260401",
+  "jobs": [
+    {
+      "name": "health-check",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": []
+}
+EOF
+```
+
+Reference those files from the release and pipeline requests:
+
+```yaml
+# .agentops/requests/release.yaml
+releaseScope: Prepare the next release candidate
+versionTargets:
+  - name: your-package-or-app
+    version: 0.0.1
+qaReportRefs:
+  - .agentops/runs/<qa-run-id>/bundle.json
+securityReportRefs:
+  - .agentops/runs/<security-run-id>/bundle.json
+evidenceSources:
+  - docs/ENVIRONMENTS.md
+  - .agentops/evidence/github-actions-ci.json
+  - .agentops/evidence/generic-ci.json
+constraints:
+  - Keep release readiness read-only by default
+```
+
+```yaml
+# .agentops/requests/pipeline.yaml
+pipelineScope: Review the current candidate pipeline set
+focusAreas:
+  - pipeline-risk
+  - deployment-readiness
+constraints:
+  - Keep the workflow read-only
+qaReportRefs:
+  - .agentops/runs/<qa-run-id>/bundle.json
+securityReportRefs:
+  - .agentops/runs/<security-run-id>/bundle.json
+releaseReportRefs:
+  - .agentops/runs/<release-run-id>/bundle.json
+evidenceSources:
+  - .agentops/evidence/github-actions-ci.json
+  - .agentops/evidence/generic-ci.json
+```
+
+Run the two workflows on the published CLI:
+
+```bash
+npx -y @h9-foundry/agentforge-cli@<version> run release-readiness --json
+npx -y @h9-foundry/agentforge-cli@<version> run pipeline-evidence-review --json
+```
+
+Expected effect:
+
+- `release-readiness` reports imported CI evidence as passed/present instead of missing
+- `pipeline-evidence-review` becomes ready with no blocker caused by missing imported CI evidence
+- `/outcomes`, `/api/outcomes/export.json`, and `visualizer export --format json` should reflect the same release/pipeline evidence state
+
 ## Recommended Initial Workflow Family
 
 Phase 2 now builds on the current official local release and CI review family:

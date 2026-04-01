@@ -322,6 +322,62 @@ npx @h9-foundry/agentforge-cli explain last-run --json
 
 The maintenance bundle should include one `maintenance-report` lifecycle artifact with deterministic evidence sources, affected packages or docs, routing recommendation, and bounded next-step guidance. The default path remains read-only and does not apply dependency updates or docs edits automatically.
 
+## Add Imported CI Evidence For Release And Pipeline Reviews
+
+`release-readiness` and `pipeline-evidence-review` do not require imported CI evidence to run. Direct repo evidence such as `.github/workflows/*`, docs, and prior workflow bundles is enough for a bounded local review.
+
+Imported CI evidence is the supported enhancement path when you want stronger release and pipeline evidence completeness:
+
+- it is optional
+- it can turn `CI Evidence (missing)` into `CI Evidence (present)` / `imported-ci-evidence: passed`
+- it does not automatically apply to `qa-review`; QA only shows CI evidence if CI evidence is actually supplied to QA
+
+Use bounded local evidence files under `.agentops/evidence/*.json` and reference them from the release and pipeline requests:
+
+```bash
+mkdir -p .agentops/evidence
+cat > .agentops/evidence/github-actions-ci.json <<'EOF'
+{
+  "sourcePath": ".agentops/evidence/github-actions-ci.json",
+  "repository": "your-org/your-repo",
+  "workflowName": "CI",
+  "workflowRunId": 2026040101,
+  "status": "completed",
+  "conclusion": "success",
+  "htmlUrl": "https://github.com/your-org/your-repo/actions/runs/2026040101",
+  "jobs": []
+}
+EOF
+```
+
+```yaml
+# .agentops/requests/release.yaml
+evidenceSources:
+  - docs/ENVIRONMENTS.md
+  - .agentops/evidence/github-actions-ci.json
+```
+
+```yaml
+# .agentops/requests/pipeline.yaml
+evidenceSources:
+  - .agentops/evidence/github-actions-ci.json
+```
+
+Then run the published package path:
+
+```bash
+npx -y @h9-foundry/agentforge-cli@<version> run release-readiness --json
+npx -y @h9-foundry/agentforge-cli@<version> run pipeline-evidence-review --json
+npx -y @h9-foundry/agentforge-cli@<version> visualizer --open
+```
+
+In the visualizer, expect:
+
+- `/outcomes` to show release/pipeline CI evidence as present when the supplied CI evidence is valid
+- `/api/outcomes/export.json` and `visualizer export --format json` to match that same state for the same run corpus
+
+See [docs/RELEASE_CICD_WORKFLOWS.md](RELEASE_CICD_WORKFLOWS.md) for a fuller two-file imported-CI example covering both GitHub Actions and a host-agnostic pipeline export.
+
 ## Contributor And Source-Build Path
 
 This section is for contributors working on AgentForge itself. If you are only evaluating the product in another repository, stop at the published-CLI sections above and use the wiki as a curated how-to layer only; repo docs remain canonical.

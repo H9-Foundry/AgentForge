@@ -682,7 +682,7 @@ nodes:
 
 const releaseWorkflowTemplate = `version: 1
 name: release-readiness
-description: Validate a bounded release-readiness request while keeping trusted publish automation separate.
+description: Validate a bounded release-readiness request while keeping trusted publish automation separate; direct repo evidence is enough to run it, and imported CI evidence is an optional path that improves release completeness signals.
 trigger: manual
 catalog:
   domain: release
@@ -709,7 +709,7 @@ nodes:
 
 const pipelineWorkflowTemplate = `version: 1
 name: pipeline-evidence-review
-description: Review bounded local pipeline evidence through the shared CI model without assuming a release target.
+description: Review bounded local pipeline evidence through the shared CI model without assuming a release target; imported CI evidence is optional but can turn missing CI signals into present, decision-ready evidence.
 trigger: manual
 catalog:
   domain: release
