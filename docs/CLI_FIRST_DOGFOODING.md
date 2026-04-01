@@ -29,6 +29,8 @@ A user-facing capability is only externally ready when:
 
 If a capability works only through direct package entrypoints or maintainer-only source-build commands, it is not externally ready.
 
+For external package-user validation, the proof path is a clean external repo plus the published CLI. Local source behavior can help debug, but it does not close a package-user gap unless the exact repro also works through the published package path.
+
 ## Visualizer Rule
 
 For the visualizer specifically:
@@ -41,3 +43,12 @@ For the visualizer specifically:
 are the default dogfooding surfaces.
 
 Maintainer-only shortcuts such as `pnpm visualizer:dev` remain valid for local debugging but do not replace CLI-path acceptance.
+
+## External Feedback Rule
+
+For long-lived external package-user pilots:
+
+- Discussion-first feedback is preferred
+- promote only reproducible reusable defects into Issues
+- include exact version, exact command, and exact bundle path in every promoted issue
+- do not mark a package-user issue fixed until the exact repro succeeds on the published CLI in a clean external repo
