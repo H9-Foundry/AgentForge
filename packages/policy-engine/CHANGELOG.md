@@ -1,5 +1,12 @@
 # @h9-foundry/agentforge-policy-engine
 
+## 0.12.6
+
+### Patch Changes
+
+- @h9-foundry/agentforge-schemas@0.12.6
+- @h9-foundry/agentforge-shared-types@0.12.6
+
 ## 0.12.5
 
 ### Patch Changes

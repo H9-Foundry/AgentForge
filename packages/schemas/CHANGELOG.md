@@ -1,5 +1,7 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.12.6
+
 ## 0.12.5
 
 ## 0.12.4
