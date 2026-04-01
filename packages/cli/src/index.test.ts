@@ -521,6 +521,7 @@ describe("cli smoke flows", () => {
   it("treats complex TypeScript app repos as application repos without forcing a package starter profile", () => {
     const root = createGitFixture("agentops-cli-app-onboard-", "https://github.com/H9-Foundry/AI-Gorilla.git");
     mkdirSync(join(root, "src"), { recursive: true });
+    mkdirSync(join(root, "admin"), { recursive: true });
     mkdirSync(join(root, "public"), { recursive: true });
     mkdirSync(join(root, "supabase"), { recursive: true });
     mkdirSync(join(root, ".github", "workflows"), { recursive: true });
@@ -534,7 +535,7 @@ describe("cli smoke flows", () => {
     expect(profile.repoName).toBe("AI-Gorilla");
     expect(profile.repoFit.contract.structure.architectureStyle).toBe("application-repo");
     expect(profile.repoFit.contract.structure.sourceRoots).toEqual(
-      expect.arrayContaining(["src", "public", "supabase", "docs"])
+      expect.arrayContaining(["src", "admin", "public", "supabase", "docs"])
     );
     expect(profile.repoFit.contract.structure.pathConventions).toEqual(
       expect.arrayContaining([
