@@ -5597,7 +5597,7 @@ function listTopLevelDirectories(root: string): string[] {
 }
 
 function detectRepoSourceRoots(root: string): string[] {
-  const candidates = ["packages", "apps", "services", "libs", "src", "app", "pages", "public", "supabase", "tests", "test", "docs", "infra", "scripts"];
+  const candidates = ["packages", "apps", "services", "libs", "src", "admin", "app", "pages", "public", "supabase", "tests", "test", "docs", "infra", "scripts"];
   return candidates.filter((candidate) => existsSync(join(root, candidate)));
 }
 
