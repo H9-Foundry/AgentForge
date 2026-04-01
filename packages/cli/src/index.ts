@@ -127,6 +127,7 @@ export type { ReleaseVerifyEntry, ReleaseVerifyResult, ReleaseVerifyTarball } fr
 
 export const startupPresetNames = ["planning-discovery"] as const;
 export type StartupPresetName = (typeof startupPresetNames)[number];
+export const packageUserCliCommand = "npx -y @h9-foundry/agentforge-cli";
 
 const controlDirName = "control";
 const policyPresetsFileName = "policy-presets.yaml";
@@ -5950,10 +5951,10 @@ export function onboardProject(
     profile,
     repoFit,
     nextSteps: {
-      firstWorkflowCommand: `agentforge run ${runnableWorkflow} --json`,
-      firstBenchmarkCommand: `agentforge benchmark --mode ${profile.recommendedBenchmarkMode}`,
-      outcomesCommand: "agentforge visualizer --open",
-      benchmarksCommand: "agentforge visualizer --open"
+      firstWorkflowCommand: `${packageUserCliCommand} run ${runnableWorkflow} --json`,
+      firstBenchmarkCommand: `${packageUserCliCommand} benchmark --mode ${profile.recommendedBenchmarkMode}`,
+      outcomesCommand: `${packageUserCliCommand} visualizer --open`,
+      benchmarksCommand: `${packageUserCliCommand} visualizer --open`
     }
   };
 }
