@@ -518,6 +518,28 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("bootstraps a runnable starter workflow during onboarding even when the recommended workflow is release-readiness", async () => {
+    const root = createGitFixture("agentops-cli-release-onboard-runnable-");
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: ci\n");
+    writeFileSync(join(root, "docs", "release.md"), "# Release\n");
+    writeFileSync(join(root, "docs", "deployment.md"), "# Deployment\n");
+
+    const result = onboardProject(root);
+
+    expect(result.profile.recommendedFirstWorkflow).toBe("release-readiness");
+    expect(result.preset?.workflow).toBe("planning-discovery");
+    expect(result.nextSteps.firstWorkflowCommand).toBe("agentforge run planning-discovery --json");
+    expect(existsSync(join(root, ".agentops", "requests", "planning.yaml"))).toBe(true);
+
+    const run = await runLocalWorkflow("planning-discovery", root);
+    const bundle = readJson<{ workflow: string; status: string }>(run.jsonPath);
+
+    expect(bundle.workflow).toBe("planning-discovery");
+    expect(bundle.status).toBe("success");
+  });
+
   it("treats complex TypeScript app repos as application repos without forcing a package starter profile", () => {
     const root = createGitFixture("agentops-cli-app-onboard-", "https://github.com/H9-Foundry/AI-Gorilla.git");
     mkdirSync(join(root, "src"), { recursive: true });
@@ -880,6 +902,33 @@ describe("cli smoke flows", () => {
     expect(parsed.profile.workflowFamilies).toContain("review/planning");
     expect(parsed.nextSteps.firstBenchmarkCommand).toContain("agentforge benchmark --mode live");
     expect((parsed as { repoFit?: { contractPath?: string; recommendedProfileId?: string } }).repoFit?.contractPath).toBe(".agentops/repo-fit.yaml");
+  }, 90_000);
+
+  it("prints runnable onboarding guidance for release-shaped repos in both JSON and text output", () => {
+    const root = createGitFixture("agentops-cli-release-onboard-json-");
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: ci\n");
+    writeFileSync(join(root, "docs", "release.md"), "# Release\n");
+    writeFileSync(join(root, "docs", "deployment.md"), "# Deployment\n");
+    ensureBuiltCli();
+
+    const jsonRun = runBuiltCli(["onboard", "--json"], root);
+    expect(jsonRun.status, getSpawnErrorText(jsonRun)).toBe(0);
+    const parsed = JSON.parse(String(jsonRun.stdout)) as {
+      profile: { recommendedFirstWorkflow: string };
+      preset?: { workflow?: string };
+      nextSteps: { firstWorkflowCommand: string };
+    };
+    expect(parsed.profile.recommendedFirstWorkflow).toBe("release-readiness");
+    expect(parsed.preset?.workflow).toBe("planning-discovery");
+    expect(parsed.nextSteps.firstWorkflowCommand).toBe("agentforge run planning-discovery --json");
+
+    const textRun = runBuiltCli(["onboard"], root);
+    expect(textRun.status, getSpawnErrorText(textRun)).toBe(0);
+    expect(textRun.stdout).toContain("Recommended first workflow: release-readiness");
+    expect(textRun.stdout).toContain("Runnable starter workflow: planning-discovery");
+    expect(textRun.stdout).toContain("Next workflow: agentforge run planning-discovery --json");
   }, 90_000);
 
   it("routes eval benchmarking through the top-level benchmark command", () => {

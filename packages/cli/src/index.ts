@@ -5584,6 +5584,17 @@ function inferRecommendedPreset(workflow: string): StartupPresetName[] {
   return workflow === "planning-discovery" ? ["planning-discovery"] : [];
 }
 
+function resolveOnboardingStartupPreset(
+  profile: OnboardingProfile,
+  applyRecommendedPreset: boolean | undefined
+): StartupPresetName | undefined {
+  if (applyRecommendedPreset === false) {
+    return undefined;
+  }
+
+  return profile.recommendedStarterPresets[0] ?? "planning-discovery";
+}
+
 function repoFitContractPath(root: string): string {
   return join(root, ".agentops", repoFitFileName);
 }
@@ -5927,9 +5938,10 @@ export function onboardProject(
     ...initialProfile,
     repoFit
   };
-  const presetToApply = options?.applyRecommendedPreset === false ? undefined : profile.recommendedStarterPresets[0];
+  const presetToApply = resolveOnboardingStartupPreset(profile, options?.applyRecommendedPreset);
   const initResult = initProject(root, presetToApply ? { preset: presetToApply } : undefined);
   writeYamlFile(repoFitContractPath(root), repoFit.contract);
+  const runnableWorkflow = initResult.preset?.workflow ?? profile.recommendedFirstWorkflow;
 
   return {
     root: initResult.root,
@@ -5938,7 +5950,7 @@ export function onboardProject(
     profile,
     repoFit,
     nextSteps: {
-      firstWorkflowCommand: `agentforge run ${profile.recommendedFirstWorkflow} --json`,
+      firstWorkflowCommand: `agentforge run ${runnableWorkflow} --json`,
       firstBenchmarkCommand: `agentforge benchmark --mode ${profile.recommendedBenchmarkMode}`,
       outcomesCommand: "agentforge visualizer --open",
       benchmarksCommand: "agentforge visualizer --open"
