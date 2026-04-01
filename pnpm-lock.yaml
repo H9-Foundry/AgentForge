@@ -252,7 +252,7 @@ importers:
         specifier: workspace:*
         version: link:../shared-types
       '@h9-foundry/agentforge-visualizer':
-        specifier: workspace:^0.12.6
+        specifier: workspace:^0.12.7
         version: link:../visualizer
       commander:
         specifier: ^14.0.3

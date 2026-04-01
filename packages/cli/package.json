@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-cli",
-  "version": "0.12.6",
+  "version": "0.12.7",
   "description": "Secure-by-default CLI for AgentForge repo-first software engineering workflows.",
   "license": "MIT",
   "author": "H9 Foundry",
@@ -64,7 +64,7 @@
     "@h9-foundry/agentforge-schemas": "workspace:*",
     "@h9-foundry/agentforge-sdk": "workspace:*",
     "@h9-foundry/agentforge-shared-types": "workspace:*",
-    "@h9-foundry/agentforge-visualizer": "workspace:^0.12.6",
+    "@h9-foundry/agentforge-visualizer": "workspace:^0.12.7",
     "commander": "^14.0.3",
     "js-yaml": "^4.1.0",
     "zod": "^4.3.6"
