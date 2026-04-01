@@ -1,5 +1,17 @@
 # @h9-foundry/agentforge-runtime
 
+## 0.12.9
+
+### Patch Changes
+
+- 9128276: Clarify the package-user guidance for imported CI evidence in release and pipeline workflows. The published CLI now describes imported CI evidence as an optional path that improves release and pipeline completeness signals, and the docs include a concrete external-user example using bounded local CI evidence files with the published package path.
+- Updated dependencies [9128276]
+  - @h9-foundry/agentforge-schemas@0.12.9
+  - @h9-foundry/agentforge-shared-types@0.12.9
+  - @h9-foundry/agentforge-sdk@0.12.9
+  - @h9-foundry/agentforge-policy-engine@0.12.9
+  - @h9-foundry/agentforge-audit@0.12.9
+
 ## 0.12.8
 
 ### Patch Changes
