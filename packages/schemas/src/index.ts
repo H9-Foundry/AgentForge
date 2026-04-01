@@ -1056,9 +1056,17 @@ export const releaseVerificationCheckSchema = z.object({
   detail: z.string().min(1).optional()
 });
 
+export const releaseTargetModeSchema = z.enum(["workspace-packages", "application-revision"]);
+
 export const releaseVersionTargetSchema = z.object({
   name: z.string().min(1),
   version: z.string().min(1)
+});
+
+export const applicationReleaseTargetSchema = z.object({
+  identifier: z.string().min(1),
+  versionLabel: z.string().min(1),
+  revisionRef: z.string().min(1).optional()
 });
 
 export const releaseVersionResolutionSchema = z.object({
@@ -1094,11 +1102,47 @@ export const releaseCiEvidenceSummarySchema = z.object({
 export const releaseRequestSchema = z.object({
   meta: requestMetaSchema.optional(),
   releaseScope: z.string().min(1),
-  versionTargets: z.array(releaseVersionTargetSchema).min(1),
+  releaseTargetMode: releaseTargetModeSchema.default("workspace-packages"),
+  versionTargets: z.array(releaseVersionTargetSchema).default([]),
+  applicationTarget: applicationReleaseTargetSchema.optional(),
   qaReportRefs: z.array(z.string().min(1)).default([]),
   securityReportRefs: z.array(z.string().min(1)).default([]),
   evidenceSources: z.array(z.string().min(1)).default([]),
   constraints: z.array(z.string().min(1)).default([])
+}).superRefine((value, ctx) => {
+  if (value.releaseTargetMode === "workspace-packages") {
+    if (value.versionTargets.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["versionTargets"],
+        message: "At least one version target is required for workspace package releases."
+      });
+    }
+    if (value.applicationTarget) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["applicationTarget"],
+        message: "applicationTarget is only valid when releaseTargetMode is application-revision."
+      });
+    }
+  }
+
+  if (value.releaseTargetMode === "application-revision") {
+    if (!value.applicationTarget) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["applicationTarget"],
+        message: "applicationTarget is required for application revision releases."
+      });
+    }
+    if (value.versionTargets.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["versionTargets"],
+        message: "versionTargets must be omitted when releaseTargetMode is application-revision."
+      });
+    }
+  }
 });
 
 export const deploymentRequestSchema = z.object({
@@ -1499,7 +1543,9 @@ export const pipelineEvidenceNormalizationSchema = z.object({
 
 export const releaseArtifactPayloadSchema = z.object({
   releaseScope: z.string().min(1),
-  versionTargets: z.array(releaseVersionTargetSchema).min(1),
+  releaseTargetMode: releaseTargetModeSchema.default("workspace-packages"),
+  versionTargets: z.array(releaseVersionTargetSchema).default([]),
+  applicationTarget: applicationReleaseTargetSchema.optional(),
   readinessStatus: z.enum(["ready", "blocked", "partial"]),
   verificationChecks: z.array(releaseVerificationCheckSchema).default([]),
   versionResolutions: z.array(releaseVersionResolutionSchema).default([]),
@@ -2330,6 +2376,7 @@ const releaseArtifactFixture = {
   summary: "Release readiness report for the lifecycle artifact schema work.",
   payload: {
     releaseScope: "Patch release for schema contracts",
+    releaseTargetMode: "workspace-packages",
     versionTargets: [{ name: "@h9-foundry/agentforge-schemas", version: "0.4.1" }],
     readinessStatus: "ready",
     verificationChecks: [{ name: "release-verify", status: "passed" }],
@@ -2864,6 +2911,7 @@ const pipelineRequestFixture = {
 
 const releaseRequestFixture = {
   releaseScope: "Prepare the 0.7.0 candidate for maintainer review",
+  releaseTargetMode: "workspace-packages",
   versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.7.0" }],
   qaReportRefs: [".agentops/runs/run-789/bundle.json"],
   securityReportRefs: [".agentops/runs/run-790/bundle.json"],

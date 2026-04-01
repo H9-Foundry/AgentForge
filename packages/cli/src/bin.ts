@@ -872,7 +872,7 @@ visualizer
   .option("--benchmark-ledger <path>", "Use an explicit benchmark-ledger JSON path.")
   .option("--format <format>", "Export format: json or markdown.", "json")
   .option("--output <path>", "Write the export to a file instead of stdout.")
-  .action((options: {
+  .action(async (options: {
     runsRoot?: string;
     benchmarkLedger?: string;
     format?: string;
@@ -882,7 +882,7 @@ visualizer
       throw new Error(`Unsupported visualizer export format: ${options.format}. Supported formats: json, markdown`);
     }
 
-    const result = exportVisualizerOutcomes({
+    const result = await exportVisualizerOutcomes({
       runsRoot: options.runsRoot,
       benchmarkLedgerPath: options.benchmarkLedger,
       format: options.format,

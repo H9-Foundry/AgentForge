@@ -11,14 +11,6 @@ import { buildAuditBundle, createAuditEntry, renderAuditBundleMarkdown } from "@
 import { createWorkflowState, detectLanguages, findWorkspaceRoot } from "@h9-foundry/agentforge-context-engine";
 import { createPolicyEngine, loadPolicyDocument, resolvePolicy } from "@h9-foundry/agentforge-policy-engine";
 import { runWorkflow } from "@h9-foundry/agentforge-runtime";
-import {
-  createOutcomesExportDocument,
-  readVisualizerSummary,
-  renderOutcomesExportMarkdown,
-  resolveBenchmarkLedgerPath as resolveVisualizerBenchmarkLedgerPath,
-  resolveRunsRoot as resolveVisualizerRunsRoot,
-  startVisualizerServer
-} from "@h9-foundry/agentforge-visualizer";
 import type {
   OutcomesExportDocument,
   VisualizerConfigAgentBindingEditorModel,
@@ -31,7 +23,7 @@ import type {
   VisualizerConfigPreviewResult,
   VisualizerConfigRenderResult,
   VisualizerConfigSaveResult
-} from "@h9-foundry/agentforge-visualizer";
+} from "../../visualizer/src/index.js";
 import {
   agentforgeConfigSchema,
   auditBundleSchema,
@@ -110,6 +102,30 @@ import type {
   WorkflowDefinition
 } from "@h9-foundry/agentforge-shared-types";
 import type { RuntimeAgent, ToolAdapter } from "@h9-foundry/agentforge-sdk";
+
+type VisualizerModule = typeof import("../../visualizer/src/index.js");
+const visualizerPackageName = "@h9-foundry/agentforge-visualizer";
+type VisualizerLoadEditorInput = Parameters<NonNullable<VisualizerConfigEditor["loadEditorModel"]>>[0];
+type VisualizerRenderDocumentInput = Parameters<NonNullable<VisualizerConfigEditor["renderDocument"]>>[0];
+type VisualizerPreviewDocumentInput = Parameters<NonNullable<VisualizerConfigEditor["previewDocument"]>>[0];
+type VisualizerSaveDocumentInput = Parameters<NonNullable<VisualizerConfigEditor["saveDocument"]>>[0];
+
+let visualizerModulePromise: Promise<VisualizerModule> | undefined;
+
+async function loadVisualizerModule(): Promise<VisualizerModule> {
+  if (!visualizerModulePromise) {
+    visualizerModulePromise = import(visualizerPackageName)
+      .catch(async (error: unknown) => {
+        if (!(error instanceof Error) || !("code" in error) || error.code !== "ERR_MODULE_NOT_FOUND") {
+          throw error;
+        }
+
+        return import(new URL("../../visualizer/dist/index.js", import.meta.url).href) as Promise<VisualizerModule>;
+      }) as Promise<VisualizerModule>;
+  }
+
+  return visualizerModulePromise;
+}
 
 import { createBuiltinAdapters } from "./internal/builtin-adapters.js";
 import { createBuiltinAgentRegistry } from "./internal/builtin-agents.js";
@@ -362,7 +378,19 @@ const workflowFieldMetadata: Record<string, WorkflowFieldDescriptor[]> = {
   ],
   "release-readiness": [
     { path: "releaseScope", label: "Release Scope", input: "textarea" },
+    {
+      path: "releaseTargetMode",
+      label: "Release Target Mode",
+      input: "select",
+      options: [
+        { label: "Workspace Packages", value: "workspace-packages" },
+        { label: "Application Revision", value: "application-revision" }
+      ]
+    },
     { path: "versionTargets", label: "Version Targets", input: "name-version-array" },
+    { path: "applicationTarget.identifier", label: "Application Identifier", input: "text" },
+    { path: "applicationTarget.versionLabel", label: "Application Version Label", input: "text" },
+    { path: "applicationTarget.revisionRef", label: "Application Revision Ref", input: "text" },
     { path: "qaReportRefs", label: "QA Report References", input: "path-array" },
     { path: "securityReportRefs", label: "Security Report References", input: "path-array" },
     { path: "evidenceSources", label: "Evidence Sources", input: "path-array" },
@@ -1441,6 +1469,19 @@ function validateReleaseRequestCompleteness(request: ReleaseRequest): ReleaseReq
     throw new Error(
       "Release request is underspecified. Add at least one of qaReportRefs, securityReportRefs, or evidenceSources."
     );
+  }
+
+  if (request.releaseTargetMode === "workspace-packages" && request.versionTargets.length === 0) {
+    throw new Error("Release request is underspecified. Add at least one versionTarget for workspace package releases.");
+  }
+
+  if (request.releaseTargetMode === "application-revision") {
+    if (!request.applicationTarget) {
+      throw new Error("Release request is underspecified. Add applicationTarget for application revision releases.");
+    }
+    if (request.versionTargets.length > 0) {
+      throw new Error("Release request must not include versionTargets when releaseTargetMode is application-revision.");
+    }
   }
 
   return request;
@@ -3068,7 +3109,20 @@ function createEmptyRequestFields(workflowName: string): RequestEditorFieldState
     case "pipeline-evidence-review":
       return { pipelineScope: "", evidenceSources: [], qaReportRefs: [], securityReportRefs: [], releaseReportRefs: [], issueRefs: [], focusAreas: [], constraints: [] };
     case "release-readiness":
-      return { releaseScope: "", versionTargets: [], qaReportRefs: [], securityReportRefs: [], evidenceSources: [], constraints: [] };
+      return {
+        releaseScope: "",
+        releaseTargetMode: "workspace-packages",
+        versionTargets: [],
+        applicationTarget: {
+          identifier: "",
+          versionLabel: "",
+          revisionRef: ""
+        },
+        qaReportRefs: [],
+        securityReportRefs: [],
+        evidenceSources: [],
+        constraints: []
+      };
     case "deployment-gate-review":
       return { deploymentScope: "", targetEnvironment: "", evidenceSources: [], qaReportRefs: [], securityReportRefs: [], releaseReportRefs: [], pipelineReportRefs: [], issueRefs: [], constraints: [] };
     case "promotion-approval":
@@ -3164,7 +3218,7 @@ function requestFieldsFromState(fields: VisualizerConfigFieldModel[]): Record<st
 
     if (field.input === "name-version-array") {
       const values = Array.isArray(field.value)
-        ? field.value.flatMap((entry) => {
+        ? field.value.flatMap((entry: unknown) => {
             if (!isRecord(entry)) {
               return [];
             }
@@ -5423,13 +5477,17 @@ function createVisualizerConfigEditor(root: string): VisualizerConfigEditor {
 
   return {
     editingEnabled,
-    loadEditorModel: ({ workflow, target }) => loadVisualizerConfigEditorModel(root, { workflow, target }, editingEnabled),
-    renderDocument: ({ workflow, target, state }) => renderVisualizerConfigDocument(root, { workflow, target, state }),
+    loadEditorModel: ({ workflow, target }: VisualizerLoadEditorInput): VisualizerConfigEditorModel =>
+      loadVisualizerConfigEditorModel(root, { workflow, target }, editingEnabled),
+    renderDocument: ({ workflow, target, state }: VisualizerRenderDocumentInput): VisualizerConfigRenderResult =>
+      renderVisualizerConfigDocument(root, { workflow, target, state }),
     previewDocument: editingEnabled
-      ? async (input) => await previewVisualizerConfigDocument(root, input)
+      ? async (input: VisualizerPreviewDocumentInput): Promise<VisualizerConfigPreviewResult> =>
+          await previewVisualizerConfigDocument(root, input)
       : undefined,
     saveDocument: editingEnabled
-      ? async (input) => await saveVisualizerConfigDocument(root, input)
+      ? async (input: VisualizerSaveDocumentInput): Promise<VisualizerConfigSaveResult> =>
+          await saveVisualizerConfigDocument(root, input)
       : undefined
   };
 }
@@ -6771,6 +6829,12 @@ function openUrlInBrowser(url: string): void {
 }
 
 export async function launchVisualizer(options: VisualizerLaunchOptions = {}, cwd = process.cwd()): Promise<VisualizerLaunchResult> {
+  const {
+    readVisualizerSummary,
+    resolveBenchmarkLedgerPath: resolveVisualizerBenchmarkLedgerPath,
+    resolveRunsRoot: resolveVisualizerRunsRoot,
+    startVisualizerServer
+  } = await loadVisualizerModule();
   const workspaceRoot = findWorkspaceRoot(cwd);
   const runsRoot = resolveVisualizerRunsRoot(workspaceRoot, options.runsRoot);
   const benchmarkLedgerPath = resolveVisualizerBenchmarkLedgerPath(workspaceRoot, options.benchmarkLedgerPath);
@@ -6799,7 +6863,13 @@ export async function launchVisualizer(options: VisualizerLaunchOptions = {}, cw
   };
 }
 
-export function exportVisualizerOutcomes(options: VisualizerExportOptions = {}, cwd = process.cwd()): VisualizerExportResult {
+export async function exportVisualizerOutcomes(options: VisualizerExportOptions = {}, cwd = process.cwd()): Promise<VisualizerExportResult> {
+  const {
+    createOutcomesExportDocument,
+    renderOutcomesExportMarkdown,
+    resolveBenchmarkLedgerPath: resolveVisualizerBenchmarkLedgerPath,
+    resolveRunsRoot: resolveVisualizerRunsRoot
+  } = await loadVisualizerModule();
   const workspaceRoot = findWorkspaceRoot(cwd);
   const runsRoot = resolveVisualizerRunsRoot(workspaceRoot, options.runsRoot);
   const benchmarkLedgerPath = resolveVisualizerBenchmarkLedgerPath(workspaceRoot, options.benchmarkLedgerPath);

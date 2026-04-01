@@ -353,9 +353,31 @@ EOF
 ```yaml
 # .agentops/requests/release.yaml
 releaseScope: Prepare the next release candidate
+releaseTargetMode: workspace-packages
 versionTargets:
-  - name: your-package-or-app
+  - name: your-package
     version: 0.0.1
+qaReportRefs: []
+securityReportRefs: []
+evidenceSources:
+  - docs/ENVIRONMENTS.md
+  - .github/workflows/security-scan.yml
+  - .github/workflows/test.yml
+  - .agentops/evidence/github-actions-ci.json
+constraints:
+  - Keep release readiness read-only by default
+```
+
+For an application repo that is deployed as an app revision rather than published as a workspace package, switch the release request to application mode:
+
+```yaml
+# .agentops/requests/release.yaml
+releaseScope: Prepare the next application deployment candidate
+releaseTargetMode: application-revision
+applicationTarget:
+  identifier: ai-gorilla
+  versionLabel: main-4480479
+  revisionRef: 4480479
 qaReportRefs: []
 securityReportRefs: []
 evidenceSources:
@@ -396,6 +418,7 @@ In the visualizer, expect:
 
 - `/outcomes` to show release/pipeline CI evidence as present when the supplied CI evidence is valid
 - `/api/outcomes/export.json` and `visualizer export --format json` to match that same state for the same run corpus
+- `release-readiness` to accept either workspace package targets or an explicit application target, depending on the repo you are reviewing
 
 See [docs/RELEASE_CICD_WORKFLOWS.md](RELEASE_CICD_WORKFLOWS.md) for a fuller two-file imported-CI example covering both GitHub Actions and a host-agnostic pipeline export.
 

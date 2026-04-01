@@ -205,6 +205,38 @@ describe("schema fixtures", () => {
     ).toThrow();
   });
 
+  it("accepts application-revision release requests without workspace version targets", () => {
+    expect(() =>
+      releaseRequestSchema.parse({
+        releaseScope: "Prepare the application deployment candidate",
+        releaseTargetMode: "application-revision",
+        applicationTarget: {
+          identifier: "ai-gorilla",
+          versionLabel: "main-4480479",
+          revisionRef: "4480479"
+        },
+        qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+        securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+        evidenceSources: [".github/workflows/release.yml"],
+        constraints: ["Keep release readiness read-only by default"]
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects mixed workspace and application release target shapes", () => {
+    expect(() =>
+      releaseRequestSchema.parse({
+        releaseScope: "Prepare the application deployment candidate",
+        releaseTargetMode: "application-revision",
+        applicationTarget: {
+          identifier: "ai-gorilla",
+          versionLabel: "main-4480479"
+        },
+        versionTargets: [{ name: "@h9-foundry/agentforge-cli", version: "0.12.9" }]
+      })
+    ).toThrow(/versionTargets/i);
+  });
+
   it("exports JSON schema snapshots", () => {
     const jsonSchemas = getJsonSchemas();
 
