@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-sdk
 
+## 0.12.10
+
+### Patch Changes
+
+- @h9-foundry/agentforge-shared-types@0.12.10
+
 ## 0.12.9
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @h9-foundry/agentforge-schemas
 
+## 0.12.10
+
+### Patch Changes
+
+- 6ad383e: Add application-revision release targets for application repos, reconcile fixed-package publishes against the npm registry before failing Release Packages, and keep release-readiness/visualizer evidence output aligned with the new release target modes.
+
 ## 0.12.9
 
 ### Patch Changes

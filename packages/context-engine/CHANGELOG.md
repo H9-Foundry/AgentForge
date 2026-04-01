@@ -1,5 +1,13 @@
 # @h9-foundry/agentforge-context-engine
 
+## 0.12.10
+
+### Patch Changes
+
+- Updated dependencies [6ad383e]
+  - @h9-foundry/agentforge-schemas@0.12.10
+  - @h9-foundry/agentforge-shared-types@0.12.10
+
 ## 0.12.9
 
 ### Patch Changes
