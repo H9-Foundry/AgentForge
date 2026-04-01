@@ -215,6 +215,17 @@ function resolveWorkspacePackage(root: string | undefined, packageName: string):
     }
   }
 
+  const rootManifestPath = join(root, "package.json");
+  if (existsSync(rootManifestPath)) {
+    const parsed = JSON.parse(readFileSync(rootManifestPath, "utf8")) as unknown;
+    if (isRecord(parsed) && parsed.name === packageName && typeof parsed.version === "string") {
+      return {
+        currentVersion: parsed.version,
+        manifestPath: rootManifestPath
+      };
+    }
+  }
+
   return {};
 }
 
@@ -1230,7 +1241,18 @@ function declaredRepoRoots(contract: RepoFitContract | undefined): string[] {
 }
 
 function isRepoContractPathCandidate(pathValue: string): boolean {
+  const ignoredRootFiles = new Set([
+    "README",
+    "README.md",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lockb"
+  ]);
+
   return pathValue.length > 0 &&
+    !ignoredRootFiles.has(pathValue) &&
     !pathValue.startsWith(".agentops/") &&
     !pathValue.startsWith("#") &&
     !pathValue.startsWith("http://") &&

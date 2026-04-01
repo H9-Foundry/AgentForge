@@ -172,7 +172,10 @@ function resolveRepoPath(repoRoot: string, pathValue: string): { relativePath: s
 }
 
 function matchesAny(pathValue: string, patterns: readonly string[]): boolean {
-  return patterns.some((pattern) => picomatch(pattern)(pathValue));
+  return patterns.some((pattern) => {
+    const matcher = picomatch(pattern);
+    return matcher(pathValue) || (pathValue.startsWith(".") && pattern.startsWith("**") ? matcher(pathValue.slice(1)) : false);
+  });
 }
 
 function sanitizeUnknown(value: unknown, redactSecrets: (value: string) => string): unknown {

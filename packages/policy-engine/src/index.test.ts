@@ -83,6 +83,7 @@ describe("policy engine", () => {
     );
 
     expect(engine.canReadPath("/repo/.env").allowed).toBe(false);
+    expect(engine.canReadPath("/repo/.github/workflows/release.yml").allowed).toBe(true);
     expect(engine.canWritePath("/repo/tests/example.test.ts").requiresApproval).toBe(true);
   });
 
