@@ -62,7 +62,7 @@ For package users evaluating the published CLI in a real repository:
 
 This is the current supported package-user story:
 
-- use normal repo surfaces such as `.github/workflows/*`, docs, or prior workflow bundles when you want a minimal local-first run
+- use normal repo surfaces such as concrete files under `.github/workflows/`, docs, or prior workflow bundles when you want a minimal local-first run
 - add bounded local CI evidence exports under `.agentops/evidence/*.json` when you want stronger release and pipeline evidence completeness
 - keep imported CI evidence local and explicit; AgentForge does not auto-fetch CI state on the default path
 
