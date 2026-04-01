@@ -1,5 +1,20 @@
 # @h9-foundry/agentforge-cli
 
+## 0.12.10
+
+### Patch Changes
+
+- 6ad383e: Add application-revision release targets for application repos, reconcile fixed-package publishes against the npm registry before failing Release Packages, and keep release-readiness/visualizer evidence output aligned with the new release target modes.
+- Updated dependencies [6ad383e]
+  - @h9-foundry/agentforge-schemas@0.12.10
+  - @h9-foundry/agentforge-visualizer@0.12.10
+  - @h9-foundry/agentforge-context-engine@0.12.10
+  - @h9-foundry/agentforge-policy-engine@0.12.10
+  - @h9-foundry/agentforge-runtime@0.12.10
+  - @h9-foundry/agentforge-shared-types@0.12.10
+  - @h9-foundry/agentforge-audit@0.12.10
+  - @h9-foundry/agentforge-sdk@0.12.10
+
 ## 0.12.9
 
 ### Patch Changes

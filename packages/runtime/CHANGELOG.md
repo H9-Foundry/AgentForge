@@ -1,5 +1,16 @@
 # @h9-foundry/agentforge-runtime
 
+## 0.12.10
+
+### Patch Changes
+
+- Updated dependencies [6ad383e]
+  - @h9-foundry/agentforge-schemas@0.12.10
+  - @h9-foundry/agentforge-policy-engine@0.12.10
+  - @h9-foundry/agentforge-shared-types@0.12.10
+  - @h9-foundry/agentforge-audit@0.12.10
+  - @h9-foundry/agentforge-sdk@0.12.10
+
 ## 0.12.9
 
 ### Patch Changes
