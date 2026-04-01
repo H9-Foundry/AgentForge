@@ -20,6 +20,7 @@ import {
   renderReleaseGuide,
   runLocalWorkflow,
   scanProject,
+  packageUserCliCommand,
   startupPresetNames,
   validateControlPlane,
   verifyReleaseArtifacts
@@ -282,8 +283,8 @@ program
     if (result.preset) {
       console.log(result.preset.created ? `Created starter request: ${result.preset.requestPath}` : `Starter request already present: ${result.preset.requestPath}`);
       console.log(`Next: inspect or edit ${result.preset.requestPath}`);
-      console.log(`Then run: \`agentforge run ${result.preset.workflow} --json\``);
-      console.log("After the run, inspect `.agentops/runs/<run-id>/bundle.json` or run `agentforge explain last-run --json`.");
+      console.log(`Then run: \`${packageUserCliCommand} run ${result.preset.workflow} --json\``);
+      console.log(`After the run, inspect \`.agentops/runs/<run-id>/bundle.json\` or run \`${packageUserCliCommand} explain last-run --json\`.`);
     }
   });
 
@@ -557,7 +558,7 @@ program
     if (result.artifactCount > 0) {
       console.log(`Lifecycle artifacts: ${result.artifactKinds.join(", ")}`);
     }
-    console.log("Next: run `agentforge explain last-run` for a compact summary of this workflow run.");
+    console.log(`Next: run \`${packageUserCliCommand} explain last-run\` for a compact summary of this workflow run.`);
     console.log(`Blocked plugins: ${result.blockedPlugins}`);
   });
 
@@ -584,7 +585,7 @@ evalCommand
     if (result.evaluatedRunId) {
       console.log(`Evaluated run: ${result.evaluatedRunId}`);
     }
-    console.log("Next: run `agentforge explain last-run` for a compact summary of this eval run.");
+    console.log(`Next: run \`${packageUserCliCommand} explain last-run\` for a compact summary of this eval run.`);
   });
 
 evalCommand
@@ -609,7 +610,7 @@ evalCommand
     console.log(`Regressions: ${result.regressionCount}`);
     console.log(`Improvements: ${result.improvementCount}`);
     console.log(`Non-comparable differences: ${result.nonComparableCount}`);
-    console.log("Next: run `agentforge explain last-run` for a compact summary of this benchmark compare.");
+    console.log(`Next: run \`${packageUserCliCommand} explain last-run\` for a compact summary of this benchmark compare.`);
   });
 
 evalCommand

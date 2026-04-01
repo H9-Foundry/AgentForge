@@ -530,7 +530,7 @@ describe("cli smoke flows", () => {
 
     expect(result.profile.recommendedFirstWorkflow).toBe("release-readiness");
     expect(result.preset?.workflow).toBe("planning-discovery");
-    expect(result.nextSteps.firstWorkflowCommand).toBe("agentforge run planning-discovery --json");
+    expect(result.nextSteps.firstWorkflowCommand).toBe("npx -y @h9-foundry/agentforge-cli run planning-discovery --json");
     expect(existsSync(join(root, ".agentops", "requests", "planning.yaml"))).toBe(true);
 
     const run = await runLocalWorkflow("planning-discovery", root);
@@ -869,7 +869,7 @@ describe("cli smoke flows", () => {
     expect(run.status, getSpawnErrorText(run)).toBe(0);
     expect(run.stdout).toContain("Audit bundle:");
     expect(run.stdout).toContain("Summary:");
-    expect(run.stdout).toContain("agentforge explain last-run");
+    expect(run.stdout).toContain("npx -y @h9-foundry/agentforge-cli explain last-run");
   }, 90_000);
 
   it("prints a four-step quick path for the planning preset in plain-text mode", () => {
@@ -881,9 +881,9 @@ describe("cli smoke flows", () => {
     expect(run.status, getSpawnErrorText(run)).toBe(0);
     expect(run.stdout).toContain("Created starter request:");
     expect(run.stdout).toContain("inspect or edit");
-    expect(run.stdout).toContain("Then run: `agentforge run planning-discovery --json`");
+    expect(run.stdout).toContain("Then run: `npx -y @h9-foundry/agentforge-cli run planning-discovery --json`");
     expect(run.stdout).toContain(".agentops/runs/<run-id>/bundle.json");
-    expect(run.stdout).toContain("agentforge explain last-run --json");
+    expect(run.stdout).toContain("npx -y @h9-foundry/agentforge-cli explain last-run --json");
   }, 90_000);
 
   it("prints machine-readable onboarding guidance for repo-fit setup", () => {
@@ -900,7 +900,7 @@ describe("cli smoke flows", () => {
     expect(parsed.profile.recommendedFirstWorkflow).toBe("planning-discovery");
     expect(parsed.profile.recommendedBenchmarkMode).toBe("live");
     expect(parsed.profile.workflowFamilies).toContain("review/planning");
-    expect(parsed.nextSteps.firstBenchmarkCommand).toContain("agentforge benchmark --mode live");
+    expect(parsed.nextSteps.firstBenchmarkCommand).toContain("npx -y @h9-foundry/agentforge-cli benchmark --mode live");
     expect((parsed as { repoFit?: { contractPath?: string; recommendedProfileId?: string } }).repoFit?.contractPath).toBe(".agentops/repo-fit.yaml");
   }, 90_000);
 
@@ -922,13 +922,13 @@ describe("cli smoke flows", () => {
     };
     expect(parsed.profile.recommendedFirstWorkflow).toBe("release-readiness");
     expect(parsed.preset?.workflow).toBe("planning-discovery");
-    expect(parsed.nextSteps.firstWorkflowCommand).toBe("agentforge run planning-discovery --json");
+    expect(parsed.nextSteps.firstWorkflowCommand).toBe("npx -y @h9-foundry/agentforge-cli run planning-discovery --json");
 
     const textRun = runBuiltCli(["onboard"], root);
     expect(textRun.status, getSpawnErrorText(textRun)).toBe(0);
     expect(textRun.stdout).toContain("Recommended first workflow: release-readiness");
     expect(textRun.stdout).toContain("Runnable starter workflow: planning-discovery");
-    expect(textRun.stdout).toContain("Next workflow: agentforge run planning-discovery --json");
+    expect(textRun.stdout).toContain("Next workflow: npx -y @h9-foundry/agentforge-cli run planning-discovery --json");
   }, 90_000);
 
   it("routes eval benchmarking through the top-level benchmark command", () => {
