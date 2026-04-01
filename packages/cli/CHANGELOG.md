@@ -1,5 +1,22 @@
 # @h9-foundry/agentforge-cli
 
+## 0.12.6
+
+### Patch Changes
+
+- d6248bd: Improve onboarding repo-fit source root inference for application repos by including top-level `admin/` surfaces.
+
+  This prevents repeated advisory findings where planning and design workflows report `admin/` as out-of-contract immediately after onboarding in multi-surface app repositories.
+
+  - @h9-foundry/agentforge-schemas@0.12.6
+  - @h9-foundry/agentforge-shared-types@0.12.6
+  - @h9-foundry/agentforge-sdk@0.12.6
+  - @h9-foundry/agentforge-context-engine@0.12.6
+  - @h9-foundry/agentforge-policy-engine@0.12.6
+  - @h9-foundry/agentforge-runtime@0.12.6
+  - @h9-foundry/agentforge-audit@0.12.6
+  - @h9-foundry/agentforge-visualizer@0.12.6
+
 ## 0.12.5
 
 ### Patch Changes
