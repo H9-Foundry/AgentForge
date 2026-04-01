@@ -1,6 +1,6 @@
 {
   "name": "@h9-foundry/agentforge-policy-engine",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "description": "Policy evaluation, path gating, trust enforcement, and redaction for AgentForge workflows.",
   "license": "MIT",
   "author": "H9 Foundry",
