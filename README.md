@@ -139,7 +139,8 @@ Available in the published CLI:
 - `agentforge visualizer export --format json|markdown` now exports a normalized outcomes snapshot for CI artifacts or team review without introducing a hosted dependency
 - provider-backed runs now persist measured token usage in `.agentops/runs/.../bundle.json`, with local cost estimation when a provider/model entry exists in the runtime pricing registry
 - `agentforge eval benchmark-ledger --json`, `agentforge eval benchmark-record ... --prefill-run <run-id>`, and `agentforge eval benchmark-wizard ...` support the local benchmark ledger that powers adjudicated `/outcomes` overlays, including release speed/quality/token-spend comparisons
-- the next benchmark expansion after the AgentForge-first dogfood phase is the bounded CreateCVs portability phase in [docs/CREATECVS_PORTABILITY_PHASE.md](docs/CREATECVS_PORTABILITY_PHASE.md)
+- the standing complex external package-user pilot is AI-Gorilla, tracked in [docs/AI_GORILLA_PACKAGE_USER_PILOT.md](docs/AI_GORILLA_PACKAGE_USER_PILOT.md) and [Discussion #307](https://github.com/H9-Foundry/AgentForge/discussions/307)
+- the next bounded benchmark expansion after the AgentForge-first dogfood phase remains the CreateCVs portability phase in [docs/CREATECVS_PORTABILITY_PHASE.md](docs/CREATECVS_PORTABILITY_PHASE.md)
 - the first pre-benchmark portability smoke for that target is recorded in [docs/CREATECVS_PORTABILITY_SMOKE.md](docs/CREATECVS_PORTABILITY_SMOKE.md)
 - see [docs/VISUALIZER.md](docs/VISUALIZER.md) for the current launch path and [docs/VISUALIZER_DATA_CONTRACT.md](docs/VISUALIZER_DATA_CONTRACT.md) for the visualizer-facing run/ledger contract
 
@@ -474,6 +475,8 @@ Current dogfooding posture:
 
 - use AgentForge on AgentForge for planning, design, review, QA, and release verification
 - benchmark AgentForge on AgentForge against the same agent's default workflow before expanding the pilot to other repositories
+- use AI-Gorilla as the standing complex external package-user pilot, with [Discussion #307](https://github.com/H9-Foundry/AgentForge/discussions/307) as the canonical feedback thread and Issues only for reproducible reusable defects
+- keep CreateCVs as the first bounded external portability benchmark once the package-user path is stable enough to benchmark without changing the contract
 - do not treat it as a broad autonomous implementation engine yet
 
 Current onboarding focus:

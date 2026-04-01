@@ -4,6 +4,8 @@ AgentForge uses GitHub Issues as the primary planning and delivery source of tru
 
 This does not make GitHub Issues the canonical usage reference. Usage and onboarding guidance should stay versioned with the codebase in repo docs, while the GitHub wiki can provide curated how-to views that mirror those repo docs.
 
+For long-lived external package-user dogfood pilots, a GitHub Discussion may serve as the canonical narrative feedback sink, with GitHub Issues reserved for reproducible reusable defects promoted out of that discussion thread.
+
 ## Operating Model
 
 - roadmap intent is documented in `docs/`
@@ -21,6 +23,7 @@ This does not make GitHub Issues the canonical usage reference. Usage and onboar
 - open follow-up issues for deferred work instead of burying it in code comments
 - update canonical repo docs when user-facing behavior or usage guidance changes
 - update the relevant wiki pages when repo-doc-backed onboarding guidance changes
+- when an external package-user pilot uses a canonical Discussion, keep the linked defect issues aligned with that discussion so planning state does not drift
 
 ## Milestone Model
 

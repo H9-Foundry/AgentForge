@@ -17,6 +17,8 @@ The next guided-adoption step is already implemented on `main` but not yet part 
 
 It is not yet fully plug-and-play for less technical adopters. The published CLI now includes preset-based startup and the canonical four-step quick path, and the external support boundary is explicit: the CLI plus official workflows and presets are the supported external surface, while `agents/*` and `packages/registry-client` remain repo-internal. The remaining gap is broader ease-of-use beyond the first bounded local-first path.
 
+The standing complex external package-user pilot is now `AI-Gorilla`, tracked in [#318](https://github.com/H9-Foundry/AgentForge/issues/318) with [Discussion #307](https://github.com/H9-Foundry/AgentForge/discussions/307) as its canonical narrative thread. That pilot validates the published package-user path directly. The separate bounded portability benchmark target remains `CreateCVs`.
+
 ## Readiness Levels
 
 - `Planned`: the capability is a target, but the required product surface is not usable yet
@@ -60,9 +62,24 @@ Yes, if all of these are acceptable:
 
 ## Next Proof Phase
 
-The next adoption proof step is not a broad plug-and-play claim. It is the first bounded external portability benchmark in a real second repository.
+The next adoption proof work is split into two lanes:
 
-Current next target:
+- a standing complex package-user pilot in `AI-Gorilla`
+- the first bounded external portability benchmark in `CreateCVs`
+
+Use `AI-Gorilla` to validate the published package-user path directly:
+
+- tracker: [#318](https://github.com/H9-Foundry/AgentForge/issues/318)
+- canonical reference: [Discussion #307](https://github.com/H9-Foundry/AgentForge/discussions/307)
+- success bar:
+  - repo-fit inference fits a real application repo
+  - onboarding leads to a runnable next step
+  - security/release/pipeline workflows accept direct repo evidence paths when policy allows them
+  - visualizer surfaces agree with CLI export
+
+Use `CreateCVs` for the benchmark-style comparison once those package-user bars are stable enough to avoid changing the benchmark contract midstream.
+
+Current bounded benchmark target:
 
 - `CreateCVs`
 - use the published CLI plus official workflows only
@@ -70,6 +87,7 @@ Current next target:
 - compare the same agent's default flow versus the AgentForge-gated flow using the same benchmark rules established in the AgentForge-first dogfood phase
 
 See [docs/CREATECVS_PORTABILITY_PHASE.md](CREATECVS_PORTABILITY_PHASE.md) for the current portability benchmark contract.
+See [docs/AI_GORILLA_PACKAGE_USER_PILOT.md](AI_GORILLA_PACKAGE_USER_PILOT.md) for the standing package-user pilot contract.
 
 ### Do Not Describe As Plug-And-Play Yet
 

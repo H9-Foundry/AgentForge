@@ -53,6 +53,7 @@ Current active lane:
 1. [#245](https://github.com/H9-Foundry/AgentForge/issues/245) Phase 2 provider and integration expansion tracker
 2. no active implementation slice assigned after the current release and CI review family shipped and was verified from npm
 3. [#268](https://github.com/H9-Foundry/AgentForge/issues/268) AgentForge-first dogfood benchmark log may run in parallel as a docs-and-ops slice while no new implementation family is active
+4. [#318](https://github.com/H9-Foundry/AgentForge/issues/318) AI-Gorilla standing package-user pilot may run in parallel as the standing complex external package-user lane, with [Discussion #307](https://github.com/H9-Foundry/AgentForge/discussions/307) as its narrative feedback sink
 
 ### Ready Lane
 
@@ -60,7 +61,7 @@ Work that is explicitly designed or queued next, but should not start until the 
 
 Current ready lane:
 
-3. the first bounded external portability phase in `CreateCVs` after the local benchmark-ledger tooling and Outcomes refinement land cleanly
+3. the first bounded external portability phase in `CreateCVs` after the package-user path and Outcomes refinement are stable enough to avoid changing the benchmark contract midstream
 4. additional generic release and CI workflow consumption after the next bounded Phase 2 family is chosen explicitly
 5. additional provider-specific SCM and CI wedges after the current generic release and CI workflow family is stable
 6. deeper supply-chain and enterprise trust work reopened only after the next provider or integration family is defined explicitly
@@ -189,6 +190,12 @@ While the queue is being executed, AgentForge should be used on itself for:
 - benchmarked comparison against the same agent's default workflow using [docs/AGENTFORGE_DOGFOOD_BENCHMARK.md](AGENTFORGE_DOGFOOD_BENCHMARK.md)
 
 For user-facing release and benchmark slices, the CLI path is the default dogfooding path. Source-build entrypoints remain maintainer-only debugging aids and do not replace CLI-path acceptance.
+
+For the external AI-Gorilla package-user pilot:
+
+- [#318](https://github.com/H9-Foundry/AgentForge/issues/318) is the planning/status tracker
+- [Discussion #307](https://github.com/H9-Foundry/AgentForge/discussions/307) is the canonical narrative feedback sink
+- CreateCVs remains the separate bounded benchmark lane and should not be conflated with the standing AI-Gorilla pilot
 
 It should **not** be used as a general autonomous implementation engine until:
 
