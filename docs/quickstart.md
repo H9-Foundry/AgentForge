@@ -324,7 +324,7 @@ The maintenance bundle should include one `maintenance-report` lifecycle artifac
 
 ## Add Imported CI Evidence For Release And Pipeline Reviews
 
-`release-readiness` and `pipeline-evidence-review` do not require imported CI evidence to run. Direct repo evidence such as `.github/workflows/*`, docs, and prior workflow bundles is enough for a bounded local review.
+`release-readiness` and `pipeline-evidence-review` do not require imported CI evidence to run. Direct repo evidence such as concrete files under `.github/workflows/`, docs, and prior workflow bundles is enough for a bounded local review.
 
 Imported CI evidence is the supported enhancement path when you want stronger release and pipeline evidence completeness:
 
@@ -352,14 +352,35 @@ EOF
 
 ```yaml
 # .agentops/requests/release.yaml
+releaseScope: Prepare the next release candidate
+versionTargets:
+  - name: your-package-or-app
+    version: 0.0.1
+qaReportRefs: []
+securityReportRefs: []
 evidenceSources:
   - docs/ENVIRONMENTS.md
+  - .github/workflows/security-scan.yml
+  - .github/workflows/test.yml
   - .agentops/evidence/github-actions-ci.json
+constraints:
+  - Keep release readiness read-only by default
 ```
 
 ```yaml
 # .agentops/requests/pipeline.yaml
+pipelineScope: Review the current candidate pipeline set
+focusAreas:
+  - pipeline-risk
+  - deployment-readiness
+constraints:
+  - Keep the workflow read-only
+qaReportRefs: []
+securityReportRefs: []
+releaseReportRefs: []
 evidenceSources:
+  - .github/workflows/security-scan.yml
+  - .github/workflows/test.yml
   - .agentops/evidence/github-actions-ci.json
 ```
 
