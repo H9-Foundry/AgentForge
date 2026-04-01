@@ -366,6 +366,9 @@ program
       console.log(`Recommended starter preset: ${result.profile.recommendedStarterPresets.join(", ")}`);
     }
     console.log(`Recommended first workflow: ${result.profile.recommendedFirstWorkflow}`);
+    if (result.preset && result.preset.workflow !== result.profile.recommendedFirstWorkflow) {
+      console.log(`Runnable starter workflow: ${result.preset.workflow}`);
+    }
     console.log(`Recommended first benchmark: ${result.profile.recommendedBenchmarkMode} ${result.profile.recommendedBenchmarkCategory}`);
     console.log(`Next workflow: ${result.nextSteps.firstWorkflowCommand}`);
     console.log(`Next benchmark: ${result.nextSteps.firstBenchmarkCommand}`);
