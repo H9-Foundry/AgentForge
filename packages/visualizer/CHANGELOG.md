@@ -1,5 +1,13 @@
 # @h9-foundry/agentforge-visualizer
 
+## 0.12.8
+
+### Patch Changes
+
+- Updated dependencies [dd90d43]
+  - @h9-foundry/agentforge-schemas@0.12.8
+  - @h9-foundry/agentforge-shared-types@0.12.8
+
 ## 0.12.7
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @h9-foundry/agentforge-audit
 
+## 0.12.8
+
+### Patch Changes
+
+- dd90d43: Update onboarding and starter guidance to use the runnable published-package `npx` command path, so external package users can follow the default next steps without a global install.
+- Updated dependencies [dd90d43]
+  - @h9-foundry/agentforge-shared-types@0.12.8
+
 ## 0.12.7
 
 ### Patch Changes
