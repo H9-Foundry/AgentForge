@@ -17,6 +17,13 @@ The pilot should answer:
 - whether security, release, and pipeline workflows work on direct real-repo evidence paths
 - whether CLI exports, browser visualizer pages, and local visualizer APIs remain consistent for the same run corpus
 
+Current pilot state after `#317` and `#320`:
+
+- onboarding and visualizer parity are closed as product defects
+- the active follow-up is [#325](https://github.com/H9-Foundry/AgentForge/issues/325)
+- imported CI evidence ingestion is now proven on the published package path
+- the remaining gap is package-user ergonomics and guidance around when imported CI evidence is optional, when it materially improves outcomes, and the lowest-friction supported way to provide it
+
 ## Target Repository
 
 - repository: [H9-Foundry/AI-Gorilla](https://github.com/H9-Foundry/AI-Gorilla)
@@ -82,6 +89,12 @@ The comment on [Discussion #307](https://github.com/H9-Foundry/AgentForge/discus
 - runnable onboarding next step
 - direct repo evidence path support
 - visualizer consistency with CLI export
+
+When a cycle explicitly evaluates imported CI evidence, the comment should also state:
+
+- whether `release-readiness` moved from missing CI evidence to present/passed CI evidence
+- whether `pipeline-evidence-review` moved from blocked or partial CI evidence to ready/no-blocker CI evidence
+- whether any remaining CI evidence gaps are still intentional, such as `qa-review` not receiving imported CI evidence
 
 ## Discussion And Issue Model
 
