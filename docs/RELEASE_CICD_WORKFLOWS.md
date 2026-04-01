@@ -137,9 +137,32 @@ Reference those files from the release and pipeline requests:
 ```yaml
 # .agentops/requests/release.yaml
 releaseScope: Prepare the next release candidate
+releaseTargetMode: workspace-packages
 versionTargets:
   - name: your-package-or-app
     version: 0.0.1
+qaReportRefs:
+  - .agentops/runs/<qa-run-id>/bundle.json
+securityReportRefs:
+  - .agentops/runs/<security-run-id>/bundle.json
+evidenceSources:
+  - docs/ENVIRONMENTS.md
+  - .agentops/evidence/github-actions-ci.json
+  - .agentops/evidence/generic-ci.json
+constraints:
+  - Keep release readiness read-only by default
+```
+
+If the repository under review is an application repo rather than a publishable workspace package set, use the explicit application-release mode instead of fake workspace targets:
+
+```yaml
+# .agentops/requests/release.yaml
+releaseScope: Prepare the next application deployment candidate
+releaseTargetMode: application-revision
+applicationTarget:
+  identifier: ai-gorilla
+  versionLabel: main-4480479
+  revisionRef: 4480479
 qaReportRefs:
   - .agentops/runs/<qa-run-id>/bundle.json
 securityReportRefs:
@@ -182,6 +205,7 @@ Expected effect:
 
 - `release-readiness` reports imported CI evidence as passed/present instead of missing
 - `pipeline-evidence-review` becomes ready with no blocker caused by missing imported CI evidence
+- application repos can record a deployable app target without pretending that the release candidate is a workspace package bump
 - `/outcomes`, `/api/outcomes/export.json`, and `visualizer export --format json` should reflect the same release/pipeline evidence state
 
 ## Recommended Initial Workflow Family

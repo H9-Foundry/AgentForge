@@ -1358,7 +1358,31 @@ function buildEvidenceCompleteness(workflow: string, artifacts: readonly Artifac
         );
         break;
       case "release-report":
-        addCategory("version-targets", "Version Targets", Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "present" : "missing", Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "Version targets are recorded." : "No version targets were recorded.", ["payload.versionTargets"]);
+        if (payload.releaseTargetMode === "application-revision") {
+          const applicationTarget =
+            payload.applicationTarget && typeof payload.applicationTarget === "object" ? payload.applicationTarget : {};
+          const applicationIdentifier =
+            "identifier" in applicationTarget && typeof applicationTarget.identifier === "string"
+              ? applicationTarget.identifier
+              : "";
+          addCategory(
+            "application-target",
+            "Application Target",
+            applicationIdentifier.length > 0 ? "present" : "missing",
+            applicationIdentifier.length > 0
+              ? "Application release target is recorded."
+              : "No application release target was recorded.",
+            ["payload.releaseTargetMode", "payload.applicationTarget"]
+          );
+        } else {
+          addCategory(
+            "version-targets",
+            "Version Targets",
+            Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "present" : "missing",
+            Array.isArray(payload.versionTargets) && payload.versionTargets.length > 0 ? "Version targets are recorded." : "No version targets were recorded.",
+            ["payload.releaseTargetMode", "payload.versionTargets"]
+          );
+        }
         addCategory("verification-checks", "Verification Checks", deriveStatusFromChecks(payload.verificationChecks), deriveStatusFromChecks(payload.verificationChecks) === "missing" ? "No verification checks were recorded." : deriveStatusFromChecks(payload.verificationChecks) === "partial" ? "Verification checks include non-passing results." : "Verification checks are present and passed.", ["payload.verificationChecks", "payload.verificationChecks[].status"]);
         addCategory("ci-evidence", "CI Evidence", deriveCiEvidenceStatus(payload.ciEvidenceSummary), deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "missing" ? "No CI evidence summary was recorded." : deriveCiEvidenceStatus(payload.ciEvidenceSummary) === "partial" ? "CI evidence includes failing checks." : "CI evidence summary is present and green.", ["payload.ciEvidenceSummary", "payload.ciEvidenceSummary[].failingChecks"]);
         addCategory("provenance", "Provenance Refs", readStringArray(payload.provenanceRefs).length > 0 ? "present" : "missing", readStringArray(payload.provenanceRefs).length > 0 ? "Release provenance refs were captured." : "No provenance refs were captured.", ["payload.provenanceRefs"]);

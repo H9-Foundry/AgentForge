@@ -186,6 +186,16 @@ interface WorkspacePackageManifest {
   readonly dependencyEntries: DependencyInventoryEntry[];
 }
 
+interface ApplicationReleaseTargetResolution {
+  readonly identifier: string;
+  readonly versionLabel: string;
+  readonly revisionRef?: string;
+  readonly status: "identified" | "manifest-missing" | "identifier-mismatch";
+  readonly manifestPath?: string;
+  readonly manifestName?: string;
+  readonly currentVersion?: string;
+}
+
 function resolveWorkspacePackage(root: string | undefined, packageName: string): WorkspacePackageResolution {
   if (!root) {
     return {};
@@ -227,6 +237,49 @@ function resolveWorkspacePackage(root: string | undefined, packageName: string):
   }
 
   return {};
+}
+
+function resolveApplicationReleaseTarget(
+  root: string | undefined,
+  applicationTarget: NonNullable<ReleaseRequest["applicationTarget"]>
+): ApplicationReleaseTargetResolution {
+  const base = {
+    identifier: applicationTarget.identifier,
+    versionLabel: applicationTarget.versionLabel,
+    revisionRef: applicationTarget.revisionRef
+  } satisfies Omit<ApplicationReleaseTargetResolution, "status">;
+
+  if (!root) {
+    return {
+      ...base,
+      status: "manifest-missing"
+    };
+  }
+
+  const rootManifestPath = join(root, "package.json");
+  if (!existsSync(rootManifestPath)) {
+    return {
+      ...base,
+      status: "manifest-missing"
+    };
+  }
+
+  const parsed = JSON.parse(readFileSync(rootManifestPath, "utf8")) as unknown;
+  if (!isRecord(parsed) || typeof parsed.name !== "string") {
+    return {
+      ...base,
+      status: "manifest-missing",
+      manifestPath: rootManifestPath
+    };
+  }
+
+  return {
+    ...base,
+    status: parsed.name === applicationTarget.identifier ? "identified" : "identifier-mismatch",
+    manifestPath: rootManifestPath,
+    manifestName: parsed.name,
+    currentVersion: typeof parsed.version === "string" ? parsed.version : undefined
+  };
 }
 
 const dependencyManifestSections = [
@@ -2873,21 +2926,27 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
       throw new Error(`Release evidence source not found: ${missingEvidenceSources[0]}`);
     }
 
-    const versionResolutions = releaseRequest.versionTargets.map((target) => {
-      const resolved = resolveWorkspacePackage(repoRoot, target.name);
-      return {
-        name: target.name,
-        targetVersion: target.version,
-        currentVersion: resolved.currentVersion,
-        status:
-          !resolved.currentVersion
-            ? "package-missing"
-            : resolved.currentVersion === target.version
-              ? "matches-target"
-              : "pending-version-bump",
-        manifestPath: resolved.manifestPath
-      };
-    });
+    const isApplicationRelease = releaseRequest.releaseTargetMode === "application-revision";
+    const applicationTargetResolution = isApplicationRelease && releaseRequest.applicationTarget
+      ? resolveApplicationReleaseTarget(repoRoot, releaseRequest.applicationTarget)
+      : undefined;
+    const versionResolutions = isApplicationRelease
+      ? []
+      : releaseRequest.versionTargets.map((target) => {
+        const resolved = resolveWorkspacePackage(repoRoot, target.name);
+        return {
+          name: target.name,
+          targetVersion: target.version,
+          currentVersion: resolved.currentVersion,
+          status:
+            !resolved.currentVersion
+              ? "package-missing"
+              : resolved.currentVersion === target.version
+                ? "matches-target"
+                : "pending-version-bump",
+          manifestPath: resolved.manifestPath
+        };
+      });
     const dependencyManifestPaths = resolveDependencyManifestPaths(repoRoot, [
       "package.json",
       ...versionResolutions
@@ -2905,6 +2964,12 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
     const hasFailedAttestationVerification = attestationVerificationEvidence.some((entry) => entry.status === "failed");
     const missingPackages = versionResolutions.filter((entry) => entry.status === "package-missing").map((entry) => entry.name);
     const versionCheckStatus = missingPackages.length === 0 ? "passed" : "failed";
+    const applicationTargetStatus =
+      applicationTargetResolution?.status === "identified"
+        ? "passed"
+        : applicationTargetResolution
+          ? "failed"
+          : "skipped";
     const baseReadinessStatus =
       qaReportRefs.length > 0 && securityReportRefs.length > 0
         ? "ready"
@@ -2912,8 +2977,10 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
           ? "partial"
           : "blocked";
     const readinessStatus =
-      missingPackages.length > 0
+      (!isApplicationRelease && missingPackages.length > 0)
         ? "blocked"
+        : isApplicationRelease && applicationTargetStatus === "failed"
+          ? "blocked"
         : hasFailedAttestationVerification
           ? "blocked"
         : hasMissingDependencyIntegrity && baseReadinessStatus === "ready"
@@ -2971,24 +3038,39 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
               : "passed",
         detail: trustSummary[0]
       },
-      {
-        name: "workspace-version-targets",
-        status: versionCheckStatus,
-        detail:
-          missingPackages.length === 0
-            ? `Resolved ${versionResolutions.length} workspace version target(s).`
-            : `Missing workspace package metadata for: ${missingPackages.join(", ")}.`
-      }
+      ...(isApplicationRelease
+        ? [{
+            name: "application-release-target",
+            status: applicationTargetStatus,
+            detail:
+              applicationTargetResolution?.status === "identified"
+                ? `Resolved application release target \`${applicationTargetResolution.identifier}\`${applicationTargetResolution.currentVersion ? ` from ${applicationTargetResolution.currentVersion}` : ""}${applicationTargetResolution.revisionRef ? ` at revision ${applicationTargetResolution.revisionRef}` : ""}.`
+                : applicationTargetResolution?.status === "identifier-mismatch"
+                  ? `Root application manifest is \`${applicationTargetResolution.manifestName ?? "unknown"}\`, not \`${applicationTargetResolution.identifier}\`.`
+                  : `Root application manifest could not be resolved for \`${releaseRequest.applicationTarget?.identifier ?? "application"}\`.`
+          }] as const
+        : [{
+            name: "workspace-version-targets",
+            status: versionCheckStatus,
+            detail:
+              missingPackages.length === 0
+                ? `Resolved ${versionResolutions.length} workspace version target(s).`
+                : `Missing workspace package metadata for: ${missingPackages.join(", ")}.`
+          }] as const)
     ] as const;
 
     const approvalRecommendations = [
       {
-        action: "publish-packages",
+        action: isApplicationRelease ? "deploy-application" : "publish-packages",
         classification: readinessStatus === "ready" ? "approval_required" : "deny",
         reason:
           readinessStatus === "ready"
-            ? "Package publication remains outside the default read-only workflow path and needs explicit release approval."
-            : "Keep package publication blocked until bounded release evidence is complete and normalized."
+            ? isApplicationRelease
+              ? "Application deployment remains outside the default read-only workflow path and needs explicit release approval."
+              : "Package publication remains outside the default read-only workflow path and needs explicit release approval."
+            : isApplicationRelease
+              ? "Keep application deployment blocked until bounded release evidence is complete and normalized."
+              : "Keep package publication blocked until bounded release evidence is complete and normalized."
       },
       {
         action: "create-release-tag",
@@ -3038,7 +3120,9 @@ const releaseEvidenceNormalizationAgent: RuntimeAgent = {
     });
 
     return agentOutputSchema.parse({
-      summary: `Normalized release evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.versionResolutions.length} version target(s).`,
+      summary: isApplicationRelease
+        ? `Normalized release evidence across ${normalization.normalizedEvidenceSources.length} source(s) for application target ${releaseRequest.applicationTarget?.identifier ?? "application"}.`
+        : `Normalized release evidence across ${normalization.normalizedEvidenceSources.length} source(s) and ${normalization.versionResolutions.length} version target(s).`,
       findings: [],
       proposedActions: [],
       lifecycleArtifacts: [],
@@ -3116,6 +3200,10 @@ const releaseAnalystAgent: RuntimeAgent = {
       : releaseRequest.evidenceSources;
     const constraints = asStringArray(intakeMetadata.constraints);
     const allEvidenceRefs = [...new Set([...qaReportRefs, ...securityReportRefs, ...evidenceSources])];
+    const isApplicationRelease = releaseRequest.releaseTargetMode === "application-revision";
+    const applicationTargetResolution = isApplicationRelease && releaseRequest.applicationTarget
+      ? resolveApplicationReleaseTarget(stateSlice.repo?.root, releaseRequest.applicationTarget)
+      : undefined;
     const importedCiEvidence = normalizedEvidence?.ciEvidence ?? [];
     const ciEvidenceSummary = normalizedEvidence?.ciEvidenceSummary ?? importedCiEvidence.map((entry) => summarizeCiEvidenceForRelease(entry));
     const dependencyIntegrityEvidence = normalizedEvidence?.dependencyIntegrityEvidence ?? [];
@@ -3161,17 +3249,33 @@ const releaseAnalystAgent: RuntimeAgent = {
           ? "partial"
           : "blocked");
     const approvalRecommendations = normalizedEvidence?.approvalRecommendations ?? [
-      {
-        action: "publish-packages",
-        classification: readinessStatus === "ready" ? "approval_required" : "deny",
-        reason:
-          readinessStatus === "ready"
-            ? "Package publication remains outside the default read-only workflow path and needs explicit release approval."
-            : "Keep package publication blocked until bounded release evidence is complete and normalized."
-      }
+      ...(isApplicationRelease
+        ? [{
+            action: "deploy-application",
+            classification: readinessStatus === "ready" ? "approval_required" : "deny",
+            reason:
+              readinessStatus === "ready"
+                ? "Application deployment remains outside the default read-only workflow path and needs explicit release approval."
+                : "Keep application deployment blocked until bounded release evidence is complete and normalized."
+          }]
+        : [{
+            action: "publish-packages",
+            classification: readinessStatus === "ready" ? "approval_required" : "deny",
+            reason:
+              readinessStatus === "ready"
+                ? "Package publication remains outside the default read-only workflow path and needs explicit release approval."
+                : "Keep package publication blocked until bounded release evidence is complete and normalized."
+          }])
     ];
     const summary = `Release report prepared for ${releaseRequest.releaseScope}.`;
     const publishingPlan = [
+      ...(isApplicationRelease && applicationTargetResolution
+        ? [
+            applicationTargetResolution.status === "identified"
+              ? `Validated application release target \`${applicationTargetResolution.identifier}\`${applicationTargetResolution.currentVersion ? ` from ${applicationTargetResolution.currentVersion}` : ""}${applicationTargetResolution.versionLabel ? ` toward ${applicationTargetResolution.versionLabel}` : ""}${applicationTargetResolution.revisionRef ? ` at revision ${applicationTargetResolution.revisionRef}` : ""}.`
+              : `Resolve the application release target before any deploy or promotion step: expected \`${applicationTargetResolution.identifier}\`${applicationTargetResolution.manifestName ? ` but found \`${applicationTargetResolution.manifestName}\`` : ""}.`
+          ]
+        : []),
       ...(versionResolutions.length > 0
         ? [`Resolved ${versionResolutions.length} workspace version target(s) before any publish or promotion step.`]
         : []),
@@ -3215,7 +3319,9 @@ const releaseAnalystAgent: RuntimeAgent = {
       lifecycleDomain: "release",
       payload: {
         releaseScope: releaseRequest.releaseScope,
+        releaseTargetMode: releaseRequest.releaseTargetMode,
         versionTargets: releaseRequest.versionTargets,
+        applicationTarget: releaseRequest.applicationTarget,
         readinessStatus,
         verificationChecks: verificationChecks.map((check) => ({ ...check })),
         versionResolutions,
@@ -3245,7 +3351,9 @@ const releaseAnalystAgent: RuntimeAgent = {
       confidence: 0.77,
       metadata: {
         deterministicInputs: {
+          releaseTargetMode: releaseRequest.releaseTargetMode,
           versionTargets: releaseRequest.versionTargets,
+          applicationTarget: releaseRequest.applicationTarget ?? null,
           qaReportRefs,
           securityReportRefs,
           evidenceSources,

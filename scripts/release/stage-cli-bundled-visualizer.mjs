@@ -9,6 +9,7 @@ const cliNodeModulesRoot = join(cliRoot, "node_modules");
 const targetRoot = join(cliNodeModulesRoot, "@h9-foundry");
 const backupPath = join(cliNodeModulesRoot, ".agentforge-h9-foundry-backup");
 const statePath = join(cliNodeModulesRoot, ".agentforge-first-party-stage.json");
+const lockPath = join(cliNodeModulesRoot, ".agentforge-first-party-stage.lock");
 const bundledPackageNames = [
   "@h9-foundry/agentforge-audit",
   "@h9-foundry/agentforge-context-engine",
@@ -85,7 +86,34 @@ function stagePackage(packageName) {
   }
 }
 
+function sleep(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function acquireStageLock() {
+  const startedAt = Date.now();
+  const timeoutMs = 60_000;
+
+  while (true) {
+    try {
+      mkdirSync(lockPath);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+        throw error;
+      }
+    }
+
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error(`Timed out waiting for CLI pack staging lock at ${lockPath}.`);
+    }
+
+    sleep(100);
+  }
+}
+
 mkdirSync(cliNodeModulesRoot, { recursive: true });
+acquireStageLock();
 
 if (existsSync(statePath)) {
   rmSync(statePath, { force: true });
@@ -111,7 +139,8 @@ writeFileSync(
     {
       hadOriginal,
       backupPath: relative(cliNodeModulesRoot, backupPath),
-      targetPath: relative(cliNodeModulesRoot, targetRoot)
+      targetPath: relative(cliNodeModulesRoot, targetRoot),
+      lockPath: relative(cliNodeModulesRoot, lockPath)
     },
     null,
     2

@@ -2634,6 +2634,177 @@ describe("cli smoke flows", () => {
     ).toEqual(expect.objectContaining({ status: "passed" }));
   });
 
+  it("supports application-revision release targets without workspace package metadata", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify(
+        {
+          name: "ai-gorilla",
+          version: "0.6.0",
+          repository: {
+            type: "git",
+            url: "https://github.com/H9-Foundry/AI-Gorilla.git"
+          },
+          scripts: {
+            test: "echo test",
+            lint: "echo lint",
+            typecheck: "echo typecheck"
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const qaBundleDir = join(root, ".agentops", "runs", "run-qa");
+    mkdirSync(qaBundleDir, { recursive: true });
+    writeFileSync(
+      join(qaBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-qa",
+          workflow: "qa-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.qaArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-qa/bundle.json",
+            markdown: ".agentops/runs/run-qa/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(qaBundleDir, "summary.md"), "# qa summary\n");
+
+    const securityBundleDir = join(root, ".agentops", "runs", "run-security");
+    mkdirSync(securityBundleDir, { recursive: true });
+    writeFileSync(
+      join(securityBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-security",
+          workflow: "security-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.securityArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-security/bundle.json",
+            markdown: ".agentops/runs/run-security/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(securityBundleDir, "summary.md"), "# security summary\n");
+
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the AI-Gorilla application deployment candidate",
+      releaseTargetMode: "application-revision",
+      applicationTarget: {
+        identifier: "ai-gorilla",
+        versionLabel: "main-4480479",
+        revisionRef: "4480479"
+      },
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      evidenceSources: [".agentops/runs/run-security/summary.md"],
+      constraints: ["Keep release readiness read-only by default"]
+    });
+
+    const releaseRun = await runLocalWorkflow("release-readiness", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        payload?: {
+          releaseTargetMode?: string;
+          applicationTarget?: { identifier?: string; versionLabel?: string; revisionRef?: string };
+          readinessStatus?: string;
+          versionResolutions?: Array<{ name: string; currentVersion?: string; status: string }>;
+          verificationChecks?: Array<{ name: string; status: string; detail?: string }>;
+          approvalRecommendations?: Array<{ action: string; classification: string }>;
+        };
+      }>;
+    }>(releaseRun.jsonPath);
+
+    expect(releaseRun.status).toBe("success");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.releaseTargetMode).toBe("application-revision");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.applicationTarget).toEqual({
+      identifier: "ai-gorilla",
+      versionLabel: "main-4480479",
+      revisionRef: "4480479"
+    });
+    expect(bundle.lifecycleArtifacts[0]?.payload?.readinessStatus).toBe("ready");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.versionResolutions).toEqual([]);
+    expect(
+      bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.find((check) => check.name === "application-release-target")
+    ).toEqual(expect.objectContaining({ status: "passed" }));
+    expect(
+      bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.find((check) => check.name === "workspace-version-targets")
+    ).toBeUndefined();
+    expect(bundle.lifecycleArtifacts[0]?.payload?.approvalRecommendations).toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "deploy-application", classification: "approval_required" })])
+    );
+  });
+
   it("emits advisory repo-fit findings during release-readiness when release evidence diverges from declared repo roots", async () => {
     const root = createFixtureRepo();
     initializeWorkspace(root);
@@ -4137,13 +4308,13 @@ describe("cli smoke flows", () => {
       "utf8"
     );
 
-    const jsonExport = exportVisualizerOutcomes({ format: "json" }, root);
+    const jsonExport = await exportVisualizerOutcomes({ format: "json" }, root);
     expect(JSON.parse(jsonExport.contents) as { schemaVersion: string; runCount: number }).toMatchObject({
       schemaVersion: "1.0.0",
       runCount: 1
     });
 
-    const markdownExport = exportVisualizerOutcomes({ format: "markdown" }, root);
+    const markdownExport = await exportVisualizerOutcomes({ format: "markdown" }, root);
     expect(markdownExport.contents).toContain("# AgentForge Outcomes Export");
     expect(markdownExport.contents).toContain("## Decision Impact");
 

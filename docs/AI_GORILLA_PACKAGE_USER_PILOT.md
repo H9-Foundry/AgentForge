@@ -17,12 +17,13 @@ The pilot should answer:
 - whether security, release, and pipeline workflows work on direct real-repo evidence paths
 - whether CLI exports, browser visualizer pages, and local visualizer APIs remain consistent for the same run corpus
 
-Current pilot state after `#317` and `#320`:
+Current pilot state after `#317`, `#320`, and `#325`:
 
 - onboarding and visualizer parity are closed as product defects
-- the active follow-up is [#325](https://github.com/H9-Foundry/AgentForge/issues/325)
-- imported CI evidence ingestion is now proven on the published package path
-- the remaining gap is package-user ergonomics and guidance around when imported CI evidence is optional, when it materially improves outcomes, and the lowest-friction supported way to provide it
+- imported CI evidence guidance is closed on the published package path
+- the active product follow-up is [#330](https://github.com/H9-Foundry/AgentForge/issues/330)
+- the active release-infra follow-up is [#329](https://github.com/H9-Foundry/AgentForge/issues/329)
+- the next package-user lane is app-repo release semantics for `release-readiness`, especially when the repo under test is a deployable application rather than a publishable workspace package set
 
 ## Target Repository
 
