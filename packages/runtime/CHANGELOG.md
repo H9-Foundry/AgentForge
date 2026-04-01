@@ -1,5 +1,15 @@
 # @h9-foundry/agentforge-runtime
 
+## 0.12.5
+
+### Patch Changes
+
+- @h9-foundry/agentforge-schemas@0.12.5
+- @h9-foundry/agentforge-shared-types@0.12.5
+- @h9-foundry/agentforge-sdk@0.12.5
+- @h9-foundry/agentforge-policy-engine@0.12.5
+- @h9-foundry/agentforge-audit@0.12.5
+
 ## 0.12.4
 
 ### Patch Changes
