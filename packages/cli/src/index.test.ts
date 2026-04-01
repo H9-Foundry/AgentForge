@@ -518,6 +518,34 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("treats complex TypeScript app repos as application repos without forcing a package starter profile", () => {
+    const root = createGitFixture("agentops-cli-app-onboard-", "https://github.com/H9-Foundry/AI-Gorilla.git");
+    mkdirSync(join(root, "src"), { recursive: true });
+    mkdirSync(join(root, "public"), { recursive: true });
+    mkdirSync(join(root, "supabase"), { recursive: true });
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(root, "docs"), { recursive: true });
+    writeFileSync(join(root, "index.html"), "<!doctype html>\n");
+    writeFileSync(join(root, "vite.config.ts"), "export default {};\n");
+    writeFileSync(join(root, ".github", "workflows", "ci.yml"), "name: ci\n");
+
+    const profile = analyzeOnboardingProfile(root);
+
+    expect(profile.repoName).toBe("AI-Gorilla");
+    expect(profile.repoFit.contract.structure.architectureStyle).toBe("application-repo");
+    expect(profile.repoFit.contract.structure.sourceRoots).toEqual(
+      expect.arrayContaining(["src", "public", "supabase", "docs"])
+    );
+    expect(profile.repoFit.contract.structure.pathConventions).toEqual(
+      expect.arrayContaining([
+        "Static app assets live under public/.",
+        "Supabase configuration and migrations live under supabase/.",
+        "CI and release automation is tracked in .github/workflows/."
+      ])
+    );
+    expect(profile.repoFit.recommendedProfileId).toBeUndefined();
+  });
+
   it("loads an allowed local plugin and executes it through a workflow", async () => {
     const root = mkdtempSync(join(tmpdir(), "agentops-cli-plugin-"));
     execFileSync("git", ["init"], { cwd: root });
@@ -2050,6 +2078,26 @@ describe("cli smoke flows", () => {
     );
   });
 
+  it("accepts .github workflow files as bounded evidence during security-review", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root, { trackerIssue: 141 });
+    ensureRequestsDir(root);
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "security-scan.yml"), "name: security\n");
+    writeYamlFile(join(root, ".agentops", "requests", "security.yaml"), {
+      targetRef: "src.ts",
+      evidenceSources: [".github/workflows/security-scan.yml"],
+      focusAreas: ["dependency-risk"],
+      constraints: ["Keep the workflow read-only"],
+      releaseContext: "candidate"
+    });
+
+    const securityRun = await runLocalWorkflow("security-review", root);
+
+    expect(securityRun.status).toBe("success");
+    expect(securityRun.artifactKinds).toContain("security-report");
+  });
+
   it("emits advisory repo-fit findings during security-review when the target falls outside declared repo roots", async () => {
     const root = createGitFixture("agentops-security-repo-fit-");
     initProject(root);
@@ -2369,6 +2417,159 @@ describe("cli smoke flows", () => {
     expect(bundle.lifecycleArtifacts[0]?.payload?.trustStatus).toBe(
       "attestation-verified-trusted-publishing-reviewed-separately"
     );
+  });
+
+  it("resolves root package version targets during release-readiness for application repos", async () => {
+    const root = createFixtureRepo();
+    initializeWorkspace(root);
+    ensureRequestsDir(root);
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify(
+        {
+          name: "fixture",
+          version: "0.6.0",
+          repository: {
+            type: "git",
+            url: "https://github.com/H9-Foundry/fixture.git"
+          },
+          scripts: {
+            test: "echo test",
+            lint: "echo lint",
+            typecheck: "echo typecheck"
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const qaBundleDir = join(root, ".agentops", "runs", "run-qa");
+    mkdirSync(qaBundleDir, { recursive: true });
+    writeFileSync(
+      join(qaBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-qa",
+          workflow: "qa-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.qaArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-qa/bundle.json",
+            markdown: ".agentops/runs/run-qa/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(qaBundleDir, "summary.md"), "# qa summary\n");
+
+    const securityBundleDir = join(root, ".agentops", "runs", "run-security");
+    mkdirSync(securityBundleDir, { recursive: true });
+    writeFileSync(
+      join(securityBundleDir, "bundle.json"),
+      JSON.stringify(
+        {
+          version: "1.0.0",
+          runId: "run-security",
+          workflow: "security-review",
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          status: "success",
+          policy: {
+            version: 1,
+            environment: "local",
+            resolvedAt: new Date().toISOString(),
+            defaults: schemaFixtures.policyDocument.defaults,
+            paths: schemaFixtures.policyDocument.paths,
+            plugins: schemaFixtures.policyDocument.plugins,
+            tools: schemaFixtures.policyDocument.tools
+          },
+          entries: [],
+          findings: [],
+          proposedActions: [],
+          blockedPlugins: [],
+          lifecycleArtifacts: [schemaFixtures.securityArtifact],
+          artifactPaths: {
+            json: ".agentops/runs/run-security/bundle.json",
+            markdown: ".agentops/runs/run-security/summary.md"
+          },
+          provenance: {
+            generatedBy: "agentforge-runtime",
+            schemaVersion: "1.0.0",
+            executionEnvironment: "local",
+            repoRoot: root
+          },
+          redaction: {
+            applied: true,
+            strategyVersion: "1.0.0",
+            categories: ["github-token"]
+          },
+          components: []
+        },
+        null,
+        2
+      )
+    );
+    writeFileSync(join(securityBundleDir, "summary.md"), "# security summary\n");
+
+    writeYamlFile(join(root, ".agentops", "requests", "release.yaml"), {
+      releaseScope: "Prepare the next fixture app release candidate",
+      versionTargets: [{ name: "fixture", version: "0.7.0" }],
+      qaReportRefs: [".agentops/runs/run-qa/bundle.json"],
+      securityReportRefs: [".agentops/runs/run-security/bundle.json"],
+      evidenceSources: [".agentops/runs/run-security/summary.md"],
+      constraints: ["Keep release readiness read-only by default"]
+    });
+
+    const releaseRun = await runLocalWorkflow("release-readiness", root);
+    const bundle = readJson<{
+      lifecycleArtifacts: Array<{
+        payload?: {
+          readinessStatus?: string;
+          versionResolutions?: Array<{ name: string; currentVersion?: string; status: string }>;
+          verificationChecks?: Array<{ name: string; status: string }>;
+        };
+      }>;
+    }>(releaseRun.jsonPath);
+
+    expect(releaseRun.status).toBe("success");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.readinessStatus).toBe("ready");
+    expect(bundle.lifecycleArtifacts[0]?.payload?.versionResolutions).toEqual([
+      expect.objectContaining({ name: "fixture", currentVersion: "0.6.0", status: "pending-version-bump" })
+    ]);
+    expect(
+      bundle.lifecycleArtifacts[0]?.payload?.verificationChecks?.find((check) => check.name === "workspace-version-targets")
+    ).toEqual(expect.objectContaining({ status: "passed" }));
   });
 
   it("emits advisory repo-fit findings during release-readiness when release evidence diverges from declared repo roots", async () => {

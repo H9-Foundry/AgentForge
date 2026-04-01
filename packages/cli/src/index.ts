@@ -1066,6 +1066,31 @@ function inferScmRepoContext(root: string): ScmRepoContext | undefined {
   return remoteUrl ? parseScmRepositoryUrl(remoteUrl) : undefined;
 }
 
+function inferRepoNameFromPackageManifest(root: string): string | undefined {
+  const packageJsonPath = join(root, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as unknown;
+    if (!isRecord(parsed) || typeof parsed.name !== "string" || parsed.name.trim().length === 0) {
+      return undefined;
+    }
+
+    return parsed.name.replace(/^@[^/]+\//, "");
+  } catch {
+    return undefined;
+  }
+}
+
+function inferRepoDisplayName(root: string): string {
+  return inferScmRepoContext(root)?.repo ??
+    inferRepoNameFromPackageManifest(root) ??
+    root.split("/").at(-1) ??
+    "repo";
+}
+
 function normalizeGitHubReference(rawValue: string, repoContext?: GitHubRepoContext): GithubReference | undefined {
   const raw = rawValue.trim();
   if (!raw) {
@@ -2805,7 +2830,7 @@ function createDefaultWorkflowControl(workflow: WorkflowDefinition): WorkflowCon
 function createDefaultRepoFitContract(root: string): RepoFitContract {
   return repoFitContractSchema.parse({
     version: 1,
-    repoName: root.split("/").at(-1) ?? "repo",
+    repoName: inferRepoDisplayName(root),
     structure: {
       architectureStyle: detectArchitectureStyle(root, []),
       sourceRoots: detectRepoSourceRoots(root),
@@ -5572,13 +5597,34 @@ function listTopLevelDirectories(root: string): string[] {
 }
 
 function detectRepoSourceRoots(root: string): string[] {
-  const candidates = ["packages", "apps", "services", "libs", "src", "tests", "test", "docs", "infra", "scripts"];
+  const candidates = ["packages", "apps", "services", "libs", "src", "app", "pages", "public", "supabase", "tests", "test", "docs", "infra", "scripts"];
   return candidates.filter((candidate) => existsSync(join(root, candidate)));
 }
 
 function detectRepoPackageRoots(root: string): string[] {
   const candidates = ["packages", "apps", "services", "libs"];
   return candidates.filter((candidate) => existsSync(join(root, candidate)));
+}
+
+function detectApplicationRepoSignals(root: string): string[] {
+  return detectExistingPaths(root, [
+    "public",
+    "supabase",
+    "app",
+    "pages",
+    "index.html",
+    "vite.config.ts",
+    "vite.config.js",
+    "vite.config.mts",
+    "vite.config.mjs",
+    "next.config.ts",
+    "next.config.js",
+    "next.config.mjs",
+    "astro.config.ts",
+    "astro.config.mjs",
+    "vercel.json",
+    "netlify.toml"
+  ]);
 }
 
 function detectArchitectureStyle(root: string, languages: readonly string[]): string {
@@ -5592,6 +5638,10 @@ function detectArchitectureStyle(root: string, languages: readonly string[]): st
     return "crate";
   }
   if (languages.includes("typescript") || languages.includes("javascript")) {
+    const applicationSignals = detectApplicationRepoSignals(root);
+    if (applicationSignals.length > 0) {
+      return "application-repo";
+    }
     return existsSync(join(root, "src")) ? "package-repo" : "application-repo";
   }
   return "unspecified";
@@ -5613,6 +5663,12 @@ function detectPathConventions(root: string): string[] {
   }
   if (existsSync(join(root, "docs"))) {
     conventions.push("Documentation and runbooks live under docs/.");
+  }
+  if (existsSync(join(root, "public"))) {
+    conventions.push("Static app assets live under public/.");
+  }
+  if (existsSync(join(root, "supabase"))) {
+    conventions.push("Supabase configuration and migrations live under supabase/.");
   }
   if (existsSync(join(root, ".github", "workflows"))) {
     conventions.push("CI and release automation is tracked in .github/workflows/.");
@@ -5640,7 +5696,7 @@ function recommendRepoFitProfile(root: string, languages: readonly string[]): Ex
     return "agentforge-rust-crate";
   }
   if (languages.includes("typescript") || languages.includes("javascript")) {
-    return "agentforge-ts-package";
+    return detectApplicationRepoSignals(root).length === 0 ? "agentforge-ts-package" : undefined;
   }
   return undefined;
 }
@@ -5806,7 +5862,7 @@ function createRepoFitContract(
 
 function buildRepoFitProfile(root: string): OnboardingProfile {
   const scan = scanProject(root);
-  const repoName = root.split("/").at(-1) ?? "repo";
+  const repoName = inferRepoDisplayName(root);
   const validationCommands = detectValidationCommands(root, scan.packageManager);
   const releaseProfile = detectReleaseProfile(root, validationCommands);
   const workflowFamilies = inferWorkflowFamilies(root, validationCommands, releaseProfile);
