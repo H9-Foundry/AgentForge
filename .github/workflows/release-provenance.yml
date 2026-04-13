@@ -47,7 +47,7 @@ jobs:
         run: tar -czf "agentforge-build-${GITHUB_SHA}.tgz" .build packages/*/dist README.md docs SECURITY.md package.json pnpm-lock.yaml
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: agentforge-build-${{ github.sha }}
           path: agentforge-build-${{ github.sha }}.tgz
