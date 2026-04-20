@@ -37,7 +37,7 @@
     "visualizer:build": "pnpm --filter @h9-foundry/agentforge-visualizer build"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.6",
+    "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.0",
