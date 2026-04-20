@@ -81,7 +81,7 @@ jobs:
         run: node -e "const fs=require('node:fs'); const data=JSON.parse(fs.readFileSync('agentforge-run.json','utf8')); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'bundle_path=' + data.jsonPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'markdown_path=' + data.markdownPath + '\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'run_id=' + data.runId + '\n');"
 
       - name: Upload AgentForge artifacts
-        uses: actions/upload-artifact@v7.0.0
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: agentforge-${{ steps.artifact_paths.outputs.run_id }}
           path: |
