@@ -1,7 +1,6 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@h9-foundry/agentforge-schemas": ["packages/schemas/src/index.ts"],
       "@h9-foundry/agentforge-shared-types": ["packages/shared-types/src/index.ts"],
