@@ -45,6 +45,6 @@
   },
   "dependencies": {
     "@h9-foundry/agentforge-schemas": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   }
 }
