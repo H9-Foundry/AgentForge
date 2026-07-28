@@ -46,7 +46,7 @@
   "dependencies": {
     "@h9-foundry/agentforge-schemas": "workspace:*",
     "@h9-foundry/agentforge-shared-types": "workspace:*",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.0",
     "picomatch": "^4.0.4"
   }
 }
